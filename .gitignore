@@ -1,0 +1,22 @@
+# Local-only documents
+docs/internal/
+
+# Go
+/avero
+*.exe
+*.test
+*.out
+
+# Build and verification output
+/artifacts/
+/dist/
+/tmp/
+
+# Environment
+.env
+.env.local
+
+# Editor and OS
+.DS_Store
+.idea/
+.vscode/
