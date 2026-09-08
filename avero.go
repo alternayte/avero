@@ -8,6 +8,7 @@
 //	host     the lifecycle, the readiness gate and the boot checks, S2
 //	router   the routes, the request context and the middleware, S4
 //	module   the module contract and the module inspection, S6
+//	view     the helpers of a server rendered page, S10
 //	telemetry the traces, the metrics and the logger, S3
 //
 // An application can import a subsystem directly. The two forms are the same
@@ -31,6 +32,7 @@ import (
 	"github.com/alternayte/avero/module"
 	"github.com/alternayte/avero/router"
 	"github.com/alternayte/avero/telemetry"
+	"github.com/alternayte/avero/view"
 	"go.opentelemetry.io/otel/attribute"
 )
 
@@ -163,6 +165,10 @@ const (
 	// StatusCSRF is the status of a CSRF fault.
 	StatusCSRF = router.StatusCSRF
 )
+
+// NewCtx builds a Ctx for one request. A test calls a handler with it and
+// needs no router. See router.NewCtx.
+func NewCtx(w http.ResponseWriter, r *http.Request) *Ctx { return router.NewCtx(w, r) }
 
 // NewRouter builds a router. See router.New.
 func NewRouter(opts ...router.Option) *Router { return router.New(opts...) }
@@ -336,3 +342,52 @@ type (
 //	    os.Exit(avero.Exit(os.Stderr, err))
 //	}
 func Modules(ms ...Module) *ModuleSet { return module.Modules(ms...) }
+
+// The view types. See the view package, S10.
+type (
+	// ViewComponent renders itself. A templ component satisfies it. The
+	// root package already holds Component for the lifecycle contract of
+	// the host, so the view name carries the View prefix here.
+	ViewComponent = view.Component
+	// ViewFunc adapts a function to the Component interface.
+	ViewFunc = view.Func
+)
+
+// View renders a component with 200 and the HTML content type.
+//
+//	return avero.View(pages.Index(posts)), nil
+func View(c ViewComponent) Response { return view.View(c) }
+
+// ViewStatus renders a component with this status. See view.ViewStatus.
+func ViewStatus(code int, c ViewComponent) Response { return view.Status(code, c) }
+
+// WithForm renders the form again with 422 when validation fails. Pass it to
+// NewRouter. See view.WithForm.
+func WithForm(page func(c *Ctx, f *Fields) ViewComponent) router.Option {
+	return view.WithForm(page)
+}
+
+// Old returns the value that the person submitted for this field. See
+// view.Old.
+func Old(ctx context.Context, field string) string { return view.Old(ctx, field) }
+
+// FieldError returns the validation message of this field.
+//
+// The SDD names this helper Error. The root package already holds the Error
+// name in the toast API of Ctx, and a package level Error reads as a fault
+// type in Go. The view package holds the name that the SDD states, and a
+// component calls view.Error.
+func FieldError(ctx context.Context, field string) string { return view.Error(ctx, field) }
+
+// HasError reports whether this field failed validation. See view.HasError.
+func HasError(ctx context.Context, field string) bool { return view.HasError(ctx, field) }
+
+// Toasts returns the messages of this response. See view.Toasts.
+func Toasts(ctx context.Context) []Toast { return view.Toasts(ctx) }
+
+// CSRFField returns the hidden field that an unsafe form must carry.
+//
+// The SDD names it CSRF. The root package already holds CSRF for the
+// middleware, so the field carries the longer name here. A component calls
+// view.CSRF.
+func CSRFField() ViewComponent { return view.CSRF() }

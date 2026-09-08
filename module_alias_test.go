@@ -2,6 +2,10 @@ package avero_test
 
 import (
 	"bytes"
+	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -57,5 +61,19 @@ func TestTwoModulesOnOnePatternExitOneAndNameBoth(t *testing.T) {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("the output does not name %q:\n%s", want, out.String())
 		}
+	}
+}
+
+func TestViewRendersThroughTheRootPackage(t *testing.T) {
+	c := avero.NewCtx(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
+	res := avero.View(avero.ViewFunc(func(ctx context.Context, w io.Writer) error {
+		_, err := io.WriteString(w, "<p>"+avero.Old(ctx, "title")+"</p>")
+		return err
+	}))
+	if res.Status() != http.StatusOK {
+		t.Fatalf("Status = %d, want 200", res.Status())
+	}
+	if err := res.Write(c); err != nil {
+		t.Fatalf("Write returned %v, want nil", err)
 	}
 }
