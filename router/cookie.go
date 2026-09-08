@@ -10,9 +10,9 @@ import (
 	"strings"
 )
 
-// minSecretLength is the shortest secret that Avero accepts. A short secret
+// MinSecretLength is the shortest secret that Avero accepts. A short secret
 // makes a signature guessable.
-const minSecretLength = 32
+const MinSecretLength = 32
 
 // signer signs and verifies a cookie value with HMAC-SHA256.
 //
@@ -23,11 +23,11 @@ type signer struct{ key []byte }
 // newSigner returns a signer. It panics on a secret that is too short, because
 // a weak secret is a wiring fault that must stop the boot. See DX-8.
 func newSigner(secret, use string) signer {
-	if len(secret) < minSecretLength {
+	if len(secret) < MinSecretLength {
 		panic(fmt.Sprintf(
 			"router: the %s secret is %d bytes, and it must be at least %d\n"+
 				"  → Set a secret of at least %d bytes, for example the output of `openssl rand -hex 32`",
-			use, len(secret), minSecretLength, minSecretLength))
+			use, len(secret), MinSecretLength, MinSecretLength))
 	}
 	sum := sha256.Sum256([]byte(secret + "|" + use))
 	return signer{key: sum[:]}

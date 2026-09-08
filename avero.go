@@ -15,6 +15,7 @@ package avero
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -206,4 +207,28 @@ func Transaction(e *drel.Engine) Middleware { return router.Transaction(e) }
 // Adapt turns a net/http middleware into an Avero middleware.
 func Adapt(name string, mw func(http.Handler) http.Handler) Middleware {
 	return router.Adapt(name, mw)
+}
+
+// SecretCheck returns a boot check that proves AVERO_SECRET is long enough to
+// sign a cookie. Register it with WithChecks, so that a weak secret stops the
+// process with a repair sentence instead of a panic inside the router wiring.
+// See DX-8.
+//
+//	app := avero.New(cfg.BaseConfig,
+//	    avero.WithChecks(avero.SecretCheck(cfg.Secret)),
+//	    avero.WithHandler(handler))
+func SecretCheck(secret Secret) Check {
+	return Check{
+		Name: "the length of AVERO_SECRET",
+		Repair: fmt.Sprintf(
+			"Set AVERO_SECRET to at least %d bytes, for example the output of `openssl rand -hex 32`",
+			router.MinSecretLength),
+		Run: func(context.Context) error {
+			if n := len(secret.Reveal()); n < router.MinSecretLength {
+				return fmt.Errorf("AVERO_SECRET holds %d bytes and it needs %d",
+					n, router.MinSecretLength)
+			}
+			return nil
+		},
+	}
 }

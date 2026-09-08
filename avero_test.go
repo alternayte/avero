@@ -78,6 +78,7 @@ func (fakeMigrator) Migrate(context.Context) error { return nil }
 func TestLoadReadsTheProcessEnvironment(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://x")
 	t.Setenv("API_KEY", "sk-live-1234")
+	t.Setenv("AVERO_SECRET", strings.Repeat("k", 32))
 	cfg, err := avero.Load[appConfig](context.Background())
 	if err != nil {
 		t.Fatalf("Load returned an error: %v", err)
@@ -139,12 +140,15 @@ func TestExitPrintsAConfigurationFault(t *testing.T) {
 	if err == nil {
 		t.Fatal("Load accepted a missing required variable")
 	}
+	// Two variables are required and both are absent, so both appear.
 	var out strings.Builder
 	if code := avero.Exit(&out, err); code != 1 {
 		t.Fatalf("Exit returned %d, want 1", code)
 	}
-	if !strings.Contains(out.String(), "DATABASE_URL") {
-		t.Fatalf("the output does not name the variable:\n%s", out.String())
+	for _, name := range []string{"DATABASE_URL", "AVERO_SECRET"} {
+		if !strings.Contains(out.String(), name) {
+			t.Fatalf("the output does not name %s:\n%s", name, out.String())
+		}
 	}
 	if !strings.Contains(out.String(), "→") {
 		t.Fatalf("the output states no repair:\n%s", out.String())
@@ -228,5 +232,58 @@ func TestTheRootRouterServesARoute(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/things", nil))
 	if rec.Code != 200 || rec.Body.String() != "listed" {
 		t.Fatalf("gave %d %q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestSecretCheckPassesAStrongSecret(t *testing.T) {
+	c := avero.SecretCheck(avero.Secret(strings.Repeat("k", 32)))
+	if c.Name == "" || c.Repair == "" || c.Run == nil {
+		t.Fatalf("the check is not complete: %+v", c)
+	}
+	if err := c.Run(context.Background()); err != nil {
+		t.Fatalf("the check rejected a 32-byte secret: %v", err)
+	}
+}
+
+func TestSecretCheckRejectsAShortSecret(t *testing.T) {
+	c := avero.SecretCheck(avero.Secret("too-short"))
+	err := c.Run(context.Background())
+	if err == nil {
+		t.Fatal("the check accepted a short secret")
+	}
+	if strings.Contains(err.Error(), "too-short") {
+		t.Fatalf("the fault leaks the secret: %v", err)
+	}
+	if !strings.Contains(err.Error(), "AVERO_SECRET") {
+		t.Fatalf("the fault does not name the variable: %v", err)
+	}
+}
+
+func TestSecretCheckStopsTheBoot(t *testing.T) {
+	// A short secret must stop the process before it serves, and not panic
+	// inside the router wiring. See DX-8.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen returned an error: %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+
+	app := avero.New(avero.BaseConfig{ShutdownGrace: time.Second, LogLevel: "error"},
+		avero.WithoutSignals(),
+		avero.WithListener(ln),
+		avero.WithChecks(avero.SecretCheck(avero.Secret("too-short"))))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	runErr := app.Run(ctx)
+	if runErr == nil {
+		t.Fatal("the application started with a short secret")
+	}
+	var out strings.Builder
+	if code := avero.Exit(&out, runErr); code != 1 {
+		t.Fatalf("Exit returned %d, want 1", code)
+	}
+	if !strings.Contains(out.String(), "→") {
+		t.Fatalf("the output states no repair:\n%s", out.String())
 	}
 }

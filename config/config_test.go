@@ -3,6 +3,7 @@ package config_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"strings"
 	"testing"
@@ -206,10 +207,10 @@ func TestEmbeddedStructTakesNoPrefix(t *testing.T) {
 		config.BaseConfig
 		DatabaseURL string `env:"DATABASE_URL,required"`
 	}
-	cfg, _, err := config.LoadFrom[App](context.Background(), env(map[string]string{
+	cfg, _, err := config.LoadFrom[App](context.Background(), env(baseEnv(map[string]string{
 		"DATABASE_URL": "postgres://x",
 		"PORT":         "9090",
-	}))
+	})))
 	if err != nil {
 		t.Fatalf("LoadFrom returned an error: %v", err)
 	}
@@ -247,7 +248,7 @@ func TestUnexportedFieldIsNotRead(t *testing.T) {
 }
 
 func TestBaseConfigDefaults(t *testing.T) {
-	cfg, _, err := config.LoadFrom[config.BaseConfig](context.Background(), env(nil))
+	cfg, _, err := config.LoadFrom[config.BaseConfig](context.Background(), env(baseEnv(nil)))
 	if err != nil {
 		t.Fatalf("LoadFrom returned an error: %v", err)
 	}
@@ -272,13 +273,13 @@ func TestBaseConfigDefaults(t *testing.T) {
 }
 
 func TestBaseConfigReadsTheOTelVariables(t *testing.T) {
-	cfg, _, err := config.LoadFrom[config.BaseConfig](context.Background(), env(map[string]string{
+	cfg, _, err := config.LoadFrom[config.BaseConfig](context.Background(), env(baseEnv(map[string]string{
 		"OTEL_SERVICE_NAME":           "orders",
 		"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318",
 		"OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
 		"OTEL_TRACES_EXPORTER":        "otlp",
 		"OTEL_METRICS_EXPORTER":       "otlp",
-	}))
+	})))
 	if err != nil {
 		t.Fatalf("LoadFrom returned an error: %v", err)
 	}
@@ -297,7 +298,7 @@ func TestBaseConfigReadsTheOTelVariables(t *testing.T) {
 }
 
 func TestBaseConfigDefaultExporterIsNone(t *testing.T) {
-	cfg, _, err := config.LoadFrom[config.BaseConfig](context.Background(), env(nil))
+	cfg, _, err := config.LoadFrom[config.BaseConfig](context.Background(), env(baseEnv(nil)))
 	if err != nil {
 		t.Fatalf("LoadFrom returned an error: %v", err)
 	}
@@ -335,5 +336,75 @@ func TestATargetThatIsNotAStructIsAFault(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "int") {
 		t.Fatalf("the message does not name the type: %v", err)
+	}
+}
+
+// baseEnv returns the variables that a BaseConfig needs. AVERO_SECRET is
+// required, so every load of a BaseConfig supplies it.
+func baseEnv(extra map[string]string) map[string]string {
+	out := map[string]string{"AVERO_SECRET": strings.Repeat("k", 32)}
+	for k, v := range extra {
+		out[k] = v
+	}
+	return out
+}
+
+func TestAMissingSecretIsAFault(t *testing.T) {
+	_, _, err := config.LoadFrom[config.BaseConfig](context.Background(), env(nil))
+	if err == nil {
+		t.Fatal("LoadFrom accepted a BaseConfig with no AVERO_SECRET")
+	}
+	if !strings.Contains(err.Error(), "AVERO_SECRET") {
+		t.Fatalf("the message does not name the variable: %v", err)
+	}
+	if !strings.Contains(err.Error(), "→") {
+		t.Fatalf("the error states no repair: %v", err)
+	}
+}
+
+func TestTheSecretLoadsFromTheEnvironment(t *testing.T) {
+	cfg, _, err := config.LoadFrom[config.BaseConfig](context.Background(),
+		env(baseEnv(map[string]string{"AVERO_SECRET": "the-signing-secret-value"})))
+	if err != nil {
+		t.Fatalf("LoadFrom returned an error: %v", err)
+	}
+	if cfg.Secret.Reveal() != "the-signing-secret-value" {
+		t.Fatalf("the secret is %q", cfg.Secret.Reveal())
+	}
+}
+
+func TestTheSecretRedactsInAVFormatOfTheConfiguration(t *testing.T) {
+	cfg, _, err := config.LoadFrom[config.BaseConfig](context.Background(),
+		env(baseEnv(map[string]string{"AVERO_SECRET": "the-signing-secret-value"})))
+	if err != nil {
+		t.Fatalf("LoadFrom returned an error: %v", err)
+	}
+	out := fmt.Sprintf("%v", *cfg)
+	if strings.Contains(out, "the-signing-secret-value") {
+		t.Fatalf("%%v of the configuration leaks the secret:\n%s", out)
+	}
+	if !strings.Contains(out, config.Redacted) {
+		t.Fatalf("%%v of the configuration does not redact the secret:\n%s", out)
+	}
+}
+
+func TestTheSecretRedactsInTheReport(t *testing.T) {
+	_, rep, err := config.LoadFrom[config.BaseConfig](context.Background(),
+		env(baseEnv(map[string]string{"AVERO_SECRET": "the-signing-secret-value"})))
+	if err != nil {
+		t.Fatalf("LoadFrom returned an error: %v", err)
+	}
+	f, ok := rep.Field("Secret")
+	if !ok {
+		t.Fatal("the report holds no row for Secret")
+	}
+	if f.Value != config.Redacted {
+		t.Fatalf("the row reads %q, want %q", f.Value, config.Redacted)
+	}
+	if !f.Required {
+		t.Fatal("the row does not mark the field as required")
+	}
+	if strings.Contains(rep.String(), "the-signing-secret-value") {
+		t.Fatalf("the report leaks the secret:\n%s", rep.String())
 	}
 }

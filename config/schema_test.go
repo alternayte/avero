@@ -109,7 +109,7 @@ func TestABaseConfigReportValidatesAgainstTheSchema(t *testing.T) {
 	if err := json.Unmarshal(config.ReportSchema, &schema); err != nil {
 		t.Fatalf("config/schema.json does not parse: %v", err)
 	}
-	_, rep, err := config.LoadFrom[config.BaseConfig](context.Background(), env(nil))
+	_, rep, err := config.LoadFrom[config.BaseConfig](context.Background(), env(baseEnv(nil)))
 	if err != nil {
 		t.Fatalf("LoadFrom returned an error: %v", err)
 	}

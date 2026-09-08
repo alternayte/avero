@@ -21,6 +21,14 @@ type BaseConfig struct {
 	MigrateOnBoot bool `env:"MIGRATE_ON_BOOT" default:"false"`
 	// Env is the deployment environment, such as development or production.
 	Env string `env:"AVERO_ENV" default:"development"`
+	// Secret signs the cookies that Avero owns: the CSRF token and the flash
+	// that carries a toast across a redirect. auth-all owns the
+	// authentication session and holds its own secret.
+	//
+	// It is required, so a missing secret stops the process before it serves.
+	// See DX-8. Use at least 32 bytes, for example the output of
+	// `openssl rand -hex 32`. Call Reveal to read the value.
+	Secret Secret `env:"AVERO_SECRET,required,secret"`
 	// OTel holds the standard OpenTelemetry variables.
 	OTel OTelConfig `env:"OTEL"`
 }
