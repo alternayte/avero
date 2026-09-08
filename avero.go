@@ -7,6 +7,7 @@
 //	config   the configuration loader and the report, S1
 //	host     the lifecycle, the readiness gate and the boot checks, S2
 //	router   the routes, the request context and the middleware, S4
+//	telemetry the traces, the metrics and the logger, S3
 //
 // An application can import a subsystem directly. The two forms are the same
 // types.
@@ -27,6 +28,8 @@ import (
 	"github.com/alternayte/avero/config"
 	"github.com/alternayte/avero/host"
 	"github.com/alternayte/avero/router"
+	"github.com/alternayte/avero/telemetry"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // The configuration types. See the config package, S1.
@@ -234,3 +237,22 @@ func SecretCheck(secret Secret) Check {
 		},
 	}
 }
+
+// The telemetry types. See the telemetry package, S3.
+type (
+	// Telemetry holds the tracer, the meter and the logger of one
+	// application. It is a component, so Stop flushes the exporters.
+	Telemetry = telemetry.Provider
+	// TelemetryOption configures the telemetry provider.
+	TelemetryOption = telemetry.Option
+)
+
+// NewTelemetry builds the telemetry provider from the OTEL_* variables. See
+// telemetry.New.
+func NewTelemetry(cfg BaseConfig, opts ...TelemetryOption) (*Telemetry, error) {
+	return telemetry.New(cfg, opts...)
+}
+
+// Attr builds a span attribute. A Secret reads as ******** and never reaches
+// an exporter. See telemetry.Attr.
+func Attr(key string, value any) attribute.KeyValue { return telemetry.Attr(key, value) }

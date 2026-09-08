@@ -14,6 +14,7 @@ import (
 	"github.com/alternayte/avero/config"
 	"github.com/alternayte/avero/host"
 	"github.com/alternayte/avero/router"
+	"github.com/alternayte/avero/telemetry"
 )
 
 // The root package holds aliases and thin wrappers. It holds no logic and no
@@ -287,3 +288,27 @@ func TestSecretCheckStopsTheBoot(t *testing.T) {
 		t.Fatalf("the output states no repair:\n%s", out.String())
 	}
 }
+
+func TestTheTelemetryAliasesNameTheSubsystemTypes(t *testing.T) {
+	cfg := avero.BaseConfig{
+		LogLevel:  "error",
+		LogFormat: "json",
+		OTel:      avero.OTelConfig{TracesExporter: "none", MetricsExporter: "none"},
+	}
+	p, err := avero.NewTelemetry(cfg)
+	if err != nil {
+		t.Fatalf("NewTelemetry returned an error: %v", err)
+	}
+	defer func() { _ = p.Stop(context.Background()) }()
+
+	takeTelemetry(p)
+	takeComponent(p)
+	if p.TracesEnabled() {
+		t.Fatal("the default exporter is not none")
+	}
+	if got := avero.Attr("api_key", avero.Secret("sk-live-1234")).Value.Emit(); got != avero.Redacted {
+		t.Fatalf("Attr gave %q, want %q", got, avero.Redacted)
+	}
+}
+
+func takeTelemetry(*telemetry.Provider) {}

@@ -40,6 +40,11 @@ func (c *Ctx) Context() context.Context { return c.r.Context() }
 // calls it.
 func (c *Ctx) setRequest(r *http.Request) { c.r = r }
 
+// SetContext replaces the request context. A middleware outside this package
+// calls it to add a value, such as the span that the telemetry middleware
+// starts.
+func (c *Ctx) SetContext(ctx context.Context) { c.r = c.r.WithContext(ctx) }
+
 // Header returns the response header. A handler sets a header here and the
 // Response writes the body.
 func (c *Ctx) Header() http.Header { return c.w.Header() }
