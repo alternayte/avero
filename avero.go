@@ -10,6 +10,11 @@
 //	module   the module contract and the module inspection, S6
 //	view     the helpers of a server rendered page, S10
 //	assets   the asset pipeline and the manifest, S11
+//
+// The hypermedia adapters, ds and htmx, are optional imports. This package
+// holds no alias for them, so an application that needs neither carries
+// neither. See the SDD, S12.
+//
 //	telemetry the traces, the metrics and the logger, S3
 //
 // An application can import a subsystem directly. The two forms are the same
