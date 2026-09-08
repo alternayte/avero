@@ -5,6 +5,8 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"net/http"
+
+	"github.com/alternayte/avero/config"
 )
 
 // The names that the CSRF middleware uses.
@@ -30,7 +32,7 @@ type csrfKey struct{}
 //
 // The token needs no server state, so it works for an anonymous visitor and
 // for a signed-in one. auth-all owns the authentication session.
-func CSRF(secret string, opts ...CookieOption) Middleware {
+func CSRF(secret config.Secret, opts ...CookieOption) Middleware {
 	sign := newSigner(secret, "csrf")
 	return Middleware{Name: "csrf", Wrap: func(next Handler) Handler {
 		return func(c *Ctx) (Response, error) {

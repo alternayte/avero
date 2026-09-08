@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/alternayte/avero/config"
 )
 
 // MinSecretLength is the shortest secret that Avero accepts. A short secret
@@ -22,14 +24,21 @@ type signer struct{ key []byte }
 
 // newSigner returns a signer. It panics on a secret that is too short, because
 // a weak secret is a wiring fault that must stop the boot. See DX-8.
-func newSigner(secret, use string) signer {
-	if len(secret) < MinSecretLength {
+//
+// Register avero.SecretCheck as a boot check to report the same fault with a
+// repair sentence instead of a panic.
+//
+// The parameter is a config.Secret, so the value keeps its redacting type from
+// the environment to the HMAC. No format verb and no log line can print it.
+func newSigner(secret config.Secret, use string) signer {
+	raw := secret.Reveal()
+	if len(raw) < MinSecretLength {
 		panic(fmt.Sprintf(
-			"router: the %s secret is %d bytes, and it must be at least %d\n"+
-				"  → Set a secret of at least %d bytes, for example the output of `openssl rand -hex 32`",
-			use, len(secret), MinSecretLength, MinSecretLength))
+			"router: the %s secret holds %d bytes, and it needs at least %d\n"+
+				"  → Set AVERO_SECRET to at least %d bytes, for example the output of `openssl rand -hex 32`",
+			use, len(raw), MinSecretLength, MinSecretLength))
 	}
-	sum := sha256.Sum256([]byte(secret + "|" + use))
+	sum := sha256.Sum256([]byte(raw + "|" + use))
 	return signer{key: sum[:]}
 }
 

@@ -190,13 +190,15 @@ func Recover(l *slog.Logger) Middleware { return router.Recover(l) }
 // AccessLog writes one line for each request.
 func AccessLog(l *slog.Logger) Middleware { return router.AccessLog(l) }
 
-// CSRF protects an unsafe method with a signed double-submit token.
-func CSRF(secret string, opts ...router.CookieOption) Middleware {
+// CSRF protects an unsafe method with a signed double-submit token. Pass
+// cfg.Secret, which BaseConfig reads from AVERO_SECRET.
+func CSRF(secret Secret, opts ...router.CookieOption) Middleware {
 	return router.CSRF(secret, opts...)
 }
 
-// Flash carries a Toast from one request to the next.
-func Flash(secret string, opts ...router.CookieOption) Middleware {
+// Flash carries a Toast from one request to the next. Pass cfg.Secret, which
+// BaseConfig reads from AVERO_SECRET.
+func Flash(secret Secret, opts ...router.CookieOption) Middleware {
 	return router.Flash(secret, opts...)
 }
 

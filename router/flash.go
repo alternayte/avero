@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+
+	"github.com/alternayte/avero/config"
 )
 
 // FlashCookieName is the cookie that carries the toasts across a redirect.
@@ -15,7 +17,7 @@ const FlashCookieName = "_avero_flash"
 // cookie. After the handler returns, it writes the toasts into the cookie only
 // when the response is a redirect. Any other response shows the toasts itself,
 // so it needs no cookie.
-func Flash(secret string, opts ...CookieOption) Middleware {
+func Flash(secret config.Secret, opts ...CookieOption) Middleware {
 	sign := newSigner(secret, "flash")
 	return Middleware{Name: "flash", Wrap: func(next Handler) Handler {
 		return func(c *Ctx) (Response, error) {

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/alternayte/avero/config"
 	"github.com/alternayte/avero/router"
 )
 
@@ -116,7 +117,7 @@ func TestAFlashCookieThatAnotherSecretSignedIsIgnored(t *testing.T) {
 	cookie := flashCookie(t, res)
 
 	other := router.New()
-	other.Use(router.Flash("a-different-secret-of-good-length"))
+	other.Use(router.Flash(config.Secret("a-different-secret-of-good-length")))
 	other.Get("/things", func(c *router.Ctx) (router.Response, error) {
 		if len(c.Toasts()) == 0 {
 			return router.Text(200, "none"), nil

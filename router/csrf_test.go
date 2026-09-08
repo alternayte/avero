@@ -1,15 +1,18 @@
 package router_test
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 	"testing"
 
+	"github.com/alternayte/avero/config"
 	"github.com/alternayte/avero/router"
 )
 
-const secret = "a-test-secret-that-is-long-enough"
+// secret is the signing secret of a test. It is long enough for newSigner.
+var secret = config.Secret("a-test-secret-that-is-long-enough")
 
 // tokenFrom performs a GET and returns the CSRF token and its cookie.
 func tokenFrom(t *testing.T, h http.Handler) (string, *http.Cookie) {
@@ -140,7 +143,7 @@ func TestCSRFRejectsACookieThatAnotherSecretSigned(t *testing.T) {
 	token, cookie := tokenFrom(t, h)
 
 	other := router.New()
-	other.Use(router.CSRF("a-different-secret-of-good-length"))
+	other.Use(router.CSRF(config.Secret("a-different-secret-of-good-length")))
 	other.Post("/submit", ok("accepted"))
 	oh, err := other.Handler()
 	if err != nil {
@@ -188,7 +191,7 @@ func TestAnEmptySecretIsAFault(t *testing.T) {
 			t.Fatal("CSRF accepted an empty secret")
 		}
 	}()
-	router.CSRF("")
+	router.CSRF(config.Secret(""))
 }
 
 func TestAShortSecretIsAFault(t *testing.T) {
@@ -197,5 +200,20 @@ func TestAShortSecretIsAFault(t *testing.T) {
 			t.Fatal("CSRF accepted a short secret")
 		}
 	}()
-	router.CSRF("short")
+	router.CSRF(config.Secret("short"))
+}
+
+func TestThePanicNeverPrintsTheSecret(t *testing.T) {
+	// The secret keeps its redacting type from the environment to the HMAC.
+	// A wiring fault must not put it in a stack trace.
+	defer func() {
+		v := recover()
+		if v == nil {
+			t.Fatal("CSRF accepted a short secret")
+		}
+		if strings.Contains(fmt.Sprint(v), "leak-me-short") {
+			t.Fatalf("the panic prints the secret: %v", v)
+		}
+	}()
+	router.CSRF(config.Secret("leak-me-short"))
 }
