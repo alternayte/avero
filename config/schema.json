@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avero.dev/schema/config-report/v1",
+  "title": "Avero configuration report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "fields"],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "https://avero.dev/schema/config-report/v1"
+    },
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "name", "type", "value", "source", "secret", "required"],
+        "properties": {
+          "path": { "type": "string" },
+          "name": { "type": "string" },
+          "type": { "type": "string" },
+          "value": { "type": "string" },
+          "source": { "type": "string", "enum": ["env", "default", "absent"] },
+          "secret": { "type": "boolean" },
+          "required": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}
