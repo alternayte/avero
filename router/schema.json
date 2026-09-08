@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avero.dev/schema/routes-report/v1",
+  "title": "Avero routes report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "routes"],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "https://avero.dev/schema/routes-report/v1"
+    },
+    "routes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["method", "pattern", "handler", "middleware", "file", "line", "mounted"],
+        "properties": {
+          "method": { "type": "string" },
+          "pattern": { "type": "string" },
+          "handler": { "type": "string" },
+          "middleware": { "type": "array", "items": { "type": "string" } },
+          "file": { "type": "string" },
+          "line": { "type": "integer" },
+          "mounted": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

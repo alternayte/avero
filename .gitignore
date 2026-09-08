@@ -20,3 +20,7 @@ docs/internal/
 .DS_Store
 .idea/
 .vscode/
+
+# Local development workspace. See the note inside the file.
+go.work
+go.work.sum

@@ -6,6 +6,7 @@
 //
 //	config   the configuration loader and the report, S1
 //	host     the lifecycle, the readiness gate and the boot checks, S2
+//	router   the routes, the request context and the middleware, S4
 //
 // An application can import a subsystem directly. The two forms are the same
 // types.
@@ -20,8 +21,11 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/alternayte/drel"
+
 	"github.com/alternayte/avero/config"
 	"github.com/alternayte/avero/host"
+	"github.com/alternayte/avero/router"
 )
 
 // The configuration types. See the config package, S1.
@@ -116,4 +120,90 @@ func Exit(w io.Writer, err error) int {
 		return config.Exit(w, err)
 	}
 	return host.Exit(w, err)
+}
+
+// The routing types. See the router package, S4.
+type (
+	// Router registers routes and builds the http.Handler.
+	Router = router.Router
+	// Ctx carries one request.
+	Ctx = router.Ctx
+	// Handler is one typed handler.
+	Handler = router.Handler
+	// Response is the result of a handler.
+	Response = router.Response
+	// Middleware wraps a handler and carries a name.
+	Middleware = router.Middleware
+	// Route is one registered route.
+	Route = router.Route
+	// Toast is one message that the next rendered page shows.
+	Toast = router.Toast
+	// RouteReport lists every route of a router.
+	RouteReport = router.Report
+)
+
+// The toast levels and the CSRF status.
+const (
+	ToastInfo    = router.ToastInfo
+	ToastSuccess = router.ToastSuccess
+	ToastWarning = router.ToastWarning
+	ToastError   = router.ToastError
+	// StatusCSRF is the status of a CSRF fault.
+	StatusCSRF = router.StatusCSRF
+)
+
+// NewRouter builds a router. See router.New.
+func NewRouter(opts ...router.Option) *Router { return router.New(opts...) }
+
+// The response constructors. See the router package.
+
+// Text returns a plain text response.
+func Text(code int, body string) Response { return router.Text(code, body) }
+
+// HTML returns an HTML response.
+func HTML(code int, body string) Response { return router.HTML(code, body) }
+
+// JSON returns a response that encodes body as JSON.
+func JSON(code int, body any) Response { return router.JSON(code, body) }
+
+// Redirect returns a redirect.
+func Redirect(code int, to string) Response { return router.Redirect(code, to) }
+
+// NoContent returns 204 with no body.
+func NoContent() Response { return router.NoContent() }
+
+// Empty returns a status with no body.
+func Empty(code int) Response { return router.Empty(code) }
+
+// Status returns a response that carries the standard text of the code.
+func Status(code int) Response { return router.Status(code) }
+
+// The middleware. See the router package for the scaffolded order.
+
+// RequestID gives each request an identifier.
+func RequestID() Middleware { return router.RequestID() }
+
+// Recover turns a panic into 500.
+func Recover(l *slog.Logger) Middleware { return router.Recover(l) }
+
+// AccessLog writes one line for each request.
+func AccessLog(l *slog.Logger) Middleware { return router.AccessLog(l) }
+
+// CSRF protects an unsafe method with a signed double-submit token.
+func CSRF(secret string, opts ...router.CookieOption) Middleware {
+	return router.CSRF(secret, opts...)
+}
+
+// Flash carries a Toast from one request to the next.
+func Flash(secret string, opts ...router.CookieOption) Middleware {
+	return router.Flash(secret, opts...)
+}
+
+// Transaction opens a drel transaction and decides the commit from the
+// response.
+func Transaction(e *drel.Engine) Middleware { return router.Transaction(e) }
+
+// Adapt turns a net/http middleware into an Avero middleware.
+func Adapt(name string, mw func(http.Handler) http.Handler) Middleware {
+	return router.Adapt(name, mw)
 }

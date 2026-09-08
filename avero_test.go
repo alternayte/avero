@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	avero "github.com/alternayte/avero"
 	"github.com/alternayte/avero/config"
 	"github.com/alternayte/avero/host"
+	"github.com/alternayte/avero/router"
 )
 
 // The root package holds aliases and thin wrappers. It holds no logic and no
@@ -171,5 +173,60 @@ func TestExitReturnsZeroForNoError(t *testing.T) {
 	}
 	if out.Len() != 0 {
 		t.Fatalf("Exit wrote %q, want nothing", out.String())
+	}
+}
+
+func takeRouter(*router.Router)        {}
+func takeCtx(*router.Ctx)              {}
+func takeResponse(router.Response)     {}
+func takeMiddleware(router.Middleware) {}
+func takeRoute(router.Route)           {}
+func takeToast(router.Toast)           {}
+
+func TestTheRouterAliasesNameTheSubsystemTypes(t *testing.T) {
+	takeRouter(avero.NewRouter())
+	takeCtx((*avero.Ctx)(nil))
+	takeResponse(avero.NoContent())
+	takeMiddleware(avero.RequestID())
+	takeRoute(avero.Route{})
+	takeToast(avero.Toast{Level: avero.ToastInfo, Message: "x"})
+	if avero.StatusCSRF != router.StatusCSRF {
+		t.Fatal("StatusCSRF does not name the router constant")
+	}
+}
+
+func TestTheRootResponseConstructorsReachTheRouter(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		res  avero.Response
+		want int
+	}{
+		{"text", avero.Text(200, "x"), 200},
+		{"html", avero.HTML(200, "x"), 200},
+		{"json", avero.JSON(201, nil), 201},
+		{"redirect", avero.Redirect(303, "/x"), 303},
+		{"no content", avero.NoContent(), 204},
+		{"empty", avero.Empty(202), 202},
+		{"status", avero.Status(422), 422},
+	} {
+		if got := tc.res.Status(); got != tc.want {
+			t.Fatalf("%s reports %d, want %d", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestTheRootRouterServesARoute(t *testing.T) {
+	r := avero.NewRouter()
+	r.Get("/things", func(*avero.Ctx) (avero.Response, error) {
+		return avero.Text(200, "listed"), nil
+	})
+	h, err := r.Handler()
+	if err != nil {
+		t.Fatalf("Handler returned an error: %v", err)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/things", nil))
+	if rec.Code != 200 || rec.Body.String() != "listed" {
+		t.Fatalf("gave %d %q", rec.Code, rec.Body.String())
 	}
 }
