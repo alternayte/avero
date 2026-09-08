@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avero.dev/schema/asset-manifest/v1",
+  "title": "Avero asset manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "base", "assets"],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "https://avero.dev/schema/asset-manifest/v1"
+    },
+    "base": { "type": "string" },
+    "assets": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "file", "hash", "size", "integrity"],
+        "properties": {
+          "source": { "type": "string" },
+          "file": { "type": "string" },
+          "hash": { "type": "string" },
+          "size": { "type": "integer" },
+          "integrity": { "type": "string" }
+        }
+      }
+    }
+  }
+}

@@ -3,7 +3,7 @@ module github.com/alternayte/avero
 go 1.26.2
 
 // The direct dependencies. Every one is named in the SDD: drel and auth-all in
-// section 1.1, and OpenTelemetry in S3.
+// section 1.1, OpenTelemetry in S3, and esbuild in S11.
 require (
 	github.com/alternayte/auth-all v0.2.0
 	github.com/alternayte/drel v0.6.0
@@ -38,6 +38,11 @@ require (
 	google.golang.org/grpc v1.79.1 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
+
+// esbuild is the bundler of the asset pipeline. S11 names it: "Bundle with
+// esbuild as a Go library." It runs at build time only. No request path calls
+// it.
+require github.com/evanw/esbuild v0.28.2
 
 require (
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect

@@ -9,6 +9,7 @@
 //	router   the routes, the request context and the middleware, S4
 //	module   the module contract and the module inspection, S6
 //	view     the helpers of a server rendered page, S10
+//	assets   the asset pipeline and the manifest, S11
 //	telemetry the traces, the metrics and the logger, S3
 //
 // An application can import a subsystem directly. The two forms are the same
@@ -20,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
@@ -27,6 +29,7 @@ import (
 
 	"github.com/alternayte/drel"
 
+	"github.com/alternayte/avero/assets"
 	"github.com/alternayte/avero/config"
 	"github.com/alternayte/avero/host"
 	"github.com/alternayte/avero/module"
@@ -391,3 +394,26 @@ func Toasts(ctx context.Context) []Toast { return view.Toasts(ctx) }
 // middleware, so the field carries the longer name here. A component calls
 // view.CSRF.
 func CSRFField() ViewComponent { return view.CSRF() }
+
+// The asset types. See the assets package, S11.
+type (
+	// Manifest maps the name of an asset to the built file.
+	Manifest = assets.Manifest
+	// AssetEntry is one built asset.
+	AssetEntry = assets.Entry
+)
+
+// LoadManifest reads the asset manifest from an embedded file system. See
+// assets.LoadManifest.
+//
+//	//go:embed all:assets/dist
+//	var dist embed.FS
+//	m, err := avero.LoadManifest(dist, "assets/dist/manifest.json")
+func LoadManifest(fsys fs.FS, name string) (*Manifest, error) {
+	return assets.LoadManifest(fsys, name)
+}
+
+// AssetHandler serves the built assets of a manifest. See assets.Handler.
+//
+//	r.Mount("/assets/", avero.AssetHandler(dist, m))
+func AssetHandler(fsys fs.FS, m *Manifest) http.Handler { return assets.Handler(fsys, m) }

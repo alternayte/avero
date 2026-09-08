@@ -24,9 +24,11 @@ lint:
 test:
     go test ./... -race -count=1
 
-# 5, 6. Integration tests against PostgreSQL and RabbitMQ.
+# 5, 6. Integration tests. The asset suite needs the network. The database
+# suite and the broker suite arrive with S7.
 integration:
-    @echo "integration: no integration test exists yet. S7 adds the first one."
+    go test ./assets/... -race -tags=integration -timeout 10m
+    @echo "integration: no database test and no broker test exist yet. S7 adds the first one."
 
 # 7. Every generated file is current.
 #
