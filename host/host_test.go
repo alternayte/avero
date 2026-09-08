@@ -182,13 +182,8 @@ func TestReadyzReturns503AfterTheGateCloses(t *testing.T) {
 	go func() { closed <- stop() }()
 
 	waitFor(t, "/readyz to report 503 after the gate closed", func() bool {
-		res, err := (&http.Client{Timeout: time.Second}).Get("http://" + app.Addr() + "/readyz")
-		if err != nil {
-			return false
-		}
-		defer func() { _ = res.Body.Close() }()
-		_, _ = io.Copy(io.Discard, res.Body)
-		return res.StatusCode == http.StatusServiceUnavailable
+		code, _ := probe(app, "/readyz")
+		return code == http.StatusServiceUnavailable
 	})
 
 	close(held)
@@ -252,7 +247,9 @@ func TestAHangingRequestDoesNotPreventExitWithinTheShutdownGrace(t *testing.T) {
 		<-release
 		_, _ = w.Write([]byte("late"))
 	})
-	app := newApp(t, baseConfig(grace),
+	log, read := captureLogger()
+	app := host.New(baseConfig(grace),
+		host.WithoutSignals(), host.WithLogger(log), host.WithListener(listener(t)),
 		host.WithComponents(newFake(rec, "a")), host.WithHandler(mux))
 
 	stop := run(t, app)
@@ -260,7 +257,7 @@ func TestAHangingRequestDoesNotPreventExitWithinTheShutdownGrace(t *testing.T) {
 	go func() {
 		res, err := (&http.Client{}).Get("http://" + app.Addr() + "/hang")
 		if err == nil {
-			defer func() { _ = res.Body.Close() }()
+			_ = res.Body.Close()
 		}
 	}()
 	<-reached
@@ -272,11 +269,18 @@ func TestAHangingRequestDoesNotPreventExitWithinTheShutdownGrace(t *testing.T) {
 	if elapsed > grace+2*time.Second {
 		t.Fatalf("Run took %v, want a return within the grace of %v", elapsed, grace)
 	}
-	if err == nil {
-		t.Fatal("Run reported no fault although the grace expired with a request in flight")
+	// The grace expiry is a step of the run sequence, not a fault. The process
+	// exits 0. See the SDD, section 5.3, steps 9 and 11.
+	if err != nil {
+		t.Fatalf("Run returned an error for a cut request, want none: %v", err)
 	}
-	if !strings.Contains(err.Error(), "→") {
-		t.Fatalf("the error states no repair: %v", err)
+	// The cut is never silent.
+	out := read()
+	if !strings.Contains(out, "level=WARN") {
+		t.Fatalf("the cut request produced no warning:\n%s", out)
+	}
+	if !strings.Contains(out, "cut=1") {
+		t.Fatalf("the warning does not count the cut requests:\n%s", out)
 	}
 	// The components still stop. A cut request must not skip the shutdown.
 	rec.equal(t, "start a", "stop a")

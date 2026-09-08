@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -143,6 +144,32 @@ func baseConfig(grace time.Duration) config.BaseConfig {
 // not log output.
 func quietLogger() *slog.Logger { return slog.New(slog.DiscardHandler) }
 
+// captureLogger returns a logger and a function that reads what it wrote. A
+// test that asserts a warning uses it.
+func captureLogger() (*slog.Logger, func() string) {
+	buf := &syncBuffer{}
+	log := slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	return log, buf.String
+}
+
+// syncBuffer is a buffer that a handler and a test can share.
+type syncBuffer struct {
+	mu sync.Mutex
+	b  strings.Builder
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
+}
+
 // listener binds a port that the operating system chooses.
 func listener(t *testing.T) net.Listener {
 	t.Helper()
@@ -228,6 +255,18 @@ func get(t *testing.T, app *host.App, path string) (int, string) {
 	return res.StatusCode, string(body)
 }
 
+// probe performs one GET and returns the status code. It never fails the
+// test, so a poll can call it.
+func probe(app *host.App, path string) (int, error) {
+	res, err := (&http.Client{Timeout: time.Second}).Get("http://" + app.Addr() + path)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = res.Body.Close() }()
+	_, _ = io.Copy(io.Discard, res.Body)
+	return res.StatusCode, nil
+}
+
 // waitFor polls until cond holds. It fails the test at the deadline.
 func waitFor(t *testing.T, why string, cond func() bool) {
 	t.Helper()
@@ -245,13 +284,8 @@ func waitFor(t *testing.T, why string, cond func() bool) {
 func waitReady(t *testing.T, app *host.App) {
 	t.Helper()
 	waitFor(t, "the readiness gate to open", func() bool {
-		res, err := (&http.Client{Timeout: time.Second}).Get("http://" + app.Addr() + "/readyz")
-		if err != nil {
-			return false
-		}
-		defer func() { _ = res.Body.Close() }()
-		_, _ = io.Copy(io.Discard, res.Body)
-		return res.StatusCode == http.StatusOK
+		code, _ := probe(app, "/readyz")
+		return code == http.StatusOK
 	})
 }
 
@@ -259,13 +293,8 @@ func waitReady(t *testing.T, app *host.App) {
 func waitServing(t *testing.T, app *host.App) {
 	t.Helper()
 	waitFor(t, "the HTTP server to listen", func() bool {
-		res, err := (&http.Client{Timeout: time.Second}).Get("http://" + app.Addr() + "/readyz")
-		if err != nil {
-			return false
-		}
-		defer func() { _ = res.Body.Close() }()
-		_, _ = io.Copy(io.Discard, res.Body)
-		return true
+		_, err := probe(app, "/readyz")
+		return err == nil
 	})
 }
 

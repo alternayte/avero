@@ -14,7 +14,6 @@ const (
 	StageMigrate = "migrate"
 	StageStart   = "start"
 	StageStop    = "stop"
-	StageDrain   = "drain"
 )
 
 // Fault is one host fault. It names the stage and the subject, states what

@@ -38,10 +38,20 @@ func (a *App) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("ready\n"))
 }
 
-// mux builds the server handler. The host owns /readyz. The application
-// handler owns every other path.
+// handleHealthz answers the liveness probe. It returns 200 as soon as the
+// server listens, and it keeps returning 200 through the drain. A slow start
+// and a drain are not reasons to restart the process.
+func (a *App) handleHealthz(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok\n"))
+}
+
+// mux builds the server handler. The host owns /healthz and /readyz. The
+// application handler owns every other path.
 func (a *App) mux() http.Handler {
 	m := http.NewServeMux()
+	m.HandleFunc("/healthz", a.handleHealthz)
 	m.HandleFunc("/readyz", a.handleReadyz)
 	if a.handler != nil {
 		m.Handle("/", a.handler)

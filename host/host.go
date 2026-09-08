@@ -294,10 +294,9 @@ func (a *App) shutdown(ctx context.Context, started []Component) error {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), a.cfg.ShutdownGrace)
 	defer cancel()
 
+	a.drain(ctx)
+
 	var errs []error
-	if err := a.drain(ctx); err != nil {
-		errs = append(errs, err)
-	}
 	for i := len(started) - 1; i >= 0; i-- {
 		c := started[i]
 		a.log.InfoContext(ctx, "stopping the component", "component", c.Name())
@@ -314,13 +313,13 @@ func (a *App) shutdown(ctx context.Context, started []Component) error {
 }
 
 // drain waits for the in-flight requests to end, then closes the server. It
-// returns a fault when the grace expires with a request still in flight.
-func (a *App) drain(ctx context.Context) error {
+// warns and returns when the grace expires with a request still in flight.
+func (a *App) drain(ctx context.Context) {
 	a.mu.RLock()
 	srv := a.srv
 	a.mu.RUnlock()
 	if srv == nil {
-		return nil
+		return
 	}
 
 	a.draining.Store(true)
@@ -332,19 +331,15 @@ func (a *App) drain(ctx context.Context) error {
 		if err := srv.Shutdown(ctx); err != nil {
 			_ = srv.Close()
 		}
-		return nil
 	case <-ctx.Done():
 		// The grace expired. Drop the connections, so that the process exits
-		// inside the grace, and report the requests that the server cut.
+		// inside the grace. The SDD makes this step of the run sequence, so
+		// the process still exits 0. See section 5.3, steps 9 and 11. The cut
+		// is never silent.
 		cut := a.inFlight.Load()
 		_ = srv.Close()
-		return &Fault{
-			Stage: StageDrain, Subject: "the HTTP server",
-			Message: fmt.Sprintf("%d requests were still in flight after the grace of %v, so the server cut them",
-				cut, a.cfg.ShutdownGrace),
-			Repair: "Raise SHUTDOWN_GRACE, or make the slow handler return sooner",
-			Err:    ctx.Err(),
-		}
+		a.log.Warn("the grace expired with requests in flight, so the server cut them",
+			"cut", cut, "grace", a.cfg.ShutdownGrace)
 	}
 }
 
