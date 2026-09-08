@@ -31,10 +31,11 @@ type Router struct {
 
 // registry holds the state that every scope of one router shares.
 type registry struct {
-	routes []Route
-	faults []*Fault
-	seen   map[string]Route
-	onErr  func(c *Ctx, err error) Response
+	routes    []Route
+	faults    []*Fault
+	seen      map[string]Route
+	onErr     func(c *Ctx, err error) Response
+	onInvalid func(c *Ctx, f *Fields) Response
 }
 
 // New builds a router.
@@ -56,6 +57,14 @@ type Option func(*Router)
 // default answers 500 and never prints the message of the error.
 func WithErrorResponse(fn func(c *Ctx, err error) Response) Option {
 	return func(r *Router) { r.reg.onErr = fn }
+}
+
+// WithValidationResponse sets the response that a validation fault produces.
+// The default answers 422 with a map of field name to message. The SSR shape
+// replaces it, so the middleware renders the form again with the errors and
+// the old input. See the SDD, S5.
+func WithValidationResponse(fn func(c *Ctx, f *Fields) Response) Option {
+	return func(r *Router) { r.reg.onInvalid = fn }
 }
 
 // defaultErrorResponse answers 500. It never writes the message of the error,
@@ -202,8 +211,10 @@ func (r *Router) serve(route Route) http.Handler {
 	}
 	h := chain(route.handler, route.mws)
 	onErr := r.reg.onErr
+	onInvalid := r.reg.onInvalid
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		c := newCtx(w, req)
+		c.onInvalid = onInvalid
 		res, err := h(c)
 		if err != nil {
 			res = onErr(c, err)

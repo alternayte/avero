@@ -312,3 +312,43 @@ func TestTheTelemetryAliasesNameTheSubsystemTypes(t *testing.T) {
 }
 
 func takeTelemetry(*telemetry.Provider) {}
+
+// rootInput stands in for a generated input.
+type rootInput struct{ Title string }
+
+func (in *rootInput) Bind(c *avero.Ctx) error {
+	in.Title = c.Request().URL.Query().Get("title")
+	return nil
+}
+
+func (in *rootInput) Validate(_ *avero.Ctx, f *avero.Fields) {
+	if in.Title == "" {
+		f.Add("Title", "is required")
+	}
+}
+
+func TestTheRootInAdapterReachesTheRouter(t *testing.T) {
+	r := avero.NewRouter()
+	r.Post("/things", avero.In(func(_ *avero.Ctx, in rootInput) (avero.Response, error) {
+		return avero.Text(201, in.Title), nil
+	}))
+	h, err := r.Handler()
+	if err != nil {
+		t.Fatalf("Handler returned an error: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/things?title=made", nil))
+	if rec.Code != 201 || rec.Body.String() != "made" {
+		t.Fatalf("gave %d %q", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/things", nil))
+	if rec.Code != 422 {
+		t.Fatalf("gave %d, want 422", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "is required") {
+		t.Fatalf("the body is %q", rec.Body.String())
+	}
+}

@@ -29,8 +29,14 @@ integration:
     @echo "integration: no integration test exists yet. S7 adds the first one."
 
 # 7. Every generated file is current.
+#
+# The first step is the exact test: it regenerates in memory and compares. The
+# second step is the one that the SDD states, scoped to the generated files so
+# that uncommitted hand-written work does not trip it.
 generate-check:
-    @echo "generate-check: no generator exists yet. S5 adds the first one."
+    go run ./internal/cmd/averogen -check .
+    go generate ./...
+    git diff --exit-code -- '*zz_generated.go'
 
 # 8, 9. Scaffold, build and test the three reference applications.
 reference-apps:

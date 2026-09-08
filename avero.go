@@ -142,6 +142,12 @@ type (
 	Route = router.Route
 	// Toast is one message that the next rendered page shows.
 	Toast = router.Toast
+	// Fields holds one message for each field that failed validation.
+	Fields = router.Fields
+	// Binder fills itself from a request. `avero generate` writes it.
+	Binder = router.Binder
+	// Validator checks itself. `avero generate` writes it.
+	Validator = router.Validator
 	// RouteReport lists every route of a router.
 	RouteReport = router.Report
 )
@@ -256,3 +262,24 @@ func NewTelemetry(cfg BaseConfig, opts ...TelemetryOption) (*Telemetry, error) {
 // Attr builds a span attribute. A Secret reads as ******** and never reaches
 // an exporter. See telemetry.Attr.
 func Attr(key string, value any) attribute.KeyValue { return telemetry.Attr(key, value) }
+
+// In adapts a typed handler to the router. The constraint requires the Bind
+// and Validate methods that `avero generate` writes, so a missing or stale
+// generated file is a compile fault at the route. See router.In.
+//
+//	r.Post("/things", avero.In(m.Create))
+func In[T any, P interface {
+	*T
+	Binder
+	Validator
+}](fn func(c *Ctx, in T) (Response, error),
+) Handler {
+	return router.In[T, P](fn)
+}
+
+// FieldsFrom returns the validation result of a failed request. S10 renders
+// the form again from it.
+func FieldsFrom(ctx context.Context) *Fields { return router.FieldsFrom(ctx) }
+
+// OldFrom returns the input that failed validation.
+func OldFrom(ctx context.Context) any { return router.OldFrom(ctx) }

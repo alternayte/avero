@@ -20,10 +20,16 @@ type Ctx struct {
 	toasts []Toast
 	// wroteHeader guards against a second WriteHeader call.
 	wroteHeader bool
+	// onInvalid answers a validation fault. The router supplies it.
+	onInvalid func(c *Ctx, f *Fields) Response
 }
 
 // newCtx builds a Ctx for one request.
 func newCtx(w http.ResponseWriter, r *http.Request) *Ctx { return &Ctx{w: w, r: r} }
+
+// NewCtx builds a Ctx for one request. A test calls a handler with it and
+// needs no router. The router builds its own.
+func NewCtx(w http.ResponseWriter, r *http.Request) *Ctx { return newCtx(w, r) }
 
 // Request returns the request.
 func (c *Ctx) Request() *http.Request { return c.r }
