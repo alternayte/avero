@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avero.dev/schema/modules-report/v1",
+  "title": "Avero modules report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "modules"],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "https://avero.dev/schema/modules-report/v1"
+    },
+    "modules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "module", "interfaces", "routes", "inboxHandlers",
+          "projections", "jobs", "migrations", "description"
+        ],
+        "properties": {
+          "module": { "type": "string" },
+          "interfaces": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "DescribeModule", "HTTPModule", "InboxModule",
+                "MigrationModule", "ProjectorModule", "ScheduleModule"
+              ]
+            }
+          },
+          "routes": { "type": "array", "items": { "$ref": "#/$defs/route" } },
+          "inboxHandlers": { "type": "array", "items": { "type": "string" } },
+          "projections": { "type": "array", "items": { "type": "string" } },
+          "jobs": { "type": "array", "items": { "type": "string" } },
+          "migrations": { "type": "boolean" },
+          "description": { "$ref": "#/$defs/description" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "pattern", "handler"],
+      "properties": {
+        "method": { "type": "string" },
+        "pattern": { "type": "string" },
+        "handler": { "type": "string" }
+      }
+    },
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type"],
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string" }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "table", "fields"],
+      "properties": {
+        "name": { "type": "string" },
+        "table": { "type": "string" },
+        "fields": { "type": "array", "items": { "$ref": "#/$defs/field" } }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "fields"],
+      "properties": {
+        "name": { "type": "string" },
+        "fields": { "type": "array", "items": { "$ref": "#/$defs/field" } }
+      }
+    },
+    "description": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "routes", "models", "events", "projections", "inboxTypes"],
+      "properties": {
+        "name": { "type": "string" },
+        "routes": { "type": "array", "items": { "$ref": "#/$defs/route" } },
+        "models": { "type": "array", "items": { "$ref": "#/$defs/model" } },
+        "events": { "type": "array", "items": { "$ref": "#/$defs/event" } },
+        "projections": { "type": "array", "items": { "type": "string" } },
+        "inboxTypes": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

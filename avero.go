@@ -7,6 +7,7 @@
 //	config   the configuration loader and the report, S1
 //	host     the lifecycle, the readiness gate and the boot checks, S2
 //	router   the routes, the request context and the middleware, S4
+//	module   the module contract and the module inspection, S6
 //	telemetry the traces, the metrics and the logger, S3
 //
 // An application can import a subsystem directly. The two forms are the same
@@ -27,6 +28,7 @@ import (
 
 	"github.com/alternayte/avero/config"
 	"github.com/alternayte/avero/host"
+	"github.com/alternayte/avero/module"
 	"github.com/alternayte/avero/router"
 	"github.com/alternayte/avero/telemetry"
 	"go.opentelemetry.io/otel/attribute"
@@ -283,3 +285,54 @@ func FieldsFrom(ctx context.Context) *Fields { return router.FieldsFrom(ctx) }
 
 // OldFrom returns the input that failed validation.
 func OldFrom(ctx context.Context) any { return router.OldFrom(ctx) }
+
+// The module types. See the module package, S6.
+type (
+	// Module is one feature of an application.
+	Module = module.Module
+	// HTTPModule contributes routes.
+	HTTPModule = module.HTTPModule
+	// InboxModule contributes message handlers.
+	InboxModule = module.InboxModule
+	// InboxHandler is one message handler.
+	InboxHandler = module.InboxHandler
+	// ScheduleModule contributes scheduled jobs.
+	ScheduleModule = module.ScheduleModule
+	// ProjectorModule contributes projections.
+	ProjectorModule = module.ProjectorModule
+	// Projection is one read model projection.
+	Projection = module.Projection
+	// MigrationModule contributes migration files.
+	MigrationModule = module.MigrationModule
+	// DescribeModule states the description that an agent reads.
+	DescribeModule = module.DescribeModule
+	// Description states what one module contributes. See AN-3.
+	Description = module.Description
+	// RouteDesc is one route of a module.
+	RouteDesc = module.RouteDesc
+	// ModelDesc is one persistent model of a module.
+	ModelDesc = module.ModelDesc
+	// EventDesc is one event of a module.
+	EventDesc = module.EventDesc
+	// FieldDesc is one field of a model or of an event.
+	FieldDesc = module.FieldDesc
+	// Scheduler collects the jobs of the modules.
+	Scheduler = module.Scheduler
+	// Job is one scheduled unit of work.
+	Job = module.Job
+	// ModuleSet holds the modules and the result of the inspection.
+	ModuleSet = module.Set
+	// ModuleReport lists the contribution of every module.
+	ModuleReport = module.Report
+	// Contribution is one row of the contribution table.
+	Contribution = module.Contribution
+)
+
+// Modules inspects each module one time and returns the set. Attach adds the
+// routes to a router. See module.Modules.
+//
+//	set := avero.Modules(billing.New(db), catalog.New(db))
+//	if err := set.Attach(r); err != nil {
+//	    os.Exit(avero.Exit(os.Stderr, err))
+//	}
+func Modules(ms ...Module) *ModuleSet { return module.Modules(ms...) }
