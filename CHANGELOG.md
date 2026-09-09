@@ -3,7 +3,7 @@
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## v0.3.1
 
 ### Added
 
@@ -12,6 +12,9 @@ The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   passes the map to the router before it registers the routes. A person
   therefore writes the sentence one time, and no comment names a type. An
   option of a route wins over the comment.
+- `module.SummaryModule` is the optional interface that carries the map. A
+  module of an older application that states no Summaries method keeps its
+  summaries in the options of its routes.
 
 ## v0.3.0
 
