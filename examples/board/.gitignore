@@ -1,0 +1,5 @@
+/bin/
+/assets/dist/
+/.avero/bin/
+/*.db
+/.env

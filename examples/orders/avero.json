@@ -1,0 +1,9 @@
+{
+  "name": "orders",
+  "shape": "api",
+  "assets": {
+    "entries": [],
+    "tailwind": {}
+  },
+  "migrations": "migrations"
+}

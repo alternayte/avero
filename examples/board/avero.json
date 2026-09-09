@@ -1,0 +1,12 @@
+{
+  "name": "board",
+  "shape": "spa",
+  "assets": {
+    "entries": ["js/app.js"],
+    "tailwind": {
+      "input": "assets/css/app.css",
+      "asset": "css/app.css"
+    }
+  },
+  "migrations": "migrations"
+}

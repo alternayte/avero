@@ -1,0 +1,13 @@
+{
+  "name": "blog",
+  "shape": "ssr",
+  "hypermedia": "datastar",
+  "assets": {
+    "entries": ["js/app.js"],
+    "tailwind": {
+      "input": "assets/css/app.css",
+      "asset": "css/app.css"
+    }
+  },
+  "migrations": "migrations"
+}

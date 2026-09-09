@@ -21,11 +21,16 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 )
+
+// debugWatch prints each change that the watcher reports. A test of the loop
+// sets AVERO_DEV_DEBUG to read it.
+var debugWatch = os.Getenv("AVERO_DEV_DEBUG") != ""
 
 // The defaults of the loop.
 const (
@@ -119,6 +124,17 @@ func New(cfg Config) (*Server, error) {
 	s := &Server{cfg: cfg, hub: newHub(), restart: make(chan struct{}, 1)}
 	s.proxy = newProxy(cfg.ChildPort, cfg.Env == EnvDevelopment)
 	return s, nil
+}
+
+// Sweep returns the source files of the tree that changed after a time. The
+// loop calls it after each rebuild, and a test reads it.
+func (s *Server) Sweep(since time.Time) []string {
+	w, err := newWatcher(s.cfg.Dir)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = w.Close() }()
+	return w.sweep(since)
 }
 
 // Clients returns the number of browsers that listen on the reload channel.
@@ -330,11 +346,20 @@ func (s *Server) watch(ctx context.Context) {
 		if err != nil {
 			return
 		}
-		if len(files) == 0 {
-			continue
-		}
-		if err := s.Changed(ctx, files); err != nil {
-			_, _ = fmt.Fprintf(s.cfg.Out, "avero dev: %v\n", err)
+		for len(files) > 0 {
+			if debugWatch {
+				_, _ = fmt.Fprintf(s.cfg.Out, "avero dev: change %v\n", files)
+			}
+			start := time.Now()
+			if err := s.Changed(ctx, files); err != nil {
+				_, _ = fmt.Fprintf(s.cfg.Out, "avero dev: %v\n", err)
+			}
+			// A change that arrives during the build must not wait for the
+			// next notification, so the loop reads the tree one time.
+			files = w.sweep(start)
+			if err := ctx.Err(); err != nil {
+				return
+			}
 		}
 	}
 }

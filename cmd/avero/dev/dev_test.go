@@ -361,3 +361,27 @@ func portOf(t *testing.T, address string) int {
 	}
 	return port
 }
+
+func TestTheSweepFindsAChangeThatArrivedDuringABuild(t *testing.T) {
+	// A notification that arrives while a build runs can reach a library
+	// buffer that nothing reads. The loop reads the tree after each build, so
+	// no change waits for the next save.
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile returned %v", err)
+	}
+	server, _, _, _ := loop(t, dir)
+
+	started := time.Now()
+	time.Sleep(10 * time.Millisecond)
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n\n// changed\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile returned %v", err)
+	}
+	files := server.Sweep(started)
+	if len(files) != 1 || filepath.Base(files[0]) != "main.go" {
+		t.Fatalf("the sweep found %v, want main.go", files)
+	}
+	if later := server.Sweep(time.Now()); len(later) != 0 {
+		t.Fatalf("the sweep found %v after the change, want none", later)
+	}
+}

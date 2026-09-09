@@ -1,0 +1,57 @@
+package main
+
+import (
+	"embed"
+	"io/fs"
+	"net/http"
+
+	"github.com/alternayte/avero"
+	"github.com/alternayte/avero/assets"
+	"github.com/alternayte/drel"
+
+	"board/internal/features/posts"
+	"board/internal/ui"
+)
+
+// dist holds the built assets of the single page front end. `avero build`
+// writes them, and the binary carries them.
+//
+//go:embed all:assets/dist
+var dist embed.FS
+
+// wire builds the router and the module set.
+//
+// An inspection command passes a nil engine and a zero configuration, because
+// a route registration touches no database and needs no key.
+func wire(engine *drel.Engine, cfg Config) (*avero.Router, *avero.ModuleSet, error) {
+	manifest, err := avero.LoadManifest(dist, "assets/dist/manifest.json")
+	if err != nil {
+		return nil, nil, err
+	}
+	ui.SetManifest(manifest)
+
+	r := avero.NewRouter()
+	r.Use(avero.RequestID())
+	r.Use(avero.Recover(nil))
+	if engine != nil {
+		r.Use(avero.Transaction(engine))
+	}
+
+	files, err := fs.Sub(dist, "assets/dist")
+	if err != nil {
+		return nil, nil, err
+	}
+	r.Mount("/assets/", http.StripPrefix("/assets/", assets.Handler(files, manifest)))
+
+	// The shell of the single page application. Every path that the front end
+	// owns renders the same document, and the script reads the path.
+	r.Get("/{$}", func(c *avero.Ctx) (avero.Response, error) {
+		return avero.View(ui.Shell()), nil
+	})
+
+	modules := avero.Modules(posts.New(engine))
+	if err := modules.Attach(r); err != nil {
+		return nil, nil, err
+	}
+	return r, modules, nil
+}

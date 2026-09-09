@@ -45,8 +45,20 @@ generate-check:
     git diff --exit-code -- '*zz_generated*.go'
 
 # 8, 9. Scaffold, build and test the three reference applications.
-reference-apps:
+reference-apps: examples-check
     go test ./internal/cli/... -tags=integration -run TestEachShapeScaffolds -timeout 20m
+    cd examples/blog && go build ./... && go test ./... -count=1
+    cd examples/board && go build ./... && go test ./... -count=1
+    cd examples/orders && go build ./... && go test ./... -count=1
+
+# Write the three reference applications again. Run it after a change to a
+# template, and commit the result.
+examples:
+    go run ./internal/cmd/averoexamples
+
+# The examples match the templates of the scaffolder.
+examples-check:
+    go run ./internal/cmd/averoexamples -check
 
 # 10. Measure DX-1 to DX-5.
 budgets:
