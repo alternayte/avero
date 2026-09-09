@@ -99,9 +99,22 @@ func loopOf(t *testing.T, app string) string {
 	t.Helper()
 	port := freePort(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+
+	// The cleanup waits for the loop to stop. A cancel alone returns at
+	// once, and the test framework then removes the tree under a rebuild
+	// that still runs. See S15.
+	done := make(chan struct{})
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(30 * time.Second):
+			t.Error("the loop did not stop")
+		}
+	})
 
 	go func() {
+		defer close(done)
 		_ = cli.Run(ctx, cli.Streams{Out: os.Stderr, Err: os.Stderr, Dir: app},
 			[]string{"dev", "--port", fmt.Sprint(port)})
 	}()

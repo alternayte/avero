@@ -3,6 +3,16 @@
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Fixed
+
+- The development loop test waits for the loop to stop before the test
+  framework removes the tree. A cancel returns at once, so a rebuild walked a
+  directory that left under it, and the loop wrote a message that named the
+  output package of drel. The guard of v0.2.0 in the two code generators
+  treated the message and not its cause, so it leaves again.
+
 ## v0.2.0
 
 ### Changed
