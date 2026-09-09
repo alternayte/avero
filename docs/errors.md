@@ -8,15 +8,15 @@ case and not the JSON.
 Return the problem. The router writes it.
 
 ```go
-func (m *Module) Show(c *avero.Ctx, in ShowInput) (avero.Result[View], error) {
+func (m *Module) Show(c *avero.Ctx, in ShowInput) (View, error) {
 	post, found, err := m.store.Get(c.Context(), in.ID)
 	if err != nil {
-		return avero.Result[View]{}, err
+		return View{}, err
 	}
 	if !found {
-		return avero.Result[View]{}, avero.NotFound("post", in.ID)
+		return View{}, avero.NotFound("post", in.ID)
 	}
-	return avero.OK(view(post)), nil
+	return view(post), nil
 }
 ```
 
@@ -52,7 +52,7 @@ and the message stays in the log. A message can name a table, a host or a
 query, and a person outside the service reads none of it.
 
 ```go
-return avero.Result[View]{}, fmt.Errorf("the post does not read: %w", err)
+return View{}, fmt.Errorf("the post does not read: %w", err)
 ```
 
 ## Keep the cause
@@ -61,7 +61,7 @@ A problem wraps the error that a store returned. The log reads the cause, and
 the client does not.
 
 ```go
-return avero.Result[View]{}, avero.Conflict("the title is taken").Wrap(err)
+return View{}, avero.Conflict("the title is taken").Wrap(err)
 ```
 
 `errors.Is` and `errors.As` reach both:
@@ -79,7 +79,7 @@ RFC 9457 allows a member beside the standard ones. A validation fault uses it
 for the field messages.
 
 ```go
-return avero.Result[View]{}, avero.Conflict("the post is locked").
+return View{}, avero.Conflict("the post is locked").
 	With("lockedBy", name)
 ```
 

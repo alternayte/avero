@@ -28,46 +28,46 @@ type TaskList struct {
 //
 // The type of the answer states the shape that the description of the API
 // carries, and the front end reads the same shape.
-func (m *Module) List(c *avero.Ctx, in ListInput) (avero.Result[TaskList], error) {
+func (m *Module) List(c *avero.Ctx, in ListInput) (TaskList, error) {
 	tasks, err := m.store.List(c.Context(), in.Search)
 	if err != nil {
-		return avero.Result[TaskList]{}, err
+		return TaskList{}, err
 	}
 	out := TaskList{Tasks: make([]Task, 0, len(tasks))}
 	for _, t := range tasks {
 		out.Tasks = append(out.Tasks, view(t))
 	}
-	return avero.OK(out), nil
+	return out, nil
 }
 
 // Create writes one task.
-func (m *Module) Create(c *avero.Ctx, in CreateInput) (avero.Result[Task], error) {
+func (m *Module) Create(c *avero.Ctx, in CreateInput) (Task, error) {
 	task, err := m.store.Create(c.Context(), in.Title)
 	if err != nil {
-		return avero.Result[Task]{}, err
+		return Task{}, err
 	}
-	return avero.Created(view(task)), nil
+	return view(task), nil
 }
 
 // Update marks one task complete, or open again.
-func (m *Module) Update(c *avero.Ctx, in UpdateInput) (avero.Result[Task], error) {
+func (m *Module) Update(c *avero.Ctx, in UpdateInput) (Task, error) {
 	task, found, err := m.store.SetDone(c.Context(), in.ID, in.Done)
 	if err != nil {
-		return avero.Result[Task]{}, err
+		return Task{}, err
 	}
 	if !found {
 		// The router writes the problem document. See RFC 9457.
-		return avero.Result[Task]{}, avero.NotFound("task", in.ID)
+		return Task{}, avero.NotFound("task", in.ID)
 	}
-	return avero.OK(view(task)), nil
+	return view(task), nil
 }
 
 // Delete removes one task.
-func (m *Module) Delete(c *avero.Ctx, in DeleteInput) (avero.Result[avero.NoBody], error) {
+func (m *Module) Delete(c *avero.Ctx, in DeleteInput) (avero.NoBody, error) {
 	if err := m.store.Delete(c.Context(), in.ID); err != nil {
-		return avero.Done(), err
+		return avero.NoBody{}, err
 	}
-	return avero.Done(), nil
+	return avero.NoBody{}, nil
 }
 
 // view maps one row to the answer of the API.

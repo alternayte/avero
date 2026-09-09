@@ -108,10 +108,11 @@ func scan(fset *token.FileSet, name string, files []*ast.File, c *collector) pkg
 
 // handlerInput returns the input type of a handler method. A handler is
 //
-//	func (m *Module) Name(ctx *avero.Ctx, in Input) (avero.Result[View], error)
+//	func (m *Module) Name(ctx *avero.Ctx, in Input) (View, error)
 //
-// The older shape answers avero.Response, and the generator reads it too. The
-// generator reads the shape and needs no marker comment.
+// A handler of a page answers avero.Response instead, because it renders a
+// view and names no body. The generator reads the shape and needs no marker
+// comment.
 func handlerInput(d *ast.FuncDecl) (string, bool) {
 	if d.Recv == nil || d.Type.Params == nil || d.Type.Results == nil {
 		return "", false
@@ -135,13 +136,19 @@ func handlerInput(d *ast.FuncDecl) (string, bool) {
 	return in.Name, true
 }
 
-// answersAResult reports the first result of a handler. It is avero.Result of
-// one type, or avero.Response.
+// answersAResult reports the first result of a handler.
+//
+// A handler answers the thing that it returns, so the type is free. The second
+// result must be error, which the caller proves, and the first parameter must
+// be *avero.Ctx. Those two hold the shape, so a method of a module that is no
+// handler does not match.
 func answersAResult(expr ast.Expr) bool {
-	if index, ok := expr.(*ast.IndexExpr); ok {
-		return isSelectorNamed(index.X, "Result")
+	switch expr.(type) {
+	case *ast.IndexExpr, *ast.Ident, *ast.SelectorExpr, *ast.StarExpr, *ast.ArrayType:
+		return true
+	default:
+		return false
 	}
-	return isSelectorNamed(expr, "Response")
 }
 
 // checkReceiver returns the type of a custom validation hook. The hook is

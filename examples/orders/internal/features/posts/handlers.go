@@ -33,44 +33,44 @@ func view(p *model.Post) View {
 //
 // The type of the answer states the shape that the description of the API
 // carries. The compiler holds it, so no comment can drift from it.
-func (m *Module) List(c *avero.Ctx, in ListInput) (avero.Result[PostList], error) {
+func (m *Module) List(c *avero.Ctx, in ListInput) (PostList, error) {
 	posts, err := m.store.List(c.Context(), in.Search)
 	if err != nil {
-		return avero.Result[PostList]{}, err
+		return PostList{}, err
 	}
 	out := PostList{Posts: make([]View, 0, len(posts))}
 	for _, p := range posts {
 		out.Posts = append(out.Posts, view(p))
 	}
-	return avero.OK(out), nil
+	return out, nil
 }
 
 // Create writes one post.
-func (m *Module) Create(c *avero.Ctx, in CreateInput) (avero.Result[View], error) {
+func (m *Module) Create(c *avero.Ctx, in CreateInput) (View, error) {
 	post, err := m.store.Create(c.Context(), in.Title, in.Body)
 	if err != nil {
-		return avero.Result[View]{}, err
+		return View{}, err
 	}
-	return avero.Created(view(post)), nil
+	return view(post), nil
 }
 
 // Show answers one post.
-func (m *Module) Show(c *avero.Ctx, in ShowInput) (avero.Result[View], error) {
+func (m *Module) Show(c *avero.Ctx, in ShowInput) (View, error) {
 	post, found, err := m.store.Get(c.Context(), in.ID)
 	if err != nil {
-		return avero.Result[View]{}, err
+		return View{}, err
 	}
 	if !found {
 		// The router writes the problem document. See RFC 9457.
-		return avero.Result[View]{}, avero.NotFound("post", in.ID)
+		return View{}, avero.NotFound("post", in.ID)
 	}
-	return avero.OK(view(post)), nil
+	return view(post), nil
 }
 
 // Delete removes one post.
-func (m *Module) Delete(c *avero.Ctx, in DeleteInput) (avero.Result[avero.NoBody], error) {
+func (m *Module) Delete(c *avero.Ctx, in DeleteInput) (avero.NoBody, error) {
 	if err := m.store.Delete(c.Context(), in.ID); err != nil {
-		return avero.Done(), err
+		return avero.NoBody{}, err
 	}
-	return avero.Done(), nil
+	return avero.NoBody{}, nil
 }

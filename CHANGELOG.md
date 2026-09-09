@@ -14,14 +14,17 @@ The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   avero.Get(r, "/posts/{id}", m.Show,
       avero.Answers[avero.Problem](http.StatusNotFound, "the post does not exist"))
 
-  func (m *Module) Show(c *avero.Ctx, in ShowInput) (avero.Result[View], error)
+  func (m *Module) Show(c *avero.Ctx, in ShowInput) (View, error)
   ```
 
-  The compiler holds both types, so a wrong name does not build.
-  `avero.Result`, `avero.OK`, `avero.Created` and `avero.Done` write the
-  answer. The options `avero.Summary`, `avero.Tags`, `avero.Deprecated`,
-  `avero.Answers` and `avero.AnswersNothing` state what a signature cannot
-  carry, such as a second status.
+  The compiler holds both types, so a wrong name does not build. A handler
+  returns the thing that it answers, as an ordinary Go function does, so a
+  test calls the method and reads the value. The method of the route states
+  the status: a POST answers 201 and every other method answers 200.
+  `Ctx.Status` names another status, and `avero.NoBody` answers none. The
+  options `avero.Summary`, `avero.Tags`, `avero.Deprecated`, `avero.Answers`
+  and `avero.AnswersNothing` state what a signature cannot carry, such as a
+  second status.
 - **Typed errors and Problem Details, RFC 9457.** `avero.Problem` is an error
   and a response. A handler returns `avero.NotFound("post", id)`, and the
   router writes `application/problem+json` with the status, the title, the

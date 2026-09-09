@@ -88,8 +88,8 @@ Go handler  →  openapi.json  →  web/src/client/  →  Board.tsx
 The type of the handler states its answer:
 
 ```go
-func (m *Module) List(c *avero.Ctx, in ListInput) (avero.Result[TaskList], error) {
-	return avero.OK(out), nil
+func (m *Module) List(c *avero.Ctx, in ListInput) (TaskList, error) {
+	return out, nil
 }
 ```
 

@@ -21,46 +21,46 @@ type ViewList struct {
 }
 
 // List answers every [[.Singular]].
-func (m *Module) List(c *avero.Ctx, in ListInput) (avero.Result[ViewList], error) {
+func (m *Module) List(c *avero.Ctx, in ListInput) (ViewList, error) {
 	rows, err := m.store.List(c.Context(), in.Search)
 	if err != nil {
-		return avero.Result[ViewList]{}, err
+		return ViewList{}, err
 	}
 	out := make([]View, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, view(row))
 	}
-	return avero.OK(ViewList{Items: out}), nil
+	return ViewList{Items: out}, nil
 }
 
 // Create writes one [[.Singular]].
-func (m *Module) Create(c *avero.Ctx, in CreateInput) (avero.Result[View], error) {
+func (m *Module) Create(c *avero.Ctx, in CreateInput) (View, error) {
 	row, err := m.store.Create(c.Context(), in.Title)
 	if err != nil {
-		return avero.Result[View]{}, err
+		return View{}, err
 	}
-	return avero.Created(view(row)), nil
+	return view(row), nil
 }
 
 // Show answers one [[.Singular]].
-func (m *Module) Show(c *avero.Ctx, in ShowInput) (avero.Result[View], error) {
+func (m *Module) Show(c *avero.Ctx, in ShowInput) (View, error) {
 	row, found, err := m.store.Get(c.Context(), in.ID)
 	if err != nil {
-		return avero.Result[View]{}, err
+		return View{}, err
 	}
 	if !found {
 		// The router writes the problem document. See RFC 9457.
-		return avero.Result[View]{}, avero.NotFound("[[.Singular]]", in.ID)
+		return View{}, avero.NotFound("[[.Singular]]", in.ID)
 	}
-	return avero.OK(view(row)), nil
+	return view(row), nil
 }
 
 // Delete removes one [[.Singular]].
-func (m *Module) Delete(c *avero.Ctx, in DeleteInput) (avero.Result[avero.NoBody], error) {
+func (m *Module) Delete(c *avero.Ctx, in DeleteInput) (avero.NoBody, error) {
 	if err := m.store.Delete(c.Context(), in.ID); err != nil {
-		return avero.Done(), err
+		return avero.NoBody{}, err
 	}
-	return avero.Done(), nil
+	return avero.NoBody{}, nil
 }
 
 // view maps one row to the answer of the API.

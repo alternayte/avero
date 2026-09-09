@@ -43,16 +43,16 @@ type PostList struct {
 	Posts []View `json:"posts"`
 }
 
-func list(_ *router.Ctx, _ listInput) (router.Result[PostList], error) {
-	return router.OK(PostList{}), nil
+func list(_ *router.Ctx, _ listInput) (PostList, error) {
+	return PostList{}, nil
 }
 
-func create(_ *router.Ctx, _ createInput) (router.Result[View], error) {
-	return router.Created(View{}), nil
+func create(_ *router.Ctx, _ createInput) (View, error) {
+	return View{}, nil
 }
 
-func remove(_ *router.Ctx, _ showInput) (router.Result[router.NoBody], error) {
-	return router.Done(), nil
+func remove(_ *router.Ctx, _ showInput) (router.NoBody, error) {
+	return router.NoBody{}, nil
 }
 
 // describe builds the description of a small application.

@@ -70,9 +70,10 @@ avero.json                  the shape and the asset pipeline
 - Never relax a test to make the gate pass. Never skip a test.
 - Never edit a generated file by hand. Change the input type or the model, then
   run `avero generate`.
-- A handler answers `avero.Result[T]`, and the type states the body. Register a
-  route with `avero.Get(r, "/things", m.List)`, which reads the types of the
-  handler. The description of the API needs no comment.
+- A handler returns the thing that it answers, such as `(View, error)`.
+  Register a route with `avero.Get(r, "/things", m.List)`, which reads the
+  types of the handler. The description of the API needs no comment. A POST
+  answers 201 and every other method answers 200.
 - A failure returns a problem, such as `avero.NotFound("thing", id)`. The
   router writes the document that RFC 9457 states. Do not write a map of one
   string.

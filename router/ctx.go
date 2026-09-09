@@ -22,7 +22,25 @@ type Ctx struct {
 	wroteHeader bool
 	// onInvalid answers a validation fault. The router supplies it.
 	onInvalid func(c *Ctx, f *Fields) Response
+	// status is the status that Status named. A zero value means that the
+	// method of the route decides. See Status.
+	status int
 }
+
+// Status names the status of this one answer.
+//
+// A handler that returns a value needs it for the case that the method does
+// not state. A GET answers 200 and a POST answers 201, so a handler calls this
+// for 202 or for 200 after a POST.
+//
+//	func (m *Module) Create(c *avero.Ctx, in CreateInput) (View, error) {
+//	    c.Status(http.StatusAccepted)
+//	    return view(row), nil
+//	}
+func (c *Ctx) Status(code int) { c.status = code }
+
+// StatusOf returns the status that Status named, or zero.
+func (c *Ctx) StatusOf() int { return c.status }
 
 // newCtx builds a Ctx for one request.
 func newCtx(w http.ResponseWriter, r *http.Request) *Ctx { return &Ctx{w: w, r: r} }

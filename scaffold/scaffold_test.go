@@ -173,9 +173,9 @@ func TestTheSpaShapeCarriesAViteProject(t *testing.T) {
 	// states nothing, and the compiler holds the type.
 	handlers := readFile(t, filepath.Join(dir, "internal", "features", "tasks", "handlers.go"))
 	for _, want := range []string{
-		"(avero.Result[TaskList], error)",
-		"(avero.Result[Task], error)",
-		"(avero.Result[avero.NoBody], error)",
+		"(TaskList, error)",
+		"(Task, error)",
+		"(avero.NoBody, error)",
 	} {
 		if !strings.Contains(handlers, want) {
 			t.Fatalf("handlers.go states no %q", want)

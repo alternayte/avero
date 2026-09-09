@@ -26,17 +26,17 @@ type postView struct {
 	Title string `json:"title"`
 }
 
-func show(_ *router.Ctx, in showInput) (router.Result[postView], error) {
-	return router.OK(postView{ID: in.ID, Title: "A title"}), nil
+func show(_ *router.Ctx, in showInput) (postView, error) {
+	return postView{ID: in.ID, Title: "A title"}, nil
 }
 
-func remove(_ *router.Ctx, _ showInput) (router.Result[router.NoBody], error) {
-	return router.Done(), nil
+func remove(_ *router.Ctx, _ showInput) (router.NoBody, error) {
+	return router.NoBody{}, nil
 }
 
-// A typed registration needs no wrapper and no comment. The types of the input
-// and of the body come from the signature, so the compiler holds them and the
-// description of the API reads them.
+// A typed registration needs no wrapper and no comment. A handler returns the
+// thing that it answers, as an ordinary Go function does, and the types come
+// from its signature.
 func TestATypedRouteRecordsItsTypes(t *testing.T) {
 	r := router.New()
 	router.Get(r, "/posts/{id}", show)
@@ -135,4 +135,34 @@ func requestTo(t *testing.T, h http.Handler, method, target string) *httptest.Re
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	return rec
+}
+
+// The method of the route states the status, and Ctx.Status names another.
+func TestAHandlerNamesAnotherStatus(t *testing.T) {
+	r := router.New()
+	router.Post(r, "/posts", func(c *router.Ctx, _ showInput) (postView, error) {
+		c.Status(http.StatusAccepted)
+		return postView{ID: "7"}, nil
+	})
+	handler, err := r.Handler()
+	if err != nil {
+		t.Fatalf("the router holds a fault: %v", err)
+	}
+	if rec := requestTo(t, handler, http.MethodPost, "/posts"); rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202", rec.Code)
+	}
+}
+
+// A handler that answers no body writes the status and nothing else.
+func TestAnEmptyAnswerWritesNoBody(t *testing.T) {
+	r := router.New()
+	router.Delete(r, "/posts/{id}", remove)
+	handler, err := r.Handler()
+	if err != nil {
+		t.Fatalf("the router holds a fault: %v", err)
+	}
+	rec := requestTo(t, handler, http.MethodDelete, "/posts/7")
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
+		t.Fatalf("status = %d and the body holds %q", rec.Code, rec.Body.String())
+	}
 }

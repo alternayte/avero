@@ -242,22 +242,9 @@ func BadRequest(detail string) *Problem { return router.BadRequest(detail) }
 // ProblemOf returns the problem that an error carries. See router.ProblemOf.
 func ProblemOf(err error) *Problem { return router.ProblemOf(err) }
 
-// Result is the answer of a typed handler. The type argument names the body,
-// so the compiler holds the shape of the answer and the description of the API
-// reads it. See router.Result.
-type Result[T any] = router.Result[T]
-
-// NoBody is the body of an answer that carries none.
+// NoBody is the answer of a handler that carries none. The router writes 204.
+// See router.NoBody.
 type NoBody = router.NoBody
-
-// OK returns 200 with this body.
-func OK[T any](body T) Result[T] { return router.OK(body) }
-
-// Created returns 201 with this body.
-func Created[T any](body T) Result[T] { return router.Created(body) }
-
-// Done returns 204 and no body.
-func Done() Result[NoBody] { return router.Done() }
 
 // OpOption states one more fact of an operation, such as a tag or another
 // answer.

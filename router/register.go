@@ -101,14 +101,21 @@ type Input[T any] interface {
 
 // Register adds one typed route.
 //
-// The type of the input and the type of the body of the answer come from the
-// signature of the handler, so a change of either is a compile fault. The
-// wrapper In is gone, and no comment states the answer.
+// A handler returns the thing that it answers, as an ordinary Go function
+// does. The type of the input and the type of the answer come from its
+// signature, so a change of either is a compile fault. No wrapper surrounds
+// the handler, and no comment states the answer.
 //
 //	avero.Get(r, "/posts/{id}", m.Show)
+//
+//	func (m *Module) Show(c *avero.Ctx, in ShowInput) (View, error)
+//
+// The method of the route states the status: a POST answers 201 and every
+// other method answers 200. A handler that answers no body returns
+// avero.NoBody, and the status is 204. Ctx.Status names another status.
 func Register[T any, P Input[T], V any](
 	r *Router, method, pattern string,
-	fn func(c *Ctx, in T) (Result[V], error),
+	fn func(c *Ctx, in T) (V, error),
 	opts ...OpOption,
 ) {
 	var in T
@@ -133,8 +140,33 @@ func Register[T any, P Input[T], V any](
 	for _, opt := range opts {
 		opt(&op)
 	}
-	handler := In[T, P](func(c *Ctx, v T) (Response, error) { return fn(c, v) })
+	handler := In[T, P](func(c *Ctx, v T) (Response, error) {
+		out, err := fn(c, v)
+		if err != nil {
+			return nil, err
+		}
+		return answerOf(c, method, out), nil
+	})
 	r.registerOp(method, pattern, handler, &op, 3)
+}
+
+// answerOf turns the value of a handler into a response.
+//
+// A value of NoBody answers the status and no body. Every other value answers
+// JSON. Ctx.Status wins over the status of the method.
+func answerOf[V any](c *Ctx, method string, out V) Response {
+	_, empty := any(out).(NoBody)
+	code := c.StatusOf()
+	if code == 0 {
+		code = successOf(method)
+		if empty {
+			code = http.StatusNoContent
+		}
+	}
+	if empty {
+		return Empty(code)
+	}
+	return JSON(code, out)
 }
 
 // successOf returns the status that a method answers when it succeeds.
@@ -147,35 +179,35 @@ func successOf(method string) int {
 
 // Get registers a typed GET route.
 func Get[T any, P Input[T], V any](r *Router, pattern string,
-	fn func(c *Ctx, in T) (Result[V], error), opts ...OpOption,
+	fn func(c *Ctx, in T) (V, error), opts ...OpOption,
 ) {
 	Register[T, P](r, http.MethodGet, pattern, fn, opts...)
 }
 
 // Post registers a typed POST route. The success answer is 201.
 func Post[T any, P Input[T], V any](r *Router, pattern string,
-	fn func(c *Ctx, in T) (Result[V], error), opts ...OpOption,
+	fn func(c *Ctx, in T) (V, error), opts ...OpOption,
 ) {
 	Register[T, P](r, http.MethodPost, pattern, fn, opts...)
 }
 
 // Put registers a typed PUT route.
 func Put[T any, P Input[T], V any](r *Router, pattern string,
-	fn func(c *Ctx, in T) (Result[V], error), opts ...OpOption,
+	fn func(c *Ctx, in T) (V, error), opts ...OpOption,
 ) {
 	Register[T, P](r, http.MethodPut, pattern, fn, opts...)
 }
 
 // Patch registers a typed PATCH route.
 func Patch[T any, P Input[T], V any](r *Router, pattern string,
-	fn func(c *Ctx, in T) (Result[V], error), opts ...OpOption,
+	fn func(c *Ctx, in T) (V, error), opts ...OpOption,
 ) {
 	Register[T, P](r, http.MethodPatch, pattern, fn, opts...)
 }
 
 // Delete registers a typed DELETE route.
 func Delete[T any, P Input[T], V any](r *Router, pattern string,
-	fn func(c *Ctx, in T) (Result[V], error), opts ...OpOption,
+	fn func(c *Ctx, in T) (V, error), opts ...OpOption,
 ) {
 	Register[T, P](r, http.MethodDelete, pattern, fn, opts...)
 }

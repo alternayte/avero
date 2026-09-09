@@ -28,9 +28,10 @@ tests of one feature. A slice imports no other slice.
    `avero generate` after each change.
 
 4. Change the handlers in `handlers.go`. A handler has the shape
-   `func (m *Module) Name(c *avero.Ctx, in Input) (avero.Result[View], error)`.
-   The type argument names the body of the answer, and the description of the
-   API reads it. Write `avero.OK(v)`, `avero.Created(v)` or `avero.Done()`. A
+   `func (m *Module) Name(c *avero.Ctx, in Input) (View, error)`. A handler
+   returns the thing that it answers, and the description of the API reads the
+   type. A POST answers 201 and every other method answers 200. Write
+   `c.Status(code)` for another status, and `avero.NoBody` for no body. A
    handler never writes to the ResponseWriter.
 
    Answer a failure with a problem, such as `avero.NotFound("<name>", in.ID)`.

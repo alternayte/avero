@@ -31,21 +31,24 @@ serves an `http.Handler` under a prefix.
 ## A handler
 
 ```go
-func (m *Module) Show(c *avero.Ctx, in ShowInput) (avero.Result[View], error) {
+func (m *Module) Show(c *avero.Ctx, in ShowInput) (View, error) {
 	post, found, err := m.store.Get(c.Context(), in.ID)
 	if err != nil {
-		return avero.Result[View]{}, err
+		return View{}, err
 	}
 	if !found {
-		return avero.Result[View]{}, avero.NotFound("post", in.ID)
+		return View{}, avero.NotFound("post", in.ID)
 	}
-	return avero.OK(view(post)), nil
+	return view(post), nil
 }
 ```
 
-The type argument of Result names the body of the answer. `avero.OK` writes
-200, `avero.Created` writes 201, and `avero.Done` writes 204 with no body. A
-handler that answers no body returns `avero.Result[avero.NoBody]`.
+A handler returns the thing that it answers, as an ordinary Go function does,
+so a test calls the method and reads the value.
+
+The method of the route states the status. A POST answers 201 and every other
+method answers 200. Write `c.Status(code)` for another status. A handler that
+answers no body returns `avero.NoBody`.
 
 A handler never writes to the ResponseWriter, so the transaction commits before
 one byte reaches the client.
@@ -147,7 +150,7 @@ opens no port, so the command needs no infrastructure. It reads no comment.
 The type of each handler states the schema of its answer:
 
 ```go
-func (m *Module) List(c *avero.Ctx, in ListInput) (avero.Result[TaskList], error)
+func (m *Module) List(c *avero.Ctx, in ListInput) (TaskList, error)
 ```
 
 The description holds one schema for each type that a handler names, and for
