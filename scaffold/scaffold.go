@@ -55,6 +55,9 @@ type Options struct {
 	Module string
 	// AveroVersion is the version of the host that go.mod requires.
 	AveroVersion string
+	// TemplVersion is the version of the templ generator that an ssr
+	// application requires.
+	TemplVersion string
 	// Replace points the module at a local copy of Avero. A test and the
 	// gate of this repository set it. An empty value writes no replace
 	// directive.
@@ -76,6 +79,7 @@ type data struct {
 	SPA        bool
 	API        bool
 	Avero      string
+	Templ      string
 	Replace    string
 	GoVersion  string
 	Secret     string
@@ -106,6 +110,7 @@ func Write(opts Options) ([]string, error) {
 		SPA:        opts.Shape == ShapeSPA,
 		API:        opts.Shape == ShapeAPI,
 		Avero:      opts.AveroVersion,
+		Templ:      opts.TemplVersion,
 		Replace:    opts.Replace,
 		GoVersion:  opts.GoVersion,
 		Secret:     secret(),
@@ -171,6 +176,9 @@ func validate(opts *Options) error {
 	if opts.AveroVersion == "" {
 		opts.AveroVersion = DefaultAveroVersion
 	}
+	if opts.TemplVersion == "" {
+		opts.TemplVersion = DefaultTemplVersion
+	}
 	if opts.GoVersion == "" {
 		opts.GoVersion = DefaultGoVersion
 	}
@@ -183,6 +191,10 @@ const (
 	DefaultAveroVersion = "v0.1.0"
 	// DefaultGoVersion is the version line of go.mod.
 	DefaultGoVersion = "1.26.2"
+	// DefaultTemplVersion is the version of the templ generator. The ssr
+	// shape writes its pages as .templ files, and the generator writes the
+	// Go file of each one.
+	DefaultTemplVersion = "v0.3.1020"
 )
 
 // validName reports a name that a module path can carry.

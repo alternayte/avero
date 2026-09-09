@@ -196,7 +196,10 @@ func TestDX3(t *testing.T) {
 	address := loopOf(t, app)
 	waitFor(t, address+"/", "Posts", 5*time.Second)
 
-	page := filepath.Join(app, "internal", "ui", "ui.go")
+	// The ssr shape writes its pages as templ files. The loop wraps
+	// `go tool templ generate --watch`, which writes the Go file, and the
+	// watcher then rebuilds. See S15.
+	page := filepath.Join(app, "internal", "ui", "posts.templ")
 	body, err := os.ReadFile(page)
 	if err != nil {
 		t.Fatalf("ReadFile returned %v", err)
@@ -206,6 +209,9 @@ func TestDX3(t *testing.T) {
 	// person works in. The first build of a session fills the build cache of
 	// the module.
 	warm := strings.Replace(string(body), "<h1>Posts</h1>", "<h1>Warm</h1>", 1)
+	if warm == string(body) {
+		t.Fatalf("the page holds no heading to change:\n%s", body)
+	}
 	if err := os.WriteFile(page, []byte(warm), 0o644); err != nil {
 		t.Fatalf("WriteFile returned %v", err)
 	}

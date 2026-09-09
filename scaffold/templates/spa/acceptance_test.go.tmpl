@@ -62,40 +62,40 @@ func TestTheShellAnswersTheRootPath(t *testing.T) {
 	}
 }
 
-func TestTheAPIWritesAndReadsAPost(t *testing.T) {
+func TestTheAPIWritesReadsAndCompletesATask(t *testing.T) {
 	h := app(t)
-	created := call(t, h, http.MethodPost, "/api/posts", `{"title":"A title","body":"A body"}`)
+	created := call(t, h, http.MethodPost, "/api/tasks", `{"title":"A title"}`)
 	if created.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201:\n%s", created.Code, created.Body.String())
 	}
-	var post struct {
+	var task struct {
 		ID string `json:"id"`
 	}
-	if err := json.Unmarshal(created.Body.Bytes(), &post); err != nil {
+	if err := json.Unmarshal(created.Body.Bytes(), &task); err != nil {
 		t.Fatalf("the answer does not parse: %v", err)
 	}
 
-	list := call(t, h, http.MethodGet, "/api/posts", "")
+	list := call(t, h, http.MethodGet, "/api/tasks", "")
 	if !strings.Contains(list.Body.String(), "A title") {
 		t.Fatalf("the list holds %q", list.Body.String())
 	}
 
-	one := call(t, h, http.MethodGet, "/api/posts/"+post.ID, "")
-	if one.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", one.Code)
+	done := call(t, h, http.MethodPatch, "/api/tasks/"+task.ID, `{"done":true}`)
+	if done.Code != http.StatusOK || !strings.Contains(done.Body.String(), `"done":true`) {
+		t.Fatalf("the answer is %d %s", done.Code, done.Body.String())
 	}
 
-	removed := call(t, h, http.MethodDelete, "/api/posts/"+post.ID, "")
+	removed := call(t, h, http.MethodDelete, "/api/tasks/"+task.ID, "")
 	if removed.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204", removed.Code)
 	}
-	if again := call(t, h, http.MethodGet, "/api/posts/"+post.ID, ""); again.Code != http.StatusNotFound {
+	if again := call(t, h, http.MethodPatch, "/api/tasks/"+task.ID, `{"done":true}`); again.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404 after the delete", again.Code)
 	}
 }
 
 func TestAnInvalidBodyAnswersTheFieldErrors(t *testing.T) {
-	rec := call(t, app(t), http.MethodPost, "/api/posts", `{"title":"no","body":""}`)
+	rec := call(t, app(t), http.MethodPost, "/api/tasks", `{"title":""}`)
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, want 422", rec.Code)
 	}
@@ -105,7 +105,7 @@ func TestAnInvalidBodyAnswersTheFieldErrors(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &answer); err != nil {
 		t.Fatalf("the answer does not parse: %v", err)
 	}
-	if answer.Errors["title"] == "" || answer.Errors["body"] == "" {
+	if answer.Errors["title"] == "" {
 		t.Fatalf("the answer holds %v", answer.Errors)
 	}
 }

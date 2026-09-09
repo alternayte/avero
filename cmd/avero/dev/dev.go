@@ -195,9 +195,9 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 	defer s.stop()
 
-	// templ owns its files. The loop wraps `templ generate --watch`, which
-	// writes the Go file of each templ file. The watcher then sees the Go
-	// file and rebuilds.
+	// templ owns its files. The loop wraps `go tool templ generate --watch`,
+	// which writes the Go file of each templ file. The watcher then sees the
+	// Go file and rebuilds.
 	templ, err := StartTempl(ctx, s.cfg.Dir, s.cfg.Out)
 	if err != nil {
 		return err

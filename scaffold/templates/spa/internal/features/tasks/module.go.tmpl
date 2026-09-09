@@ -1,6 +1,6 @@
-// Package posts holds the posts feature of the JSON API that the front end
+// Package tasks holds the tasks feature of the JSON API that the front end
 // calls. It imports no other feature.
-package posts
+package tasks
 
 import (
 	"github.com/alternayte/avero"
@@ -9,9 +9,9 @@ import (
 
 //go:generate go run github.com/alternayte/avero/internal/cmd/averogen .
 
-// Module is the posts feature.
+// Module is the tasks feature.
 type Module struct {
-	// store reads and writes the posts.
+	// store reads and writes the tasks.
 	store *Store
 }
 
@@ -19,27 +19,27 @@ type Module struct {
 func New(engine *drel.Engine) *Module { return &Module{store: NewStore(engine)} }
 
 // Name identifies the module in the contribution table.
-func (m *Module) Name() string { return "posts" }
+func (m *Module) Name() string { return "tasks" }
 
 // Routes registers the JSON routes that the front end calls.
 func (m *Module) Routes(r *avero.Router) {
-	r.Get("/api/posts", avero.In(m.List))
-	r.Post("/api/posts", avero.In(m.Create))
-	r.Get("/api/posts/{id}", avero.In(m.Show))
-	r.Delete("/api/posts/{id}", avero.In(m.Delete))
+	r.Get("/api/tasks", avero.In(m.List))
+	r.Post("/api/tasks", avero.In(m.Create))
+	r.Patch("/api/tasks/{id}", avero.In(m.Update))
+	r.Delete("/api/tasks/{id}", avero.In(m.Delete))
 }
 
 // Describe states what the feature contributes. `avero schema` reads it.
 func (m *Module) Describe() avero.Description {
 	return avero.Description{
-		Name: "posts",
+		Name: "tasks",
 		Models: []avero.ModelDesc{{
-			Name:  "Post",
-			Table: "posts",
+			Name:  "Task",
+			Table: "tasks",
 			Fields: []avero.FieldDesc{
 				{Name: "ID", Type: "string"},
 				{Name: "Title", Type: "string"},
-				{Name: "Body", Type: "string"},
+				{Name: "Done", Type: "bool"},
 				{Name: "CreatedAt", Type: "time.Time"},
 			},
 		}},

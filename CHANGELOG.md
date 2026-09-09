@@ -23,7 +23,8 @@ The first release. It carries every subsystem except the messaging ones.
 - **Module system, S6.** One module for each feature, with optional interfaces
   and a contribution table. Two modules on one pattern stop the process.
 - **View layer, S10.** The old input, the field errors, the toasts and the CSRF
-  field. A templ component satisfies the component interface.
+  field. The ssr shape writes its pages as templ files, and the application
+  carries the generator as a tool of its `go.mod`.
 - **Asset pipeline, S11.** esbuild as a Go library, the Tailwind standalone
   binary, content hashing, a manifest and a handler that serves an embedded
   file system. Tier 0 needs no Node.js.
@@ -33,7 +34,8 @@ The first release. It carries every subsystem except the messaging ones.
   timeouts, retries, a circuit breaker, OTel spans and typed errors.
 - **CLI and scaffolder, S14.** `avero new`, `slice`, `generate`, `build`,
   `migrate`, `routes`, `modules`, `schema`, `doctor`, `verify`, `js pin`,
-  `assets init`. Three shapes: ssr, spa and api.
+  `assets init`. Three shapes: ssr with templ pages, spa with React 19 and
+  TanStack Query, and api with a generated client.
 - **Dev loop, S15.** `avero dev` swaps a stylesheet with no reload, and it
   morphs the page after a rebuild, so the scroll position survives.
 - **Agent surface, S16.** `avero mcp` with seven tools, `AGENTS.md`, four

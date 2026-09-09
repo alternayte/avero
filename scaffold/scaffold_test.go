@@ -33,11 +33,12 @@ func TestEachShapeWritesItsFiles(t *testing.T) {
 			"main.go", "wire.go", "config.go", "avero.json", "AGENTS.md",
 			".claude/skills/add-slice/SKILL.md", ".env.example", ".gitignore",
 			"internal/features/posts/module.go", "internal/ui/ui.go",
+			"internal/ui/layout.templ", "internal/ui/posts.templ",
 			"assets/dist/manifest.json", "acceptance_test.go",
 		}},
 		{scaffold.ShapeSPA, []string{
-			"main.go", "wire.go", "internal/ui/ui.go", "assets/js/app.js",
-			"internal/features/posts/handlers.go", "assets/dist/manifest.json",
+			"main.go", "wire.go", "internal/ui/ui.go", "assets/js/app.jsx",
+			"internal/features/tasks/handlers.go", "assets/dist/manifest.json",
 		}},
 		{scaffold.ShapeAPI, []string{
 			"main.go", "wire.go", "internal/features/posts/handlers.go",
@@ -63,7 +64,9 @@ func TestNoPlaceholderRemainsInAScaffoldedFile(t *testing.T) {
 	// `avero migrate new <name>`, so the angle brackets are prose there and a
 	// fault everywhere else.
 	always := []string{"[[", "]]", "TODO", "FIXME"}
-	code := []string{"<name>", "PLACEHOLDER", "placeholder", "changeme", "myapp"}
+	// The word placeholder is a real attribute of an input element, so the
+	// list holds the upper case form only.
+	code := []string{"<name>", "PLACEHOLDER", "changeme", "myapp", "yourapp"}
 	for _, shape := range []string{scaffold.ShapeSSR, scaffold.ShapeSPA, scaffold.ShapeAPI} {
 		dir, files := write(t, shape)
 		for _, file := range files {

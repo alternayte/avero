@@ -1,0 +1,72 @@
+package ui
+
+import "github.com/alternayte/avero/view"
+
+// PostList renders every post.
+templ PostList(rows []PostRow) {
+	<h1>Posts</h1>
+	<p><a href="/posts/new">Write a post</a></p>
+	if len(rows) == 0 {
+		<p class="empty">No post exists yet.</p>
+	}
+	<ul class="posts">
+		for _, row := range rows {
+			<li><a href={ templ.URL("/posts/" + row.ID) }>{ row.Title }</a></li>
+		}
+	</ul>
+}
+
+// PostDetail renders one post and the button that deletes it.
+templ PostDetail(row PostRow) {
+	<article>
+		<h1>{ row.Title }</h1>
+		<p>{ row.Body }</p>
+	</article>
+	<form method="post" action={ templ.URL("/posts/" + row.ID + "/delete") }>
+		@view.CSRF()
+		<button type="submit">Delete</button>
+	</form>
+}
+
+// NewPostForm renders the form of a new post. It renders again after a
+// validation fault, with the old input and the field errors. See S10.
+templ NewPostForm() {
+	<h1>New post</h1>
+	<form method="post" action="/posts">
+		@view.CSRF()
+		@Field("title", "Title")
+		@Area("body", "Body")
+		<button type="submit">Save</button>
+	</form>
+}
+
+// Field renders one text field with its old value and its error.
+templ Field(name string, label string) {
+	<p>
+		<label for={ name }>{ label }</label>
+		<input id={ name } name={ name } value={ view.Old(ctx, name) }/>
+		@Error(name)
+	</p>
+}
+
+// Area renders one text area with its old value and its error.
+templ Area(name string, label string) {
+	<p>
+		<label for={ name }>{ label }</label>
+		<textarea id={ name } name={ name }>{ view.Old(ctx, name) }</textarea>
+		@Error(name)
+	</p>
+}
+
+// Error renders the validation message of one field.
+templ Error(name string) {
+	if view.HasError(ctx, name) {
+		<span class="error">{ view.Error(ctx, name) }</span>
+	}
+}
+
+// NotFound renders the page of an absent post.
+templ NotFound() {
+	<h1>Absent</h1>
+	<p>The post does not exist.</p>
+}

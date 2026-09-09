@@ -48,6 +48,8 @@ config.go                   every variable that the application reads
 wire.go                     the router, the middleware and the modules
 internal/features/          one directory for each feature
 internal/ui/                the views. They import no feature package.
+                            A page is a .templ file. Run `avero generate`
+                            after a change.
 migrations/                 the SQL files
 assets/                     the source of the stylesheet and of the script
 avero.json                  the shape and the asset pipeline

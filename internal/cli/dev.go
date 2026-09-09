@@ -119,6 +119,10 @@ func startBinary(ctx context.Context, dir string, project *Project, port int,
 		"AVERO_ENV="+dev.EnvDevelopment)
 	cmd.Stdout = s.Out
 	cmd.Stderr = s.Err
+	// The application ends with its own group, so no child of it stays
+	// behind and holds the output of the loop.
+	dev.Group(cmd)
+	cmd.WaitDelay = 2 * time.Second
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("avero dev: the application does not start: %w\n  → Run `avero build` and repair the fault that it names", err)
 	}
@@ -151,7 +155,7 @@ func (p *process) Stop() error {
 	if p.cmd.Process == nil {
 		return nil
 	}
-	p.once.Do(func() { _ = p.cmd.Process.Kill() })
+	p.once.Do(func() { dev.KillGroup(p.cmd) })
 	select {
 	case <-p.exited:
 	case <-time.After(5 * time.Second):

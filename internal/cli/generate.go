@@ -3,8 +3,10 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/alternayte/avero/assets"
@@ -33,6 +35,11 @@ func runGenerate(_ context.Context, s Streams, args []string) int {
 		}
 		return 0
 	}
+	// templ owns the .templ files. It writes the Go file of each one, and the
+	// generators of Avero read the result.
+	if err := Templ(context.Background(), dir); err != nil {
+		return fail(s, err)
+	}
 	handlers, err := codegen.Generate(dir)
 	if err != nil {
 		return fail(s, err)
@@ -45,6 +52,45 @@ func runGenerate(_ context.Context, s Streams, args []string) int {
 		_, _ = fmt.Fprintln(s.Out, path)
 	}
 	return 0
+}
+
+// Templ runs the templ generator when the application holds a .templ file.
+//
+// The application carries the generator as a tool of its go.mod, so
+// `go tool templ` needs no second installation. See the SDD, S15.
+func Templ(ctx context.Context, dir string) error {
+	if !templFiles(dir) {
+		return nil
+	}
+	out, err := goCommand(ctx, dir, "tool", "templ", "generate")
+	if err != nil {
+		return fmt.Errorf("avero generate: templ failed\n%s\n  → Repair the .templ file that the message names, then run the command again",
+			strings.TrimSpace(out))
+	}
+	return nil
+}
+
+// templFiles reports a tree that holds a .templ file.
+func templFiles(dir string) bool {
+	found := false
+	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if path != dir && (name == "node_modules" || name == "vendor" || strings.HasPrefix(name, ".")) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.EqualFold(filepath.Ext(path), ".templ") {
+			found = true
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	return found
 }
 
 // runBuild generates, builds the assets and compiles the binary.

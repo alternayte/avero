@@ -6,13 +6,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/alternayte/avero/assets"
 	"github.com/alternayte/avero/codegen"
 	"github.com/alternayte/avero/codegen/client"
 	"github.com/alternayte/avero/scaffold"
 )
 
 // runNew writes a new application.
-func runNew(_ context.Context, s Streams, args []string) int {
+func runNew(ctx context.Context, s Streams, args []string) int {
 	opts := scaffold.Options{}
 	var name string
 	for i := 0; i < len(args); i++ {
@@ -69,8 +70,18 @@ func runNew(_ context.Context, s Streams, args []string) int {
 	if err != nil {
 		return fail(s, err)
 	}
-	// The generated binding of each input type must exist before the first
-	// build, so the application compiles at once.
+	// The application must build at once, so the command reads the
+	// dependencies and writes every generated file.
+	if out, err := goCommand(ctx, opts.Dir, "mod", "tidy"); err != nil {
+		return failf(s, "avero new: the dependencies do not read\n%s\n  → Prove the network, then run `go mod tidy` in %s",
+			strings.TrimSpace(out), name)
+	}
+	if err := Templ(ctx, opts.Dir); err != nil {
+		return fail(s, err)
+	}
+	if err := Vendor(ctx, opts.Dir, opts.Shape, s); err != nil {
+		return fail(s, err)
+	}
 	if _, err := codegen.Generate(opts.Dir); err != nil {
 		return fail(s, err)
 	}
@@ -80,6 +91,31 @@ func runNew(_ context.Context, s Streams, args []string) int {
 	for _, path := range written {
 		_, _ = fmt.Fprintln(s.Out, path)
 	}
-	_, _ = fmt.Fprintf(s.Out, "\nThe application %s is ready.\n\n\tcd %s\n\tcp .env.example .env\n\tavero migrate up\n\tgo run .\n", name, name)
+	_, _ = fmt.Fprintf(s.Out, "\nThe application %s is ready.\n\n\tcd %s\n\tcp .env.example .env\n\tavero migrate up\n\tavero dev\n", name, name)
 	return 0
+}
+
+// FrontEnd holds the modules that the spa shape vendors. `avero js pin`
+// fetches each one as a bundled ES module and records its address and its hash
+// in avero.lock, so a later build needs no network and no Node.js. See DX-9.
+var FrontEnd = []struct{ Name, URL string }{
+	{"react", "https://esm.sh/react@19.2.0/es2022/react.bundle.mjs"},
+	{"react/jsx-runtime", "https://esm.sh/react@19.2.0/es2022/jsx-runtime.bundle.mjs"},
+	{"react-dom/client", "https://esm.sh/react-dom@19.2.0/es2022/client.bundle.mjs"},
+	{"@tanstack/react-query", "https://esm.sh/@tanstack/react-query@5.90.2/es2022/react-query.bundle.mjs"},
+}
+
+// Vendor fetches the front end modules of a shape. Only the spa shape carries
+// one.
+func Vendor(ctx context.Context, dir, shape string, s Streams) error {
+	if shape != scaffold.ShapeSPA {
+		return nil
+	}
+	for _, module := range FrontEnd {
+		if err := assets.PinJS(ctx, assets.PinConfig{Dir: dir}, module.Name, module.URL); err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintf(s.Out, "pinned %s\n", module.Name)
+	}
+	return nil
 }

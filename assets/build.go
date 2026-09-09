@@ -184,7 +184,13 @@ func bundle(cfg Config, outDir, entry string) ([]output, []*Fault) {
 		Format:        api.FormatESModule,
 		Target:        api.ES2022,
 		Platform:      api.PlatformBrowser,
+		// The automatic JSX runtime writes the import of react/jsx-runtime,
+		// so a component file needs no import of React. `avero js pin`
+		// vendors the runtime.
+		JSX:             api.JSXAutomatic,
+		JSXImportSource: "react",
 		Loader: map[string]api.Loader{
+			".jsx": api.LoaderJSX, ".tsx": api.LoaderTSX, ".ts": api.LoaderTS,
 			".png": api.LoaderFile, ".jpg": api.LoaderFile, ".jpeg": api.LoaderFile,
 			".gif": api.LoaderFile, ".svg": api.LoaderFile, ".webp": api.LoaderFile,
 			".woff": api.LoaderFile, ".woff2": api.LoaderFile, ".ttf": api.LoaderFile,

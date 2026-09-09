@@ -1,0 +1,25 @@
+{
+  "js": {
+    "@tanstack/react-query": {
+      "url": "https://esm.sh/@tanstack/react-query@5.90.2/es2022/react-query.bundle.mjs",
+      "sha256": "dcf51f9146010a1113b0e6cf5a34e00585e10387f6ae5b780de9dd546839d5ff",
+      "source_sha256": "c30138b48bf98c105c42d1ba2be4c258e0cedc33f48fb2e6046703bad0aa0005"
+    },
+    "react": {
+      "url": "https://esm.sh/react@19.2.0/es2022/react.bundle.mjs",
+      "sha256": "4d28e447ec06f61be88111c0023d69b899f39a25a5ec2dbdd943c60b2c2403d8",
+      "source_sha256": "4d28e447ec06f61be88111c0023d69b899f39a25a5ec2dbdd943c60b2c2403d8"
+    },
+    "react-dom/client": {
+      "url": "https://esm.sh/react-dom@19.2.0/es2022/client.bundle.mjs",
+      "sha256": "d0a13ef78dd5129ff07c2aeccc93cc61a3fa1bdd1d6411bab6fc6e6cf9e53e06",
+      "source_sha256": "0d59e3286f0ce1df61113199f53a1908863f56cd1a88c533c5bb07f631f7b5a3"
+    },
+    "react/jsx-runtime": {
+      "url": "https://esm.sh/react@19.2.0/es2022/jsx-runtime.bundle.mjs",
+      "sha256": "31589189aac1fb48b9850732fe33115cfbb67caf80b5eb18913aa9f8d729e9cf",
+      "source_sha256": "31589189aac1fb48b9850732fe33115cfbb67caf80b5eb18913aa9f8d729e9cf"
+    }
+  },
+  "bin": {}
+}

@@ -28,8 +28,13 @@ const MaxDownload = 512 << 20
 type Pin struct {
 	// URL is the address that the file came from.
 	URL string `json:"url"`
-	// SHA256 is the hash of the bytes, in hexadecimal.
+	// SHA256 is the hash of the file in the vendor directory, in
+	// hexadecimal. It is the hash of the bytes after the rewrite of the
+	// imports, which is deterministic.
 	SHA256 string `json:"sha256"`
+	// SourceSHA256 is the hash of the bytes that the address answered. It
+	// proves the origin of a module that the pin rewrote.
+	SourceSHA256 string `json:"source_sha256,omitempty"`
 	// Version is the version of a binary. A module leaves it empty.
 	Version string `json:"version,omitempty"`
 }
@@ -199,11 +204,17 @@ func PinJS(ctx context.Context, cfg PinConfig, name, url string) error {
 		return nil
 	}
 
-	body, err := cfg.fetcher().Fetch(ctx, url)
+	source, err := cfg.fetcher().Fetch(ctx, url)
 	if err != nil {
 		return fault(LockName, fmt.Sprintf("the module %q does not download from %s: %v", name, url, err),
 			"Prove the address in a browser, then run the command again")
 	}
+	// A CDN keeps a peer dependency outside the bundle and names it with an
+	// absolute path of its own host. The pin rewrites such an import to the
+	// name of the package, so the bundler resolves it in the vendor
+	// directory. See vendorSpecifiers.
+	body := vendorSpecifiers(source)
+	sourceSum := sha256.Sum256(source)
 	sum := sha256.Sum256(body)
 	hash := hex.EncodeToString(sum[:])
 	if locked && pin.URL == url && pin.SHA256 != hash {
@@ -221,7 +232,7 @@ func PinJS(ctx context.Context, cfg PinConfig, name, url string) error {
 		return fault(path.Join(VendorDir, name+".js"), "the module does not write",
 			"Give the process the right to write the assets directory")
 	}
-	lock.SetJS(name, Pin{URL: url, SHA256: hash})
+	lock.SetJS(name, Pin{URL: url, SHA256: hash, SourceSHA256: hex.EncodeToString(sourceSum[:])})
 	return lock.Save()
 }
 

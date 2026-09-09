@@ -5,13 +5,24 @@ of your application holds the pages. It imports no feature package.
 
 ## A page
 
-```go
-func Page(title string, body avero.ViewComponent) avero.ViewComponent {
-	return view.Func(func(ctx context.Context, w io.Writer) error {
-		...
-	})
+The ssr shape writes its pages as templ files:
+
+```templ
+package ui
+
+templ PostList(rows []PostRow) {
+	<h1>Posts</h1>
+	<ul class="posts">
+		for _, row := range rows {
+			<li><a href={ templ.URL("/posts/" + row.ID) }>{ row.Title }</a></li>
+		}
+	</ul>
 }
 ```
+
+`go tool templ generate` writes the Go file of each templ file. The
+application carries the generator in its `go.mod`, so a person installs
+nothing. `avero generate`, `avero build` and `avero dev` run it.
 
 A component states one method:
 
@@ -19,9 +30,9 @@ A component states one method:
 Render(ctx context.Context, w io.Writer) error
 ```
 
-A templ component satisfies it with no adapter, because the method set is the
-same. Avero imports no template library, so you can use templ, `html/template`
-or a plain function.
+A templ component satisfies it, and so does `view.Func`. Avero imports no
+template library, so an application can use templ, `html/template` or a plain
+function.
 
 ## The response
 

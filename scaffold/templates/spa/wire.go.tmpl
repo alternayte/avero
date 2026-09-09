@@ -9,7 +9,7 @@ import (
 	"github.com/alternayte/avero/assets"
 	"github.com/alternayte/drel"
 
-	"[[.Module]]/internal/features/posts"
+	"[[.Module]]/internal/features/tasks"
 	"[[.Module]]/internal/ui"
 )
 
@@ -49,7 +49,7 @@ func wire(engine *drel.Engine, cfg Config) (*avero.Router, *avero.ModuleSet, err
 		return avero.View(ui.Shell()), nil
 	})
 
-	modules := avero.Modules(posts.New(engine))
+	modules := avero.Modules(tasks.New(engine))
 	if err := modules.Attach(r); err != nil {
 		return nil, nil, err
 	}

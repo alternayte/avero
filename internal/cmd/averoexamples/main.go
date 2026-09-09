@@ -10,8 +10,10 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -22,6 +24,7 @@ import (
 
 	"github.com/alternayte/avero/codegen"
 	"github.com/alternayte/avero/codegen/client"
+	"github.com/alternayte/avero/internal/cli"
 	"github.com/alternayte/avero/scaffold"
 )
 
@@ -129,6 +132,23 @@ func write(e example, dir, replace string) error {
 	}); err != nil {
 		return err
 	}
+	// The example must build from the repository, so it carries the sum of
+	// its dependencies. The check runs the same step, so the two go.mod files
+	// hold the same list.
+	cmd := exec.Command("go", "mod", "tidy")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("go mod tidy failed in %s: %w\n%s", dir, err, out)
+	}
+	// templ writes the Go file of each .templ file of the ssr shape.
+	ctx := context.Background()
+	if err := cli.Templ(ctx, dir); err != nil {
+		return err
+	}
+	// The spa shape vendors React and TanStack Query.
+	if err := cli.Vendor(ctx, dir, e.Shape, cli.Streams{Out: io.Discard, Err: os.Stderr}); err != nil {
+		return err
+	}
 	if _, err := codegen.Generate(dir); err != nil {
 		return err
 	}
@@ -144,14 +164,6 @@ func write(e example, dir, replace string) error {
 		}
 	}
 
-	// The example must build from the repository, so it carries the sum of
-	// its dependencies. The check runs the same step, so the two go.mod files
-	// hold the same list.
-	cmd := exec.Command("go", "mod", "tidy")
-	cmd.Dir = dir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("go mod tidy failed in %s: %w\n%s", dir, err, out)
-	}
 	return nil
 }
 

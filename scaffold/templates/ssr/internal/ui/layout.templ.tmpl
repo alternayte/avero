@@ -1,0 +1,36 @@
+package ui
+
+import "github.com/alternayte/avero/view"
+
+// Page wraps a body in the layout of the application.
+templ Page(title string, body templ.Component) {
+	<!doctype html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ title } · [[.Title]]</title>
+			<link rel="stylesheet" href={ Asset("app.css") }/>
+			<script type="module" src={ Asset("app.js") }></script>
+		</head>
+		<body>
+			<header><a href="/">[[.Title]]</a></header>
+			<main>
+				@Toasts()
+				@body
+			</main>
+		</body>
+	</html>
+}
+
+// Toasts renders the messages of this response. The flash middleware carries a
+// message across a redirect.
+templ Toasts() {
+	if toasts := view.Toasts(ctx); len(toasts) > 0 {
+		<ul class="toasts">
+			for _, toast := range toasts {
+				<li class={ toast.Level }>{ toast.Message }</li>
+			}
+		</ul>
+	}
+}

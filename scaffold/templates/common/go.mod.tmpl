@@ -3,6 +3,12 @@ module [[.Module]]
 go [[.GoVersion]]
 
 require github.com/alternayte/avero [[.Avero]]
-[[if .Replace]]
+[[if .SSR]]
+require github.com/a-h/templ [[.Templ]]
+
+// The templ generator writes the Go file of each .templ file. `avero generate`
+// and `avero dev` run it, so a person needs no second tool.
+tool github.com/a-h/templ/cmd/templ
+[[end]][[if .Replace]]
 replace github.com/alternayte/avero => [[.Replace]]
 [[end]]

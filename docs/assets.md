@@ -22,6 +22,28 @@ Import the module by its bare name:
 import { atom } from "nanostores";
 ```
 
+A CDN keeps a peer dependency outside its bundle and names it with an absolute
+path of its own host. The pin rewrites such an import to the name of the
+package, so the bundler resolves it in the vendor directory. `avero.lock`
+records the hash of the file that the pin wrote and the hash of the bytes that
+the address answered.
+
+## React and TanStack Query
+
+The spa shape carries React 19 and TanStack Query, and it needs no Node.js.
+`avero new --shape spa` pins four modules:
+
+```
+react
+react/jsx-runtime
+react-dom/client
+@tanstack/react-query
+```
+
+esbuild transforms the JSX with the automatic runtime, so a component file
+needs no import of React, and it bundles the application and the vendored
+modules into one file of about 230 kilobytes.
+
 ## Tier 1
 
 ```

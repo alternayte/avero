@@ -16,9 +16,11 @@ avero new blog
 cd blog
 ```
 
-`avero new` writes the application, the generated files and the starter assets.
-The shape is `ssr` by default. Write `--shape spa` or `--shape api` for another
-shape.
+`avero new` writes the application, reads its dependencies, and writes every
+generated file: the templ pages of the ssr shape, the binding of each input
+type and the implementation of each client. The shape is `ssr` by default.
+Write `--shape spa` for a React front end, or `--shape api` for a JSON
+service.
 
 ## Run it
 
@@ -42,7 +44,7 @@ blog/
 ├── wire.go                   the router, the middleware and the modules
 ├── avero.json                the shape and the asset pipeline
 ├── internal/features/posts/  one feature: routes, handlers, inputs, store
-├── internal/ui/              the views. They import no feature package.
+├── internal/ui/              the templ pages. They import no feature package.
 ├── migrations/               the SQL files
 ├── assets/                   the source of the stylesheet and of the script
 ├── AGENTS.md                 the rules that an agent reads
