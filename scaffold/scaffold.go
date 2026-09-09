@@ -205,7 +205,7 @@ const (
 	// DefaultDrelVersion is the version of drel. Every shape states its
 	// models with it, and its generator writes the repositories and the
 	// migrations.
-	DefaultDrelVersion = "v0.7.0"
+	DefaultDrelVersion = "v0.7.1"
 )
 
 // validName reports a name that a module path can carry.

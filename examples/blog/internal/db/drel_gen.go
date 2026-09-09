@@ -44,6 +44,11 @@ func (db *DB) Tx(ctx context.Context) TxRepos {
 	tx := drel.MustFromContext(ctx)
 	return TxRepos{
 		Posts: &model.TxPostRepository{TxRepository: drel.NewTxRepository(tx, model.PostMeta)},
+		Modules: TxModules{
+			Posts: PostsTxRepos{
+				Posts: &model.TxPostRepository{TxRepository: drel.NewTxRepository(tx, model.PostMeta)},
+			},
+		},
 	}
 }
 

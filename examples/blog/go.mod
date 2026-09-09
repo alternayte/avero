@@ -4,7 +4,7 @@ go 1.26.2
 
 require github.com/alternayte/avero v0.1.0
 
-require github.com/alternayte/drel v0.7.0
+require github.com/alternayte/drel v0.7.1
 
 // drel writes the models, the repositories and the migrations of each feature
 // slice. `avero generate` and `avero migrate` run it, so a person needs no

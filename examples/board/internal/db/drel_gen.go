@@ -44,6 +44,11 @@ func (db *DB) Tx(ctx context.Context) TxRepos {
 	tx := drel.MustFromContext(ctx)
 	return TxRepos{
 		Tasks: &model.TxTaskRepository{TxRepository: drel.NewTxRepository(tx, model.TaskMeta)},
+		Modules: TxModules{
+			Tasks: TasksTxRepos{
+				Tasks: &model.TxTaskRepository{TxRepository: drel.NewTxRepository(tx, model.TaskMeta)},
+			},
+		},
 	}
 }
 

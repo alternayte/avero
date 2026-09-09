@@ -5,7 +5,7 @@ go 1.26.2
 require github.com/alternayte/avero v0.1.0
 
 require (
-	github.com/alternayte/drel v0.7.0
+	github.com/alternayte/drel v0.7.1
 	github.com/google/uuid v1.6.0
 )
 

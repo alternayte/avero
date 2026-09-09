@@ -6,7 +6,7 @@ go 1.26.2
 // section 1.1, OpenTelemetry in S3, and esbuild in S11.
 require (
 	github.com/alternayte/auth-all v0.2.0
-	github.com/alternayte/drel v0.7.0
+	github.com/alternayte/drel v0.7.1
 	go.opentelemetry.io/otel v1.41.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.41.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.41.0

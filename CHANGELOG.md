@@ -5,6 +5,11 @@ The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Changed
+
+- drel v0.7.1. The generated `Tx` fills its module holder now. A call of
+  `db.Tx(ctx).Modules.<Module>.<Rows>` held nil in v0.7.0.
+
 ### Fixed
 
 - The development loop test waits for the loop to stop before the test
