@@ -68,7 +68,7 @@ needs no Node.js:
 
 ```
 @import "tailwindcss";
-@import "./vendor/basecoat/basecoat.css";
+@import "../vendor/basecoat/basecoat.css";
 → 287988 bytes minified, 468 ms
 ```
 
@@ -213,11 +213,11 @@ The steps, in order:
 2. `PinPackage` fetches
    `https://registry.npmjs.org/basecoat-css/-/basecoat-css-<version>.tgz` and
    writes `dist/` under `assets/vendor/basecoat/`.
-3. Add `@import "vendor/basecoat/basecoat-<style>.css";` to
+3. Add `@import "../vendor/basecoat/basecoat-<style>.css";` to
    `assets/css/app.css` after the Tailwind import, when the line is absent.
    The stylesheet reads the relative imports of the tree, so no other line
    changes.
-4. Add `import "./vendor/basecoat/js/all.min.js";` to `assets/js/app.js`, when
+4. Add `import "../vendor/basecoat/js/all.min.js";` to `assets/js/app.js`, when
    the line is absent. esbuild takes the file as a relative path, so the
    application needs no bare specifier and no rewrite.
 5. The eight styles are `vega`, `nova`, `maia`, `lyra`, `mira`, `luma`, `sera`
