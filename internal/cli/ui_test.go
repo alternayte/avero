@@ -123,8 +123,49 @@ func TestUIAddBasecoatWritesTheStylesheetTheScriptAndTheComponent(t *testing.T) 
 	if _, err := os.Stat(filepath.Join(dir, "internal", "ui", "toaster.templ")); err != nil {
 		t.Fatalf("the component is absent: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(dir, "toaster_test.go")); err != nil {
+		t.Fatalf("the proof is absent: %v", err)
+	}
 	if !strings.Contains(out, "basecoat") {
 		t.Fatalf("the command said %q", out)
+	}
+}
+
+// TestUIAddBasecoatWritesTheProofOfTheToaster proves that the command puts
+// the marks of Basecoat into toaster_test.go.
+func TestUIAddBasecoatWritesTheProofOfTheToaster(t *testing.T) {
+	dir := uiProject(t)
+
+	if code, _, errOut := run(t, dir, "ui", "add", "basecoat"); code != 0 {
+		t.Fatalf("the command gave %d and said %q", code, errOut)
+	}
+	body := read(t, dir, "toaster_test.go")
+	for _, want := range []string{
+		`id="toaster"`,
+		`data-category="success"`,
+		"data-toast-cancel",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("toaster_test.go holds no %q:\n%s", want, body)
+		}
+	}
+}
+
+// TestUIAddBasecoatKeepsTheProofOfAPerson proves that a second run does not
+// overwrite toaster_test.go. A person owns the file after the first run.
+func TestUIAddBasecoatKeepsTheProofOfAPerson(t *testing.T) {
+	dir := uiProject(t)
+
+	if code, _, errOut := run(t, dir, "ui", "add", "basecoat"); code != 0 {
+		t.Fatalf("the first run gave %d and said %q", code, errOut)
+	}
+	mark := "// a person wrote this line\n"
+	writeFile(t, dir, "toaster_test.go", mark)
+	if code, _, errOut := run(t, dir, "ui", "add", "basecoat"); code != 0 {
+		t.Fatalf("the second run gave %d and said %q", code, errOut)
+	}
+	if got := read(t, dir, "toaster_test.go"); got != mark {
+		t.Fatalf("the second run changed toaster_test.go to %q", got)
 	}
 }
 
