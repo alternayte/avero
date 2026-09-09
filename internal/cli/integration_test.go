@@ -286,6 +286,12 @@ func TestTheSpaBinaryCarriesItsFrontEnd(t *testing.T) {
 	}
 	root := repoRoot(t)
 	dir := t.TempDir()
+
+	// The build runs with the tools of a clean machine and no other: Go, node
+	// and npm. A build that reaches for a tool of this laptop would pass here
+	// and fail on a runner.
+	t.Setenv("PATH", cleanPath(t))
+
 	if code, _, errOut := run(t, dir, "new", "board", "--shape", "spa", "--replace", root); code != 0 {
 		t.Fatalf("avero new returned %d: %s", code, errOut)
 	}
@@ -377,6 +383,30 @@ func TestTheSpaBinaryCarriesItsFrontEnd(t *testing.T) {
 	if list := body(t, address+"/api/tasks"); !strings.Contains(list, "from the binary") {
 		t.Fatalf("the list holds %q", list)
 	}
+}
+
+// cleanPath returns a path that holds the tools of a clean machine and no
+// other: the Go toolchain, node and npm.
+//
+// It builds a directory of links, because a tool of the machine can stand in
+// the same directory as node. A build that reaches for such a tool passes on
+// this machine and fails on a runner.
+func cleanPath(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	for _, tool := range []string{"go", "node", "npm", "npx", "sh", "env", "uname"} {
+		path, err := exec.LookPath(tool)
+		if err != nil {
+			if tool == "go" || tool == "node" || tool == "npm" {
+				t.Skipf("%s is absent, and the spa shape needs it", tool)
+			}
+			continue
+		}
+		if err := os.Symlink(path, filepath.Join(dir, tool)); err != nil {
+			t.Fatalf("Symlink returned %v", err)
+		}
+	}
+	return dir
 }
 
 // bundleOf returns the address of the script of the index document.

@@ -6,10 +6,9 @@ import { defineConfig } from "@hey-api/openapi-ts";
 // `npm run api`.
 export default defineConfig({
     input: "../openapi.json",
-    output: {
-        path: "src/client",
-        format: "prettier",
-    },
+    // The output takes no formatter, so the generator needs no tool beside
+    // the dependencies of the project.
+    output: "src/client",
     plugins: [
         "@hey-api/client-fetch",
         {
