@@ -99,6 +99,32 @@ The transaction middleware opens one transaction for each request. It reads the
 status of the response and commits or rolls back. `avero.Adapt` turns a
 `net/http` middleware into an Avero middleware.
 
+## The description of the API
+
+```
+avero routes --openapi                       write the description to the output
+avero routes --openapi --out openapi.json    write it to a file
+avero routes --openapi --server https://api.example.com
+```
+
+The command reads the source, so it needs no database and no running
+application. It reads the routes of each module and the input type of each
+handler, and it writes an OpenAPI 3.1 document:
+
+- a path for each pattern, with `{id}` as a path parameter;
+- an operation for each method, named after the handler, with the first
+  sentence of its comment as the summary;
+- a parameter for each `path`, `query` and `header` field;
+- a request body for each `json` field of a method that carries one;
+- the rules of the `validate` tag as `minLength`, `maxLength`, `minimum`,
+  `maximum`, `format` and `enum`;
+- the answers that the router writes: 400 for a request that does not bind,
+  422 for a request that fails validation, and 500 for a handler that returns
+  an error.
+
+The description carries no schema for the answer of a handler, because Go
+states that answer and no tag does.
+
 ## The modules
 
 ```go

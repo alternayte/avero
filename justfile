@@ -32,7 +32,7 @@ test:
 # with S7.
 integration:
     go test ./assets/... -race -tags=integration -timeout 10m
-    go test ./internal/cli/... -tags=integration -run 'TestTheDoctor|TestTheRoutesAndThe|TestVerifyRuns|TestTheSpaBinary' -timeout 20m
+    go test ./internal/cli/... -tags=integration -run 'TestTheDoctor|TestTheRoutesAndThe|TestVerifyRuns|TestTheSpaBinary|TestTheOpenAPI' -timeout 20m
     go test ./cmd/avero/dev/... -tags=integration -run TestTheProductionBuild -timeout 10m
     go test ./mcp/... -tags=integration -timeout 20m
     @echo "integration: no broker test exists yet. S7 adds the first one."

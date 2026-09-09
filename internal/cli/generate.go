@@ -130,7 +130,7 @@ func runBuild(ctx context.Context, s Streams, args []string) int {
 // runJS fetches a bundled module into the vendor directory.
 func runJS(ctx context.Context, s Streams, args []string) int {
 	if len(args) < 2 || args[0] != "pin" {
-		return failf(s, "avero js: the form is `avero js pin <package> [url]`\n  → Name the package, and the address on the first pin")
+		return failf(s, "avero js: the form is `avero js pin <package> [url]`\n  → Name the package, such as `avero js pin zustand`")
 	}
 	name := args[1]
 	url := ""
@@ -140,7 +140,13 @@ func runJS(ctx context.Context, s Streams, args []string) int {
 	if err := assets.PinJS(ctx, assets.PinConfig{Dir: dirOf(s)}, name, url); err != nil {
 		return fail(s, err)
 	}
-	_, _ = fmt.Fprintf(s.Out, "pinned %s into %s\n", name, assets.VendorDir)
+	lock, err := assets.LoadLock(dirOf(s))
+	if err != nil {
+		return fail(s, err)
+	}
+	pin, _ := lock.JS(name)
+	_, _ = fmt.Fprintf(s.Out, "pinned %s from %s\n\nImport it by its name:\n\n\timport ... from %q\n",
+		name, pin.URL, name)
 	return 0
 }
 

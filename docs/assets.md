@@ -9,12 +9,20 @@ compiles the stylesheet with the Tailwind standalone binary. It resolves a
 relative path and a vendored package only.
 
 ```
-avero js pin nanostores https://cdn.jsdelivr.net/npm/nanostores@0.11.3/+esm
+avero js pin zustand
 ```
 
-The command writes the module into `assets/js/vendor/` and records the address
-and the SHA-256 in `avero.lock`. A second run changes nothing. A body that does
-not match the hash stops the command.
+The command names the package and no address. It asks the CDN, fetches the
+bundled module, writes it into `assets/js/vendor/`, and records the resolved
+address and the SHA-256 in `avero.lock`. A second run changes nothing. A body
+that does not match the hash stops the command.
+
+```
+avero js pin zustand@5.0.15                 one version
+avero js pin @tanstack/react-table          a scoped package
+avero js pin react-dom/server               one subpath
+avero js pin lodash-es https://…/lodash.js  one address that you choose
+```
 
 Import the module by its bare name:
 

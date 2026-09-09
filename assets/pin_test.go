@@ -215,3 +215,65 @@ func TestTheBuildTakesTheTailwindOutput(t *testing.T) {
 		t.Fatalf("the stylesheet holds %q", body)
 	}
 }
+
+func TestResolveReadsTheModuleOfAPackage(t *testing.T) {
+	answer := "/* esm.sh - zustand@5.0.15 */\n" +
+		"import \"/react@>=18.0.0?target=es2022\";\n" +
+		"export * from \"/zustand@5.0.15/es2022/zustand.bundle.mjs\";\n"
+	f := &fetcher{bodies: map[string]string{
+		"https://esm.sh/zustand?bundle&target=es2022": answer,
+	}}
+	url, err := assets.Resolve(context.Background(), f, "zustand")
+	if err != nil {
+		t.Fatalf("Resolve returned %v, want nil", err)
+	}
+	if url != "https://esm.sh/zustand@5.0.15/es2022/zustand.bundle.mjs" {
+		t.Fatalf("Resolve returned %q", url)
+	}
+}
+
+func TestResolveTakesTheAnswerWhenItHoldsTheModule(t *testing.T) {
+	f := &fetcher{bodies: map[string]string{
+		"https://esm.sh/tiny?bundle&target=es2022": "export const tiny = 1;\n",
+	}}
+	url, err := assets.Resolve(context.Background(), f, "tiny")
+	if err != nil {
+		t.Fatalf("Resolve returned %v, want nil", err)
+	}
+	if url != "https://esm.sh/tiny?bundle&target=es2022" {
+		t.Fatalf("Resolve returned %q", url)
+	}
+}
+
+func TestPinResolvesAPackageWithNoAddress(t *testing.T) {
+	dir := t.TempDir()
+	f := &fetcher{bodies: map[string]string{
+		"https://esm.sh/zustand?bundle&target=es2022":             "export * from \"/zustand@5.0.15/es2022/zustand.bundle.mjs\";\n",
+		"https://esm.sh/zustand@5.0.15/es2022/zustand.bundle.mjs": "export const create = () => 1;\n",
+	}}
+	if err := assets.PinJS(context.Background(), assets.PinConfig{Dir: dir, Fetch: f}, "zustand", ""); err != nil {
+		t.Fatalf("PinJS returned %v, want nil", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(assets.VendorDir), "zustand.js")); err != nil {
+		t.Fatalf("the vendor file is absent: %v", err)
+	}
+	lock, err := assets.LoadLock(dir)
+	if err != nil {
+		t.Fatalf("LoadLock returned %v, want nil", err)
+	}
+	pin, ok := lock.JS("zustand")
+	if !ok || pin.URL != "https://esm.sh/zustand@5.0.15/es2022/zustand.bundle.mjs" {
+		t.Fatalf("the lock holds %+v", pin)
+	}
+}
+
+func TestPinNamesTheRepairForAPackageThatDoesNotResolve(t *testing.T) {
+	f := &fetcher{bodies: map[string]string{}}
+	err := assets.PinJS(context.Background(), assets.PinConfig{Dir: t.TempDir(), Fetch: f}, "absent-package", "")
+	if err == nil {
+		t.Fatal("PinJS returned nil, want a fault")
+	}
+	if !strings.Contains(err.Error(), "→") {
+		t.Fatalf("the fault states no repair: %v", err)
+	}
+}

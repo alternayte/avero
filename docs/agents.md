@@ -79,6 +79,7 @@ runs give one answer.
 | `avero schema --json` | `module/schema_models.json` |
 | `avero doctor --json` | `host/doctor_schema.json` |
 | `avero build` | `assets/schema.json` |
+| `avero routes --openapi` | OpenAPI 3.1 |
 
 ## The record of the gate
 

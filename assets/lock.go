@@ -192,11 +192,16 @@ func PinJS(ctx context.Context, cfg PinConfig, name, url string) error {
 	}
 	pin, locked := lock.JS(name)
 	switch {
-	case url == "" && !locked:
-		return fault(LockName, fmt.Sprintf("the lock holds no pin of the module %q", name),
-			fmt.Sprintf("Run `avero js pin %s <url>` with the address of the bundled module", name))
-	case url == "":
+	case url == "" && locked:
 		url = pin.URL
+	case url == "":
+		// The command names a package and no address, so the CDN resolves
+		// the version and names the file that holds the bundle.
+		resolved, err := Resolve(ctx, cfg.fetcher(), name)
+		if err != nil {
+			return err
+		}
+		url = resolved
 	}
 
 	file := filepath.Join(cfg.Dir, filepath.FromSlash(VendorDir), name+".js")

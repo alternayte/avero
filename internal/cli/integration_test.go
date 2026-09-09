@@ -375,3 +375,74 @@ func body(t *testing.T, address string) string {
 	}
 	return string(out)
 }
+
+// TestTheOpenAPIDescriptionOfAScaffoldedApplication proves that the command
+// reads a real application and writes a description that a client reads.
+func TestTheOpenAPIDescriptionOfAScaffoldedApplication(t *testing.T) {
+	root := repoRoot(t)
+	dir := t.TempDir()
+	if code, _, errOut := run(t, dir, "new", "orders", "--shape", "api", "--replace", root); code != 0 {
+		t.Fatalf("avero new returned %d: %s", code, errOut)
+	}
+	app := filepath.Join(dir, "orders")
+
+	code, out, errOut := run(t, app, "routes", "--openapi", "--server", "https://api.example.com")
+	if code != 0 {
+		t.Fatalf("the code is %d: %s", code, errOut)
+	}
+	var doc struct {
+		OpenAPI string `json:"openapi"`
+		Info    struct {
+			Title string `json:"title"`
+		} `json:"info"`
+		Paths map[string]map[string]struct {
+			OperationID string `json:"operationId"`
+			Summary     string `json:"summary"`
+			Parameters  []struct {
+				Name string `json:"name"`
+				In   string `json:"in"`
+			} `json:"parameters"`
+			RequestBody *struct {
+				Content map[string]struct {
+					Schema struct {
+						Properties map[string]any `json:"properties"`
+						Required   []string       `json:"required"`
+					} `json:"schema"`
+				} `json:"content"`
+			} `json:"requestBody"`
+			Responses map[string]any `json:"responses"`
+		} `json:"paths"`
+	}
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("the description does not parse: %v\n%s", err, out)
+	}
+	if doc.OpenAPI != "3.1.0" || doc.Info.Title != "orders" {
+		t.Fatalf("the description holds %+v", doc)
+	}
+	create, ok := doc.Paths["/posts"]["post"]
+	if !ok {
+		t.Fatalf("the description holds no POST /posts: %v", doc.Paths)
+	}
+	if create.OperationID != "posts.Create" || create.Summary == "" {
+		t.Fatalf("the operation is %+v", create)
+	}
+	if create.RequestBody == nil {
+		t.Fatal("the operation carries no body")
+	}
+	body := create.RequestBody.Content["application/json"].Schema
+	if _, ok := body.Properties["title"]; !ok {
+		t.Fatalf("the body holds %v", body.Properties)
+	}
+	if strings.Join(body.Required, ",") != "body,title" {
+		t.Fatalf("the required fields are %v", body.Required)
+	}
+	show, ok := doc.Paths["/posts/{id}"]["get"]
+	if !ok || len(show.Parameters) != 1 || show.Parameters[0].In != "path" {
+		t.Fatalf("the operation of GET /posts/{id} is %+v", show)
+	}
+	for _, code := range []string{"200", "422", "500"} {
+		if _, ok := create.Responses[code]; !ok {
+			t.Fatalf("the operation states no %s: %v", code, create.Responses)
+		}
+	}
+}

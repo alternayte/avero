@@ -3,13 +3,74 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/alternayte/avero/internal/inspect"
+	"github.com/alternayte/avero/openapi"
 )
 
-// runRoutes prints the routes of the application.
+// runRoutes prints the routes of the application, or its OpenAPI description.
 func runRoutes(ctx context.Context, s Streams, args []string) int {
+	for i, a := range args {
+		if a == "--openapi" || a == "-openapi" {
+			return runOpenAPI(s, append(append([]string(nil), args[:i]...), args[i+1:]...))
+		}
+	}
 	return ask(ctx, s, inspect.Routes, args)
+}
+
+// runOpenAPI writes the OpenAPI description of the application.
+//
+// It reads the source, so it needs no database and no running application.
+func runOpenAPI(s Streams, args []string) int {
+	out := ""
+	server := ""
+	for i := 0; i < len(args); i++ {
+		switch a := args[i]; {
+		case a == "--out" || a == "-out":
+			i++
+			if i >= len(args) {
+				return failf(s, "avero routes: --out names no file\n  → Write --out openapi.json")
+			}
+			out = args[i]
+		case strings.HasPrefix(a, "--out="):
+			out = strings.TrimPrefix(a, "--out=")
+		case a == "--server" || a == "-server":
+			i++
+			if i >= len(args) {
+				return failf(s, "avero routes: --server names no address\n  → Write --server https://api.example.com")
+			}
+			server = args[i]
+		case strings.HasPrefix(a, "--server="):
+			server = strings.TrimPrefix(a, "--server=")
+		case a == "--json" || a == "-json":
+			// The description is JSON, so the flag changes nothing.
+		default:
+			return failf(s, "avero routes: the flag %q is not known\n  → Run `avero routes --openapi [--out openapi.json] [--server https://api.example.com]`", a)
+		}
+	}
+
+	dir := dirOf(s)
+	project, err := LoadProject(dir)
+	if err != nil {
+		return fail(s, err)
+	}
+	doc, err := openapi.Generate(openapi.Options{Dir: dir, Title: project.Name, Server: server})
+	if err != nil {
+		return fail(s, err)
+	}
+	body := doc.String() + "\n"
+	if out == "" {
+		_, _ = fmt.Fprint(s.Out, body)
+		return 0
+	}
+	if err := os.WriteFile(filepath.Join(dir, out), []byte(body), 0o644); err != nil {
+		return failf(s, "avero routes: %s does not write\n  → Give the process the right to write the application directory", out)
+	}
+	_, _ = fmt.Fprintf(s.Out, "%s: %d paths\n", out, len(doc.Paths))
+	return 0
 }
 
 // runModules prints the contribution of each module.

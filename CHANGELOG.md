@@ -38,6 +38,8 @@ The first release. It carries every subsystem except the messaging ones.
   TanStack Query, and api with a generated client.
 - **Dev loop, S15.** `avero dev` swaps a stylesheet with no reload, and it
   morphs the page after a rebuild, so the scroll position survives.
+- **OpenAPI.** `avero routes --openapi` reads the routes and the input types of
+  the source and writes an OpenAPI 3.1 document. It runs no application.
 - **Agent surface, S16.** `avero mcp` with seven tools, `AGENTS.md`, four
   skills in the Agent Skills format, and one published schema for each
   report.

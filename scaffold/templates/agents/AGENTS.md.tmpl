@@ -21,6 +21,7 @@ avero generate        write the generated files after a change to an input type
 avero slice <name>    write a new feature slice
 avero doctor          prove the configuration, the database and the broker
 avero routes          print the routes
+avero routes --openapi  write the OpenAPI description of the API
 avero modules         print the contribution of each module
 avero schema          print the models
 avero dev             run the application and rebuild it on each change

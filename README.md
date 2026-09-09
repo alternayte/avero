@@ -42,6 +42,7 @@ You need Go, and a database when you leave SQLite. You need no Node.js.
   after a rebuild.
 - An MCP server, so an agent reads the routes, the modules and the models, and
   writes a new slice.
+- An OpenAPI 3.1 description that `avero routes --openapi` reads from the code.
 - `AGENTS.md` and four skills in the Agent Skills format, which a coding agent
   reads with no setting.
 
@@ -54,7 +55,7 @@ avero dev             run the application and rebuild it on each change
 avero generate        write the generated files
 avero build           generate, build the assets and compile the binary
 avero migrate         write and apply the migrations
-avero routes          print the routes
+avero routes          print the routes, or the OpenAPI description
 avero modules         print the contribution of each module
 avero schema          print the models
 avero doctor          prove the configuration and the database
@@ -114,6 +115,7 @@ S7, S8 and S9. Every other shape works today.
 - [Routing and handlers](docs/routing.md)
 - [Views and forms](docs/views.md)
 - [Assets](docs/assets.md)
+- [The single page shape](docs/spa.md)
 - [HTTP clients](docs/clients.md)
 - [The agent surface](docs/agents.md)
 - [GraphQL](docs/graphql.md)
