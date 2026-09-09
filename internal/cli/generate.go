@@ -36,8 +36,11 @@ func runGenerate(_ context.Context, s Streams, args []string) int {
 		}
 		return 0
 	}
-	// templ owns the .templ files. It writes the Go file of each one, and the
-	// generators of Avero read the result.
+	// drel owns the models and the migrations. templ owns the .templ files.
+	// Both write Go files that the generators of Avero read.
+	if err := Drel(context.Background(), dir); err != nil {
+		return fail(s, err)
+	}
 	if err := Templ(context.Background(), dir); err != nil {
 		return fail(s, err)
 	}
@@ -53,6 +56,27 @@ func runGenerate(_ context.Context, s Streams, args []string) int {
 		_, _ = fmt.Fprintln(s.Out, path)
 	}
 	return 0
+}
+
+// DrelConfig is the file that states the models and the migrations of each
+// feature slice.
+const DrelConfig = "drel.yaml"
+
+// Drel runs the drel generator when the application states its models.
+//
+// The application carries the generator as a tool of its go.mod, so `go tool
+// drel` needs no second installation. drel writes the columns, the repository
+// and the migration set of each model.
+func Drel(ctx context.Context, dir string) error {
+	if _, err := os.Stat(filepath.Join(dir, DrelConfig)); err != nil {
+		return nil
+	}
+	out, err := goCommand(ctx, dir, "tool", "drel", "generate")
+	if err != nil {
+		return fmt.Errorf("avero generate: drel failed\n%s\n  → Repair the model that the message names, then run the command again",
+			strings.TrimSpace(out))
+	}
+	return nil
 }
 
 // Templ runs the templ generator when the application holds a .templ file.

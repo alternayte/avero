@@ -58,6 +58,8 @@ type Options struct {
 	// TemplVersion is the version of the templ generator that an ssr
 	// application requires.
 	TemplVersion string
+	// DrelVersion is the version of drel that an application requires.
+	DrelVersion string
 	// Replace points the module at a local copy of Avero. A test and the
 	// gate of this repository set it. An empty value writes no replace
 	// directive.
@@ -80,6 +82,7 @@ type data struct {
 	API        bool
 	Avero      string
 	Templ      string
+	Drel       string
 	Replace    string
 	GoVersion  string
 	Secret     string
@@ -111,6 +114,7 @@ func Write(opts Options) ([]string, error) {
 		API:        opts.Shape == ShapeAPI,
 		Avero:      opts.AveroVersion,
 		Templ:      opts.TemplVersion,
+		Drel:       opts.DrelVersion,
 		Replace:    opts.Replace,
 		GoVersion:  opts.GoVersion,
 		Secret:     secret(),
@@ -179,6 +183,9 @@ func validate(opts *Options) error {
 	if opts.TemplVersion == "" {
 		opts.TemplVersion = DefaultTemplVersion
 	}
+	if opts.DrelVersion == "" {
+		opts.DrelVersion = DefaultDrelVersion
+	}
 	if opts.GoVersion == "" {
 		opts.GoVersion = DefaultGoVersion
 	}
@@ -195,6 +202,10 @@ const (
 	// shape writes its pages as .templ files, and the generator writes the
 	// Go file of each one.
 	DefaultTemplVersion = "v0.3.1020"
+	// DefaultDrelVersion is the version of drel. Every shape states its
+	// models with it, and its generator writes the repositories and the
+	// migrations.
+	DefaultDrelVersion = "v0.7.0"
 )
 
 // validName reports a name that a module path can carry.

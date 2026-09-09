@@ -1,0 +1,37 @@
+{
+  "tables": [
+    {
+      "name": "posts",
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT PRIMARY KEY",
+          "notNull": true,
+          "pk": true
+        },
+        {
+          "name": "title",
+          "type": "TEXT",
+          "notNull": true
+        },
+        {
+          "name": "body",
+          "type": "TEXT",
+          "notNull": true
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "notNull": true,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        {
+          "name": "updated_at",
+          "type": "DATETIME",
+          "notNull": true,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      ]
+    }
+  ]
+}

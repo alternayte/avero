@@ -1,12 +1,14 @@
 package main
 
 import (
+	"io/fs"
 	"net/http"
 
 	"github.com/alternayte/avero"
 	"github.com/alternayte/drel"
 
 	"[[.Module]]/internal/features/posts"
+	postmigrations "[[.Module]]/internal/features/posts/migrations"
 )
 
 // wire builds the router and the module set.
@@ -21,8 +23,8 @@ func wire(engine *drel.Engine, cfg Config) (*avero.Router, *avero.ModuleSet, err
 		r.Use(avero.Transaction(engine))
 	}
 
-	// The service answers JSON, so the root path states the name and the
-	// version of the service.
+	// The service answers JSON, so the root path states the name of the
+	// service.
 	r.Get("/{$}", func(c *avero.Ctx) (avero.Response, error) {
 		return avero.JSON(http.StatusOK, map[string]string{"service": "[[.Name]]"}), nil
 	})
@@ -32,4 +34,10 @@ func wire(engine *drel.Engine, cfg Config) (*avero.Router, *avero.ModuleSet, err
 		return nil, nil, err
 	}
 	return r, modules, nil
+}
+
+// migrationSets holds the migrations of each feature slice. drel merges them
+// in version order, and the binary carries them. See drel.yaml.
+func migrationSets() []fs.FS {
+	return []fs.FS{postmigrations.FS}
 }

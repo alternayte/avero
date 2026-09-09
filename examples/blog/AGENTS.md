@@ -47,11 +47,13 @@ go test ./... -race
 main.go                     the composition root
 config.go                   every variable that the application reads
 wire.go                     the router, the middleware and the modules
-internal/features/          one directory for each feature
+internal/features/          one directory for each feature. Each holds a
+                            model/ package that drel reads, and a migrations/
+                            package that drel writes.
 internal/ui/                the views. They import no feature package.
                             A page is a .templ file. Run `avero generate`
                             after a change.
-migrations/                 the SQL files
+drel.yaml                   the model packages and the migrations of drel
 assets/                     the source of the stylesheet and of the script
 avero.json                  the shape and the asset pipeline
 ```
@@ -68,8 +70,10 @@ avero.json                  the shape and the asset pipeline
 - An acceptance test drives real HTTP against a real database. Do not use a
   mock at that level.
 - Never relax a test to make the gate pass. Never skip a test.
-- Never edit a generated file by hand. Change the input type and run
-  `avero generate`.
+- Never edit a generated file by hand. Change the input type or the model, then
+  run `avero generate`.
+- A store writes no SQL string. It reads and writes with the typed API of drel,
+  so a name fault appears at compile time.
 
 ## Writing standard
 

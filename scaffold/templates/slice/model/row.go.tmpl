@@ -1,0 +1,28 @@
+// Package model holds the rows of the [[.Plural]] feature. drel reads it and
+// writes the columns, the repository and the migrations of each type.
+package model
+
+import (
+	"github.com/alternayte/drel"
+	"github.com/google/uuid"
+)
+
+// [[.Type]] is one row of the [[.Table]] table.
+//
+// The embedded Model gives the identifier, the times and the change tracking.
+// The key is a UUID of version 7, which drel stamps at Add, so the identifier
+// stands before the commit.
+//
+// A db tag names the column. Write a field, then run `avero generate`. Write
+// the change of the table with `avero migrate new add_a_column`.
+type [[.Type]] struct {
+	drel.Model[uuid.UUID]
+
+	// Title is the name that a person reads.
+	Title string `db:"title"`
+}
+
+// New[[.Type]] returns one row that a person wrote.
+func New[[.Type]](title string) *[[.Type]] {
+	return &[[.Type]]{Title: title}
+}

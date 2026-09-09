@@ -10,6 +10,7 @@ import (
 	"github.com/alternayte/drel"
 
 	"blog/internal/features/posts"
+	postmigrations "blog/internal/features/posts/migrations"
 	"blog/internal/ui"
 )
 
@@ -63,4 +64,10 @@ func wire(engine *drel.Engine, cfg Config) (*avero.Router, *avero.ModuleSet, err
 		return nil, nil, err
 	}
 	return r, modules, nil
+}
+
+// migrationSets holds the migrations of each feature slice. drel merges them
+// in version order, and the binary carries them. See drel.yaml.
+func migrationSets() []fs.FS {
+	return []fs.FS{postmigrations.FS}
 }

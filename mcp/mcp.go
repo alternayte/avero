@@ -49,7 +49,7 @@ type Server struct {
 	Dir string
 	// Slice writes one feature slice. scaffold_slice calls it, and the CLI
 	// supplies the same function that `avero slice` runs.
-	Slice func(dir, name string) (files []string, registered bool, err error)
+	Slice func(ctx context.Context, dir, name string) (files []string, registered bool, err error)
 	// Generate proves that every generated file of the application is
 	// current. The gate step of run_verify calls it.
 	Generate func(dir string) error

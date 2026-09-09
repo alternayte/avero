@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/alternayte/avero"
+
+	"[[.Module]]/internal/features/[[.Package]]/model"
 )
 
 // View is one [[.Singular]] as the answer carries it.
@@ -14,7 +16,15 @@ type View struct {
 	Title string `json:"title"`
 }
 
+// [[.Type]]List is the answer of the list call.
+type [[.Type]]List struct {
+	// [[.Type]]s holds every row, newest first.
+	[[.Type]]s []View `json:"[[.Plural]]"`
+}
+
 // List answers every [[.Singular]].
+//
+//avero:response 200 [[.Type]]List
 func (m *Module) List(c *avero.Ctx, in ListInput) (avero.Response, error) {
 	rows, err := m.store.List(c.Context(), in.Search)
 	if err != nil {
@@ -22,21 +32,25 @@ func (m *Module) List(c *avero.Ctx, in ListInput) (avero.Response, error) {
 	}
 	out := make([]View, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, View{ID: row.ID, Title: row.Title})
+		out = append(out, view(row))
 	}
-	return avero.JSON(http.StatusOK, map[string]any{"[[.Plural]]": out}), nil
+	return avero.JSON(http.StatusOK, [[.Type]]List{[[.Type]]s: out}), nil
 }
 
 // Create writes one [[.Singular]].
+//
+//avero:response 201 View
 func (m *Module) Create(c *avero.Ctx, in CreateInput) (avero.Response, error) {
-	id, err := m.store.Create(c.Context(), in.Title)
+	row, err := m.store.Create(c.Context(), in.Title)
 	if err != nil {
 		return nil, err
 	}
-	return avero.JSON(http.StatusCreated, View{ID: id, Title: in.Title}), nil
+	return avero.JSON(http.StatusCreated, view(row)), nil
 }
 
 // Show answers one [[.Singular]].
+//
+//avero:response 200 View
 func (m *Module) Show(c *avero.Ctx, in ShowInput) (avero.Response, error) {
 	row, found, err := m.store.Get(c.Context(), in.ID)
 	if err != nil {
@@ -45,13 +59,20 @@ func (m *Module) Show(c *avero.Ctx, in ShowInput) (avero.Response, error) {
 	if !found {
 		return avero.JSON(http.StatusNotFound, map[string]string{"error": "the [[.Singular]] is absent"}), nil
 	}
-	return avero.JSON(http.StatusOK, View{ID: row.ID, Title: row.Title}), nil
+	return avero.JSON(http.StatusOK, view(row)), nil
 }
 
 // Delete removes one [[.Singular]].
+//
+//avero:response 204
 func (m *Module) Delete(c *avero.Ctx, in DeleteInput) (avero.Response, error) {
 	if err := m.store.Delete(c.Context(), in.ID); err != nil {
 		return nil, err
 	}
 	return avero.NoContent(), nil
+}
+
+// view maps one row to the answer of the API.
+func view(row *model.[[.Type]]) View {
+	return View{ID: row.ID().String(), Title: row.Title}
 }

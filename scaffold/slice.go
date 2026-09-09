@@ -6,9 +6,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 	"unicode"
 )
+
+// DrelConfig is the name of the drel configuration file. drel reads the model
+// package of each slice from its modules block.
+const DrelConfig = "drel.yaml"
 
 // SliceOptions states one feature slice.
 type SliceOptions struct {
@@ -84,11 +87,11 @@ func WriteSlice(opts SliceOptions) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	migration, err := writeSliceMigration(opts.Dir, values)
+	config, err := addSliceModule(opts.Dir, values)
 	if err != nil {
 		return nil, err
 	}
-	written = append(written, migration...)
+	written = append(written, config...)
 	return written, nil
 }
 
@@ -106,6 +109,14 @@ func renderSlice(dir string, values sliceData) ([]string, error) {
 
 	var written []string
 	for _, entry := range entries {
+		if entry.IsDir() {
+			files, dirErr := renderSliceDir(dir, entry.Name(), values)
+			if dirErr != nil {
+				return nil, dirErr
+			}
+			written = append(written, files...)
+			continue
+		}
 		body, readErr := templates.ReadFile("templates/slice/" + entry.Name())
 		if readErr != nil {
 			return nil, readErr
@@ -128,30 +139,75 @@ func renderSlice(dir string, values sliceData) ([]string, error) {
 	return written, nil
 }
 
-// writeSliceMigration writes the table of one slice.
-func writeSliceMigration(dir string, values sliceData) ([]string, error) {
-	migrations := filepath.Join(dir, "migrations")
-	if err := os.MkdirAll(migrations, 0o755); err != nil {
-		return nil, faultOf("the migrations directory does not open",
+// renderSliceDir writes one directory of the slice templates, such as the
+// model package that drel reads.
+func renderSliceDir(dir, name string, values sliceData) ([]string, error) {
+	entries, err := templates.ReadDir("templates/slice/" + name)
+	if err != nil {
+		return nil, err
+	}
+	target := filepath.Join(dir, name)
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		return nil, faultOf(fmt.Sprintf("the directory %s does not open", target),
 			"Give the process the right to write the application directory")
 	}
-	version := time.Now().UTC().Format("20060102150405")
-	up := filepath.Join(migrations, version+"_create_"+values.Table+".up.sql")
-	down := filepath.Join(migrations, version+"_create_"+values.Table+".down.sql")
+	var written []string
+	for _, entry := range entries {
+		body, readErr := templates.ReadFile("templates/slice/" + name + "/" + entry.Name())
+		if readErr != nil {
+			return nil, readErr
+		}
+		out, renderErr := executeSlice(entry.Name(), string(body), values)
+		if renderErr != nil {
+			return nil, renderErr
+		}
+		file := strings.TrimSuffix(entry.Name(), ".tmpl")
+		if file == "row.go" {
+			file = values.Singular + ".go"
+		}
+		path := filepath.Join(target, file)
+		if err := os.WriteFile(path, out, 0o644); err != nil {
+			return nil, faultOf(fmt.Sprintf("the file %s does not write", path),
+				"Give the process the right to write the application directory")
+		}
+		written = append(written, path)
+	}
+	return written, nil
+}
 
-	upSQL := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (\n"+
-		"    id         TEXT PRIMARY KEY,\n"+
-		"    title      TEXT NOT NULL,\n"+
-		"    created_at TIMESTAMP NOT NULL\n);\n", values.Table)
-	if err := os.WriteFile(up, []byte(upSQL), 0o644); err != nil {
-		return nil, faultOf(fmt.Sprintf("the file %s does not write", up),
-			"Give the process the right to write the migrations directory")
+// addSliceModule adds the slice to the modules block of drel.yaml.
+//
+// drel then writes the columns, the repository and the migrations of the
+// model package of the slice. The caller runs `drel generate` and
+// `drel migrate new` after this call. See the SDD, S14.
+func addSliceModule(dir string, values sliceData) ([]string, error) {
+	name := filepath.Join(dir, DrelConfig)
+	body, err := os.ReadFile(name)
+	if err != nil {
+		return nil, faultOf("this directory holds no "+DrelConfig,
+			"Run the command in the directory of an Avero application, or write one with `avero new`")
 	}
-	if err := os.WriteFile(down, []byte("DROP TABLE IF EXISTS "+values.Table+";\n"), 0o644); err != nil {
-		return nil, faultOf(fmt.Sprintf("the file %s does not write", down),
-			"Give the process the right to write the migrations directory")
+	source := string(body)
+	if strings.Contains(source, "\n  - name: "+values.Package+"\n") {
+		return nil, nil
 	}
-	return []string{up, down}, nil
+	marker := "\nmodules:\n"
+	i := strings.Index(source, marker)
+	if i < 0 {
+		return nil, faultOf(DrelConfig+" holds no modules block",
+			"Add a `modules:` block to "+DrelConfig+", then run the command again")
+	}
+	entry := "  - name: " + values.Package + "\n" +
+		"    packages:\n" +
+		"      - ./internal/features/" + values.Package + "/model\n" +
+		"    migrations: ./internal/features/" + values.Package + "/migrations\n"
+	at := i + len(marker)
+	source = source[:at] + entry + source[at:]
+	if err := os.WriteFile(name, []byte(source), 0o644); err != nil {
+		return nil, faultOf(DrelConfig+" does not write",
+			"Give the process the right to write the application directory")
+	}
+	return []string{name}, nil
 }
 
 // modulePath returns the module path of one slice.
@@ -176,6 +232,37 @@ func ModulePath(dir string) (string, error) {
 	}
 	return "", faultOf("go.mod names no module",
 		"Write the module line in go.mod, such as `module blog`")
+}
+
+// addMigrationSet adds the migrations of one slice to migrationSets in
+// wire.go. The binary then carries the table of the new feature.
+//
+// It changes nothing when the function is absent, so a wiring that a person
+// wrote by hand stays as it is.
+func addMigrationSet(source, module, pkg string) string {
+	const marker = "return []fs.FS{"
+	i := strings.Index(source, marker)
+	if i < 0 {
+		return source
+	}
+	alias := strings.TrimSuffix(pkg, "s") + "migrations"
+	if strings.Contains(source, alias+" \"") {
+		return source
+	}
+	at := i + len(marker)
+	source = source[:at] + alias + ".FS, " + source[at:]
+
+	importLine := "\t" + alias + " \"" + module + "/internal/features/" + pkg + "/migrations\""
+	k := strings.LastIndex(source, "\t\""+module+"/internal/features/")
+	if k < 0 {
+		return source
+	}
+	end := strings.Index(source[k:], "\n")
+	if end < 0 {
+		return source
+	}
+	end += k + 1
+	return source[:end] + importLine + "\n" + source[end:]
 }
 
 // upper returns the name with the first letter in upper case.
@@ -221,6 +308,7 @@ func RegisterSlice(dir, module, pkg string) (bool, error) {
 
 	j := strings.Index(source, call)
 	source = source[:j+len(call)] + pkg + ".New(engine), " + source[j+len(call):]
+	source = addMigrationSet(source, module, pkg)
 
 	// The file must read as gofmt writes it, so the import block sorts again.
 	out, err := format.Source([]byte(source))

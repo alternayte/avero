@@ -11,6 +11,7 @@ package codegen
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -126,6 +127,12 @@ func build(dir string) ([]result, error) {
 // output.
 func parseDir(fset *token.FileSet, dir string) (map[string][]*ast.File, error) {
 	entries, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		// A generator that runs beside this one writes the directory again.
+		// The walk saw it and the read does not. The next run reads it, so
+		// the absent directory is no fault here.
+		return nil, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("avero generate: %s did not read: %w", dir, err)
 	}

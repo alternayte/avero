@@ -13,6 +13,7 @@ import (
 	"github.com/alternayte/drel"
 
 	"[[.Module]]/internal/features/[[.Package]]"
+	"[[.Module]]/internal/features/[[.Package]]/migrations"
 )
 
 // The test drives the routes of the feature against a real database. Write the
@@ -26,12 +27,12 @@ func handler(t *testing.T) http.Handler {
 		t.Fatalf("the database does not open: %v", err)
 	}
 	t.Cleanup(func() { engine.Close() })
-	if _, err := engine.Exec(context.Background(),
-		"CREATE TABLE [[.Table]] (id TEXT PRIMARY KEY, title TEXT NOT NULL, created_at TIMESTAMP NOT NULL)"); err != nil {
-		t.Fatalf("the table does not open: %v", err)
+	if _, err := engine.ApplyMigrationsFS(context.Background(), migrations.FS); err != nil {
+		t.Fatalf("the migrations do not apply: %v", err)
 	}
 
 	r := avero.NewRouter()
+	r.Use(avero.Transaction(engine))
 	set := avero.Modules([[.Package]].New(engine))
 	if err := set.Attach(r); err != nil {
 		t.Fatalf("the module holds a fault: %v", err)

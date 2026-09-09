@@ -1,0 +1,19 @@
+# drel writes the models, the repositories and the migrations of each feature.
+#
+# One module for each feature slice, so a slice owns its models and its
+# migrations. Delete the directory of a slice and the feature is gone.
+#
+# `avero generate` runs `go tool drel generate`.
+# `avero migrate new create_comments` runs `go tool drel migrate new`.
+modules:
+  - name: posts
+    packages:
+      - ./internal/features/posts/model
+    migrations: ./internal/features/posts/migrations
+
+output:
+  db: ./internal/db/drel_gen.go
+
+# The dialect of the code generation. Write postgres when DATABASE_URL names a
+# PostgreSQL server, then write the migrations again.
+dialect: sqlite

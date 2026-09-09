@@ -3,22 +3,12 @@ package main
 
 import (
 	"context"
-	"embed"
 	"fmt"
 	"os"
 
 	"github.com/alternayte/avero"
 	"github.com/alternayte/drel"
 )
-
-// migrationsDir holds the SQL files of the application.
-const migrationsDir = "migrations"
-
-// migrations holds the same files inside the binary, so one artifact carries
-// the server and the schema. See MIGRATE_ON_BOOT.
-//
-//go:embed all:migrations
-var migrations embed.FS
 
 func main() { os.Exit(run()) }
 
@@ -63,7 +53,7 @@ func run() int {
 	// so a start opens one connection pool and no more.
 	boot := []avero.Check{avero.SecretCheck(cfg.Secret), avero.DatabaseCheckOn(engine)}
 	if !cfg.MigrateOnBoot {
-		boot = append(boot, avero.MigrationCheckOn(engine, migrationsDir))
+		boot = append(boot, avero.MigrationCheckOnFS(engine, migrationSets()...))
 	}
 
 	app := avero.New(cfg.BaseConfig,
@@ -75,7 +65,7 @@ func run() int {
 }
 
 // checks are the boot checks that `avero doctor` runs. The doctor holds no
-// engine, so each check opens its own connection and closes it. The boot uses
+// engine, so the check opens its own connection and closes it. The boot uses
 // the engine of the application instead. See DX-8.
 func checks(dsn string) []avero.Check {
 	if dsn == "" {
@@ -83,7 +73,7 @@ func checks(dsn string) []avero.Check {
 	}
 	return []avero.Check{
 		avero.DatabaseCheck(dsn),
-		avero.MigrationCheck(dsn, migrationsDir),
+		avero.MigrationCheckFS(dsn, migrationSets()...),
 	}
 }
 
@@ -94,16 +84,10 @@ type migrator struct {
 
 // Migrate applies every migration that the database does not hold.
 //
-// The files come from the binary, so the application needs no directory beside
-// it. drel applies a migration from a directory, so the files reach a
-// temporary one for the moment of the boot.
+// Each feature slice embeds its own migrations, and drel merges the sets in
+// version order. The files come from the binary, so one artifact carries the
+// server and the schema.
 func (m migrator) Migrate(ctx context.Context) error {
-	dir, clean, err := avero.UnpackMigrations(migrations, migrationsDir)
-	if err != nil {
-		return err
-	}
-	defer clean()
-
-	_, err = m.engine.ApplyMigrations(ctx, dir)
+	_, err := m.engine.ApplyMigrationsFS(ctx, migrationSets()...)
 	return err
 }

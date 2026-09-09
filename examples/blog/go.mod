@@ -4,9 +4,16 @@ go 1.26.2
 
 require github.com/alternayte/avero v0.1.0
 
+require github.com/alternayte/drel v0.7.0
+
+// drel writes the models, the repositories and the migrations of each feature
+// slice. `avero generate` and `avero migrate` run it, so a person needs no
+// second tool.
+tool github.com/alternayte/drel/cmd/drel
+
 require (
 	github.com/a-h/templ v0.3.1020 // indirect
-	github.com/alternayte/drel v0.6.0
+	github.com/google/uuid v1.6.0
 )
 
 require (
@@ -25,7 +32,6 @@ require (
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
@@ -59,6 +65,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260209200024-4cfbd4190f57 // indirect
 	google.golang.org/grpc v1.79.1 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	modernc.org/libc v1.74.4 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect

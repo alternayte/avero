@@ -26,7 +26,7 @@ func app(t *testing.T) http.Handler {
 		t.Fatalf("the database does not open: %v", err)
 	}
 	t.Cleanup(func() { engine.Close() })
-	if _, err := engine.ApplyMigrations(context.Background(), migrationsDir); err != nil {
+	if _, err := engine.ApplyMigrationsFS(context.Background(), migrationSets()...); err != nil {
 		t.Fatalf("the migrations do not apply: %v", err)
 	}
 

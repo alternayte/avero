@@ -44,8 +44,10 @@ blog/
 ├── wire.go                   the router, the middleware and the modules
 ├── avero.json                the shape and the asset pipeline
 ├── internal/features/posts/  one feature: routes, handlers, inputs, store
+│   ├── model/                the rows that drel reads
+│   └── migrations/           the SQL of this feature. drel writes it.
 ├── internal/ui/              the templ pages. They import no feature package.
-├── migrations/               the SQL files
+├── drel.yaml                 the model packages and the migrations of drel
 ├── assets/                   the source of the stylesheet and of the script
 ├── AGENTS.md                 the rules that an agent reads
 └── .claude/skills/           one skill for each task that repeats
@@ -59,8 +61,50 @@ avero migrate up
 avero verify
 ```
 
-`avero slice` writes the module, the input types, the handlers, the store, the
-test and the migration. It registers the module in `wire.go`.
+`avero slice` writes the module, the model, the input types, the handlers, the
+store and the test. It adds the slice to `drel.yaml`, writes the first
+migration of the table, and registers the module in `wire.go`.
+
+## Read and write the database
+
+A store reads and writes with the typed API of drel. It writes no SQL string.
+
+```go
+repo, err := s.repo(ctx)
+if err != nil {
+	return nil, err
+}
+return repo.AsNoTracking().
+	Where(model.Posts.Title.Contains(search)).
+	OrderBy(model.Posts.ID.Desc()).
+	All(ctx)
+```
+
+`model.Posts` is generated. A column that no model names does not compile, so a
+name fault appears before the process starts. See design rule 8.
+
+A write stages the change on the transaction of the request:
+
+```go
+post := model.NewPost(title, body)
+repo.Add(post)
+```
+
+The key is a UUID of version 7. drel stamps it at `Add`, so the answer of the
+handler carries the identifier before the commit.
+
+## Change a table
+
+Add a field to the model, then write the migration:
+
+```
+avero generate
+avero migrate new add_a_column
+avero migrate up
+```
+
+drel compares the model with its snapshot and writes the two SQL files. Read
+them before you apply them.
 
 ## Prove the work
 

@@ -8,6 +8,8 @@ board/
 ├── main.go                        the composition root
 ├── wire.go                        the router and the embedded build
 ├── internal/features/tasks/       the JSON routes, the handlers and the store
+│   ├── model/                     the rows that drel reads
+│   └── migrations/                the SQL of this feature. drel writes it.
 ├── web/                           the front end
 │   ├── package.json               the dependencies of the front end
 │   ├── vite.config.ts             the build and the proxy of the API
@@ -21,7 +23,7 @@ board/
 │       └── styles.css             Tailwind
 ├── openapi.json                   the description that `avero build` writes
 ├── assets/dist/                   the build. `avero build` writes it.
-├── migrations/                    the SQL files
+├── drel.yaml                      the model packages and the migrations of drel
 └── avero.json                     the shape and the bundler
 ```
 

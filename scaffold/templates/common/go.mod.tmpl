@@ -3,6 +3,13 @@ module [[.Module]]
 go [[.GoVersion]]
 
 require github.com/alternayte/avero [[.Avero]]
+
+require github.com/alternayte/drel [[.Drel]]
+
+// drel writes the models, the repositories and the migrations of each feature
+// slice. `avero generate` and `avero migrate` run it, so a person needs no
+// second tool.
+tool github.com/alternayte/drel/cmd/drel
 [[if .SSR]]
 require github.com/a-h/templ [[.Templ]]
 

@@ -2,28 +2,22 @@ package posts
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
+	"errors"
 	"fmt"
-	"time"
 
 	"github.com/alternayte/drel"
-)
+	"github.com/google/uuid"
 
-// Post is one row of the posts table.
-type Post struct {
-	// ID identifies the post.
-	ID string
-	// Title is the name that a person reads.
-	Title string
-	// Body is the text of the post.
-	Body string
-	// CreatedAt is the time of the write.
-	CreatedAt time.Time
-}
+	"orders/internal/features/posts/model"
+)
 
 // Store reads and writes the posts. It takes the engine as a field, so a test
 // passes its own database. See design rule 3.
+//
+// Every call runs inside the transaction of the request, which the transaction
+// middleware opens. A read therefore reads its own writes, and a write stages
+// the change on the transaction. drel flushes it at the commit, so only the
+// columns that changed reach the database. See S4.
 type Store struct {
 	engine *drel.Engine
 }
@@ -32,100 +26,103 @@ type Store struct {
 func NewStore(engine *drel.Engine) *Store { return &Store{engine: engine} }
 
 // List returns the posts, newest first. An empty search returns every post.
-func (s *Store) List(ctx context.Context, search string) ([]Post, error) {
-	sql := "SELECT id, title, body FROM posts ORDER BY created_at DESC"
-	args := []any{}
-	if search != "" {
-		sql = "SELECT id, title, body FROM posts WHERE title LIKE " + s.mark(1) +
-			" ORDER BY created_at DESC"
-		args = append(args, "%"+search+"%")
+func (s *Store) List(ctx context.Context, search string) ([]*model.Post, error) {
+	repo, err := s.repo(ctx)
+	if err != nil {
+		return nil, err
 	}
-	rows, err := s.query(ctx, sql, args...)
+	query := repo.AsNoTracking().OrderBy(model.Posts.ID.Desc())
+	if search != "" {
+		query = query.Where(model.Posts.Title.Contains(search))
+	}
+	rows, err := query.All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("the posts do not read: %w", err)
 	}
-	defer rows.Close()
-
-	var out []Post
-	for rows.Next() {
-		var p Post
-		if err := rows.Scan(&p.ID, &p.Title, &p.Body); err != nil {
-			return nil, fmt.Errorf("a post does not read: %w", err)
-		}
-		out = append(out, p)
-	}
-	return out, rows.Err()
+	return rows, nil
 }
 
-// Get returns one post and reports whether the table holds it.
-func (s *Store) Get(ctx context.Context, id string) (Post, bool, error) {
-	rows, err := s.query(ctx, "SELECT id, title, body FROM posts WHERE id = "+s.mark(1), id)
+// Get returns one post and reports whether the table holds it. An identifier
+// that is no UUID holds no row.
+func (s *Store) Get(ctx context.Context, id string) (*model.Post, bool, error) {
+	key, err := uuid.Parse(id)
 	if err != nil {
-		return Post{}, false, fmt.Errorf("the post does not read: %w", err)
+		return nil, false, nil
 	}
-	defer rows.Close()
-	if !rows.Next() {
-		return Post{}, false, rows.Err()
+	repo, err := s.repo(ctx)
+	if err != nil {
+		return nil, false, err
 	}
-	var p Post
-	if err := rows.Scan(&p.ID, &p.Title, &p.Body); err != nil {
-		return Post{}, false, fmt.Errorf("the post does not read: %w", err)
+	post, err := repo.AsNoTracking().Where(model.Posts.ID.Eq(key)).FirstOrNil(ctx)
+	if err != nil {
+		return nil, false, fmt.Errorf("the post does not read: %w", err)
 	}
-	return p, true, nil
+	return post, post != nil, nil
 }
 
-// Create writes one post and returns its identifier.
-func (s *Store) Create(ctx context.Context, title, body string) (string, error) {
-	id := newID()
-	sql := fmt.Sprintf("INSERT INTO posts (id, title, body, created_at) VALUES (%s, %s, %s, %s)",
-		s.mark(1), s.mark(2), s.mark(3), s.mark(4))
-	if err := s.exec(ctx, sql, id, title, body, time.Now().UTC()); err != nil {
-		return "", fmt.Errorf("the post does not write: %w", err)
+// Create writes one post. The identifier stands at once, because drel stamps
+// the UUID at Add.
+func (s *Store) Create(ctx context.Context, title, body string) (*model.Post, error) {
+	repo, err := s.repo(ctx)
+	if err != nil {
+		return nil, err
 	}
-	return id, nil
+	post := model.NewPost(title, body)
+	repo.Add(post)
+	if err := s.save(ctx); err != nil {
+		return nil, err
+	}
+	return post, nil
 }
 
-// Delete removes one post.
+// Delete removes one post. It removes nothing when the table holds no such
+// row.
 func (s *Store) Delete(ctx context.Context, id string) error {
-	if err := s.exec(ctx, "DELETE FROM posts WHERE id = "+s.mark(1), id); err != nil {
-		return fmt.Errorf("the post does not delete: %w", err)
+	key, err := uuid.Parse(id)
+	if err != nil {
+		return nil
 	}
-	return nil
-}
-
-// query runs a read inside the transaction of the request when one is open.
-func (s *Store) query(ctx context.Context, sql string, args ...any) (drel.Rows, error) {
-	if tx, ok := drel.FromContext(ctx); ok {
-		return tx.Query(ctx, sql, args...)
-	}
-	return s.engine.Query(ctx, sql, args...)
-}
-
-// exec runs a write inside the transaction of the request when one is open, so
-// the write and the response commit together. See S4.
-func (s *Store) exec(ctx context.Context, sql string, args ...any) error {
-	if tx, ok := drel.FromContext(ctx); ok {
-		_, err := tx.Exec(ctx, sql, args...)
+	repo, err := s.repo(ctx)
+	if err != nil {
 		return err
 	}
-	_, err := s.engine.Exec(ctx, sql, args...)
-	return err
+	post, err := repo.Where(model.Posts.ID.Eq(key)).FirstOrNil(ctx)
+	if err != nil {
+		return fmt.Errorf("the post does not read: %w", err)
+	}
+	if post == nil {
+		return nil
+	}
+	if err := repo.Remove(post); err != nil {
+		return fmt.Errorf("the post does not delete: %w", err)
+	}
+	return s.save(ctx)
 }
 
-// mark returns the parameter mark of the dialect. PostgreSQL counts its
-// parameters and SQLite does not.
-func (s *Store) mark(n int) string {
-	if s.engine != nil && s.engine.DialectName() == "postgres" {
-		return fmt.Sprintf("$%d", n)
+// repo returns the repository of the transaction of the request.
+//
+// The transaction middleware opens it, so a handler always holds one. A job
+// that reads outside a request opens its own with engine.WithTx.
+func (s *Store) repo(ctx context.Context) (*drel.TxRepository[model.Post], error) {
+	tx, ok := drel.FromContext(ctx)
+	if !ok {
+		return nil, errors.New("the call needs a transaction: register avero.Transaction in wire.go, or wrap the call in engine.WithTx")
 	}
-	return "?"
+	return drel.NewTxRepository(tx, model.PostMeta), nil
 }
 
-// newID returns a random identifier.
-func newID() string {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return time.Now().UTC().Format("20060102150405.000000000")
+// save writes the staged changes to the database inside the transaction of the
+// request.
+//
+// The transaction still commits at the end of the request. The flush only
+// makes a later read of the same request see the write.
+func (s *Store) save(ctx context.Context) error {
+	tx, ok := drel.FromContext(ctx)
+	if !ok {
+		return errors.New("the call needs a transaction: register avero.Transaction in wire.go, or wrap the call in engine.WithTx")
 	}
-	return hex.EncodeToString(b)
+	if err := tx.SaveChanges(ctx); err != nil {
+		return fmt.Errorf("the change does not write: %w", err)
+	}
+	return nil
 }

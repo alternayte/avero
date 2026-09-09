@@ -2,8 +2,10 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"text/tabwriter"
@@ -14,11 +16,18 @@ import (
 )
 
 // runMigrate writes and applies the migrations of the application.
+//
+// An application that states its models in drel.yaml lets drel write and apply
+// them, because drel reads the models and writes the difference. An
+// application that holds SQL files of its own keeps the reader of Avero.
 func runMigrate(ctx context.Context, s Streams, args []string) int {
 	if len(args) == 0 {
 		return failf(s, "avero migrate: the form is `avero migrate new <name>|up|down|status`\n  → Name the step that you want")
 	}
 	dir := dirOf(s)
+	if _, err := os.Stat(filepath.Join(dir, DrelConfig)); err == nil {
+		return drelMigrate(ctx, s, dir, args)
+	}
 	project, err := LoadProject(dir)
 	if err != nil {
 		return fail(s, err)
@@ -47,6 +56,38 @@ func runMigrate(ctx context.Context, s Streams, args []string) int {
 	default:
 		return failf(s, "avero migrate: the step %q is not known\n  → Write new, up, down or status", args[0])
 	}
+}
+
+// drelMigrate runs the migration command of drel.
+//
+// `avero migrate new <name>` reads the models and writes the difference, so a
+// person writes no SQL by hand. The other steps read and apply the sets of
+// every feature slice.
+func drelMigrate(ctx context.Context, s Streams, dir string, args []string) int {
+	step := args[0]
+	switch step {
+	case "new", "up", "down", "status", "lint", "check":
+	default:
+		return failf(s, "avero migrate: the step %q is not known\n  → Write new, up, down, status, lint or check", step)
+	}
+	if step == "new" && len(args) < 2 {
+		return failf(s, "avero migrate new: the form is `avero migrate new <name>`\n  → Name the migration, such as `avero migrate new add_posts`")
+	}
+
+	command := append([]string{"tool", "drel", "migrate"}, args...)
+	cmd := exec.CommandContext(ctx, "go", command...)
+	cmd.Dir = dir
+	cmd.Env = os.Environ()
+	cmd.Stdout = s.Out
+	cmd.Stderr = s.Err
+	if err := cmd.Run(); err != nil {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) {
+			return exit.ExitCode()
+		}
+		return failf(s, "avero migrate: drel did not run: %v\n  → Run `go mod tidy`, then run the command again", err)
+	}
+	return 0
 }
 
 // withEngine opens the database of DATABASE_URL and runs fn.

@@ -128,7 +128,7 @@ var registry = []Tool{
 		Name:        "scaffold_slice",
 		Description: "Write a new feature slice from the templates of the CLI, and register it in wire.go.",
 		InputSchema: oneString("name", "The name of the feature, such as comment."),
-		run: func(_ context.Context, s *Server, args json.RawMessage) (any, error) {
+		run: func(ctx context.Context, s *Server, args json.RawMessage) (any, error) {
 			name, err := stringArg(args, "name")
 			if err != nil {
 				return nil, err
@@ -136,7 +136,7 @@ var registry = []Tool{
 			if s.Slice == nil {
 				return nil, errors.New("the server holds no scaffolder\n  → Run the server with `avero mcp`")
 			}
-			written, registered, err := s.Slice(s.Dir, name)
+			written, registered, err := s.Slice(ctx, s.Dir, name)
 			if err != nil {
 				return nil, err
 			}

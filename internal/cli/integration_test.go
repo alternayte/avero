@@ -540,7 +540,8 @@ func TestTheOpenAPIDescriptionOfAScaffoldedApplication(t *testing.T) {
 	if !ok || len(show.Parameters) != 1 || show.Parameters[0].In != "path" {
 		t.Fatalf("the operation of GET /posts/{id} is %+v", show)
 	}
-	for _, code := range []string{"200", "422", "500"} {
+	// The Create handler states 201 with an //avero:response directive.
+	for _, code := range []string{"201", "422", "500"} {
 		if _, ok := create.Responses[code]; !ok {
 			t.Fatalf("the operation states no %s: %v", code, create.Responses)
 		}

@@ -140,8 +140,18 @@ func write(e example, dir, replace string) error {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("go mod tidy failed in %s: %w\n%s", dir, err, out)
 	}
-	// templ writes the Go file of each .templ file of the ssr shape.
+	// drel writes the models and the migrations. templ writes the Go file of
+	// each .templ file of the ssr shape.
 	ctx := context.Background()
+	if err := cli.Drel(ctx, dir); err != nil {
+		return err
+	}
+	if err := cli.FirstMigration(ctx, dir, e.Shape, cli.Streams{Out: io.Discard, Err: os.Stderr}); err != nil {
+		return err
+	}
+	if err := fixMigrationVersion(dir); err != nil {
+		return err
+	}
 	if err := cli.Templ(ctx, dir); err != nil {
 		return err
 	}
@@ -166,6 +176,30 @@ func write(e example, dir, replace string) error {
 	}
 
 	return nil
+}
+
+// exampleVersion is the version of the first migration of every example.
+//
+// `avero migrate new` names a migration after the time of the run, so two runs
+// write two names. An example is generated output that the gate compares, so
+// it carries one fixed version.
+const exampleVersion = "20250101000000"
+
+// fixMigrationVersion renames the first migration of each slice to
+// exampleVersion. The generated set embeds every .sql file, so the name of a
+// file changes nothing else.
+func fixMigrationVersion(dir string) error {
+	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".sql") {
+			return err
+		}
+		name := d.Name()
+		version, rest, found := strings.Cut(name, "_")
+		if !found || len(version) != len(exampleVersion) {
+			return nil
+		}
+		return os.Rename(path, filepath.Join(filepath.Dir(path), exampleVersion+"_"+rest))
+	})
 }
 
 // prove writes one example into a temporary directory and compares it with the

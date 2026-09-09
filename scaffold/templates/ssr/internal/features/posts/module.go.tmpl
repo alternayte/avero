@@ -44,10 +44,11 @@ func (m *Module) Describe() avero.Description {
 			Name:  "Post",
 			Table: "posts",
 			Fields: []avero.FieldDesc{
-				{Name: "ID", Type: "string"},
+				{Name: "ID", Type: "uuid.UUID"},
 				{Name: "Title", Type: "string"},
 				{Name: "Body", Type: "string"},
 				{Name: "CreatedAt", Type: "time.Time"},
+				{Name: "UpdatedAt", Type: "time.Time"},
 			},
 		}},
 	}

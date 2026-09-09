@@ -73,6 +73,52 @@ func Applied(ctx context.Context, e *drel.Engine) map[string]string {
 	return out
 }
 
+// ReadFS returns the migrations of one embedded set, in version order.
+//
+// drel writes a migrations_drel.go into the directory of each feature slice,
+// which embeds the SQL files of that slice. See the modules block of
+// drel.yaml.
+func ReadFS(fsys fs.FS) ([]Migration, error) {
+	entries, err := fs.ReadDir(fsys, ".")
+	if err != nil {
+		return nil, fmt.Errorf("the embedded migrations do not read: %w", err)
+	}
+	var out []Migration
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".up.sql") {
+			continue
+		}
+		version, rest, found := strings.Cut(strings.TrimSuffix(name, ".up.sql"), "_")
+		if !found {
+			continue
+		}
+		out = append(out, Migration{Version: version, Name: rest})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Version < out[j].Version })
+	return out, nil
+}
+
+// PendingFS returns the migrations of the embedded sets that the database does
+// not hold.
+func PendingFS(ctx context.Context, e *drel.Engine, sets ...fs.FS) ([]Migration, error) {
+	done := Applied(ctx, e)
+	var out []Migration
+	for _, fsys := range sets {
+		files, err := ReadFS(fsys)
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range files {
+			if _, ok := done[m.Version]; !ok {
+				out = append(out, m)
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Version < out[j].Version })
+	return out, nil
+}
+
 // Pending returns the migrations that the database does not hold.
 func Pending(ctx context.Context, e *drel.Engine, dir string) ([]Migration, error) {
 	files, err := Read(dir)

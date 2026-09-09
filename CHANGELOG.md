@@ -3,6 +3,43 @@
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.2.0
+
+### Changed
+
+- **drel 0.7.0.** The scaffolded stores read and write with the typed API of
+  drel. They write no SQL string, so a wrong column name does not compile.
+  Each feature slice owns a `model/` package and a `migrations/` package, which
+  `drel.yaml` names. `avero generate` runs the drel generator, `avero migrate`
+  runs the drel migrator, and `avero migrate new <name>` writes the two SQL
+  files from the difference between the model and its snapshot. The binary
+  carries the migrations of every slice through `migrationSets()`.
+- The key of a scaffolded row is a UUID of version 7. drel stamps it at `Add`,
+  so a handler answers with the identifier before the commit.
+- `avero slice` writes a model package, adds the slice to `drel.yaml`, writes
+  the first migration and adds the set to `migrationSets()` in `wire.go`.
+
+### Added
+
+- `avero.MigrationCheckFS` proves the embedded migration sets against a
+  database that the check opens itself. `avero doctor` uses it.
+
+### Fixed
+
+- The code generators no longer stop when a directory leaves between the walk
+  and the read. The development loop runs two generators, and one writes the
+  output package of drel again.
+
+### To move an application from v0.1.0
+
+1. Add `drel.yaml` with one module for each feature slice.
+2. Move each row type into `internal/features/<name>/model`, embed
+   `drel.Model[uuid.UUID]`, and give each field a `db` tag.
+3. Run `avero generate`, then `avero migrate new create_<name>` for each slice.
+4. Write `migrationSets()` in `wire.go`, and call `ApplyMigrationsFS` in
+   `main.go`.
+5. Write each store call with the typed API of drel.
+
 ## v0.1.0
 
 The first release. It carries every subsystem except the messaging ones.

@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/alternayte/avero"
+
+	"board/internal/features/tasks/model"
 )
 
 // Task is one task as the API returns it. The description of the API names
@@ -34,7 +36,7 @@ func (m *Module) List(c *avero.Ctx, in ListInput) (avero.Response, error) {
 	}
 	out := TaskList{Tasks: make([]Task, 0, len(tasks))}
 	for _, t := range tasks {
-		out.Tasks = append(out.Tasks, Task{ID: t.ID, Title: t.Title, Done: t.Done})
+		out.Tasks = append(out.Tasks, view(t))
 	}
 	return avero.JSON(http.StatusOK, out), nil
 }
@@ -43,11 +45,11 @@ func (m *Module) List(c *avero.Ctx, in ListInput) (avero.Response, error) {
 //
 //avero:response 201 Task
 func (m *Module) Create(c *avero.Ctx, in CreateInput) (avero.Response, error) {
-	id, err := m.store.Create(c.Context(), in.Title)
+	task, err := m.store.Create(c.Context(), in.Title)
 	if err != nil {
 		return nil, err
 	}
-	return avero.JSON(http.StatusCreated, Task{ID: id, Title: in.Title}), nil
+	return avero.JSON(http.StatusCreated, view(task)), nil
 }
 
 // Update marks one task complete, or open again.
@@ -61,7 +63,7 @@ func (m *Module) Update(c *avero.Ctx, in UpdateInput) (avero.Response, error) {
 	if !found {
 		return avero.JSON(http.StatusNotFound, map[string]string{"error": "the task is absent"}), nil
 	}
-	return avero.JSON(http.StatusOK, Task{ID: task.ID, Title: task.Title, Done: task.Done}), nil
+	return avero.JSON(http.StatusOK, view(task)), nil
 }
 
 // Delete removes one task.
@@ -72,4 +74,9 @@ func (m *Module) Delete(c *avero.Ctx, in DeleteInput) (avero.Response, error) {
 		return nil, err
 	}
 	return avero.NoContent(), nil
+}
+
+// view maps one row to the answer of the API.
+func view(t *model.Task) Task {
+	return Task{ID: t.ID().String(), Title: t.Title, Done: t.Done}
 }

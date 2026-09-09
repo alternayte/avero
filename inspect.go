@@ -143,6 +143,44 @@ func MigrationCheck(dsn, dir string) Check {
 	return check
 }
 
+// MigrationCheckOnFS proves the migrations of the embedded sets of the feature
+// slices. Each slice embeds its own, and drel merges them in version order.
+func MigrationCheckOnFS(e *drel.Engine, sets ...fs.FS) Check {
+	return Check{
+		Name:   "the pending migrations",
+		Repair: "Run `avero migrate up`, or set MIGRATE_ON_BOOT=true",
+		Run: func(ctx context.Context) error {
+			if e == nil {
+				return fmt.Errorf("the check holds no database")
+			}
+			pending, err := migrations.PendingFS(ctx, e, sets...)
+			if err != nil {
+				return err
+			}
+			return pendingFault(pending)
+		},
+	}
+}
+
+// MigrationCheckFS proves the embedded migration sets against a database that
+// the check opens itself. `avero doctor` holds no engine, so it uses this one.
+func MigrationCheckFS(dsn string, sets ...fs.FS) Check {
+	check := MigrationCheckOnFS(nil, sets...)
+	check.Run = func(ctx context.Context) error {
+		e, err := drel.NewEngine(dsn)
+		if err != nil {
+			return fmt.Errorf("the database does not open: %w", err)
+		}
+		defer e.Close()
+		pending, pendErr := migrations.PendingFS(ctx, e, sets...)
+		if pendErr != nil {
+			return pendErr
+		}
+		return pendingFault(pending)
+	}
+	return check
+}
+
 // MigrationCheckOn proves the migrations with an engine that the application
 // already opened.
 func MigrationCheckOn(e *drel.Engine, dir string) Check {
@@ -164,6 +202,11 @@ func migrationsPending(ctx context.Context, e *drel.Engine, dir string) error {
 	if err != nil {
 		return err
 	}
+	return pendingFault(pending)
+}
+
+// pendingFault names each pending migration, or returns nil.
+func pendingFault(pending []migrations.Migration) error {
 	if len(pending) == 0 {
 		return nil
 	}

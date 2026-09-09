@@ -248,25 +248,16 @@ func TestMCPRefusesAFlag(t *testing.T) {
 	}
 }
 
-func TestSliceWritesAFeature(t *testing.T) {
+// The slice adds itself to the modules block of drel.yaml, because drel writes
+// the columns and the migrations of the new feature. A directory without the
+// file states the repair.
+func TestSliceNeedsTheDrelConfiguration(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module blog\n\ngo 1.26.2\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile returned %v", err)
 	}
-	code, out, errOut := run(t, dir, "slice", "comment")
-	if code != 0 {
-		t.Fatalf("the code is %d: %s", code, errOut)
-	}
-	for _, name := range []string{"module.go", "handlers.go", "input.go", "store.go", "comments_test.go"} {
-		if _, err := os.Stat(filepath.Join(dir, "internal", "features", "comments", name)); err != nil {
-			t.Fatalf("the command wrote no %s", name)
-		}
-	}
-	if !strings.Contains(out, "avero migrate up") {
-		t.Fatalf("the output states no next step:\n%s", out)
-	}
-	// A second run refuses, because the slice already exists.
-	if code, _, errOut := run(t, dir, "slice", "comment"); code != 1 || !strings.Contains(errOut, "already exists") {
+	code, _, errOut := run(t, dir, "slice", "comment")
+	if code != 1 || !strings.Contains(errOut, "drel.yaml") {
 		t.Fatalf("the code is %d and the fault is %q", code, errOut)
 	}
 }

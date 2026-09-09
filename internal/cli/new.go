@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -82,6 +83,12 @@ func runNew(ctx context.Context, s Streams, args []string) int {
 		return failf(s, "avero new: the dependencies do not read\n%s\n  → Prove the network, then run `go mod tidy` in %s",
 			strings.TrimSpace(out), name)
 	}
+	if err := Drel(ctx, opts.Dir); err != nil {
+		return fail(s, err)
+	}
+	if err := FirstMigration(ctx, opts.Dir, opts.Shape, s); err != nil {
+		return fail(s, err)
+	}
 	if err := Templ(ctx, opts.Dir); err != nil {
 		return fail(s, err)
 	}
@@ -120,6 +127,37 @@ var FrontEnd = map[string][]Module{
 	scaffold.ShapeSSR: {
 		{"datastar", "https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.3/bundles/datastar.js"},
 	},
+}
+
+// slices names the feature slice of each shape. `avero new` writes the first
+// migration of that slice from its model, so the application runs at once.
+var slices = map[string]string{
+	scaffold.ShapeSSR: "posts",
+	scaffold.ShapeSPA: "tasks",
+	scaffold.ShapeAPI: "posts",
+}
+
+// FirstMigration writes the migration of the feature slice that the shape
+// carries.
+//
+// drel reads the model and writes the difference, so the SQL and the model can
+// never disagree. The scaffolder writes no SQL of its own.
+func FirstMigration(ctx context.Context, dir, shape string, _ Streams) error {
+	slice, ok := slices[shape]
+	if !ok {
+		return nil
+	}
+	if _, err := os.Stat(filepath.Join(dir, DrelConfig)); err != nil {
+		return nil
+	}
+	out, err := goCommand(ctx, dir, "tool", "drel", "migrate", "new", "--module", slice, "create_"+slice)
+	if err != nil {
+		return fmt.Errorf("avero new: the first migration does not write\n%s\n  → Run `avero migrate new create_%s` and repair the fault that it names",
+			strings.TrimSpace(out), slice)
+	}
+	// The migration set of the slice is a package now, so the generator runs
+	// again to embed it.
+	return Drel(ctx, dir)
 }
 
 // Vendor fetches the front end modules of a shape.
