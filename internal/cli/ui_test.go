@@ -12,6 +12,7 @@ import (
 
 	"github.com/alternayte/avero/assets"
 	"github.com/alternayte/avero/internal/cli"
+	"github.com/alternayte/avero/scaffold"
 )
 
 // writeFile puts one file into the tree of a test.
@@ -259,52 +260,22 @@ func TestUIAddRefusesAShapeThatServesJSON(t *testing.T) {
 	}
 }
 
-// scaffoldLayout holds the exact body that
-// scaffold/templates/ssr/internal/ui/layout.templ.tmpl writes for an
-// application named blog with Datastar.
-const scaffoldLayout = `package ui
-
-import "github.com/alternayte/avero/view"
-
-// Page wraps a body in the layout of the application.
-templ Page(title string, body templ.Component) {
-	<!doctype html>
-	<html lang="en">
-		<head>
-			<meta charset="utf-8"/>
-			<meta name="viewport" content="width=device-width, initial-scale=1"/>
-			<title>{ title } · blog</title>
-			<link rel="stylesheet" href={ Asset("app.css") }/>
-			<script type="module" src={ Asset("app.js") }></script>
-		</head>
-		// The signal carries the CSRF token, so a Datastar action sends it in
-		// the header that the middleware reads.
-		<body data-signals-csrf={ "'" + view.CSRFToken(ctx) + "'" }>
-			<header><a href="/">blog</a></header>
-			<main>
-				@Toasts()
-				@body
-			</main>
-		</body>
-	</html>
-}
-
-// Toasts renders the messages of this response. The flash middleware carries a
-// message across a redirect.
-templ Toasts() {
-	if toasts := view.Toasts(ctx); len(toasts) > 0 {
-		<ul class="toasts">
-			for _, toast := range toasts {
-				<li class={ toast.Level }>{ toast.Message }</li>
-			}
-		</ul>
+// scaffoldLayout returns the exact body that
+// scaffold/templates/ssr/internal/ui/layout.templ.tmpl writes for the
+// application that uiProject names, so a test compares against one source and
+// not against a second copy that can drift from the template.
+func scaffoldLayout(t *testing.T) string {
+	t.Helper()
+	body, err := scaffold.Layout("blog")
+	if err != nil {
+		t.Fatalf("scaffold.Layout returned %v, want nil", err)
 	}
+	return string(body)
 }
-`
 
 func TestUIAddBasecoatPatchesALayoutThatItRecognizes(t *testing.T) {
 	dir := uiProject(t)
-	writeFile(t, dir, "internal/ui/layout.templ", scaffoldLayout)
+	writeFile(t, dir, "internal/ui/layout.templ", scaffoldLayout(t))
 
 	if code, out, errOut := run(t, dir, "ui", "add", "basecoat"); code != 0 {
 		t.Fatalf("the command gave %d, said %q and %q", code, out, errOut)
@@ -314,13 +285,56 @@ func TestUIAddBasecoatPatchesALayoutThatItRecognizes(t *testing.T) {
 	if strings.Contains(layout, "templ Toasts()") {
 		t.Fatal("the layout still defines Toasts, so the application holds two definitions")
 	}
-	body := strings.Index(layout, "@Toasts()")
+	call := strings.Index(layout, "@Toasts()")
 	main := strings.Index(layout, "</main>")
-	if body < 0 || body < main {
-		t.Fatalf("the call of Toasts stands inside main:\n%s", layout)
+	end := strings.Index(layout, "</body>")
+	if call < 0 || end < 0 || call < main || call > end {
+		t.Fatalf("the call of Toasts does not stand between main and the end of the body:\n%s", layout)
 	}
-	if !strings.Contains(layout, "</body>") {
-		t.Fatalf("the patch broke the layout:\n%s", layout)
+}
+
+// TestUIAddBasecoatIndentsTheMovedCall proves that the moved call carries the
+// indentation of the other children of the body element, and not the
+// indentation of a child of main.
+func TestUIAddBasecoatIndentsTheMovedCall(t *testing.T) {
+	dir := uiProject(t)
+	writeFile(t, dir, "internal/ui/layout.templ", scaffoldLayout(t))
+
+	if code, _, errOut := run(t, dir, "ui", "add", "basecoat"); code != 0 {
+		t.Fatalf("the command gave %d and said %q", code, errOut)
+	}
+
+	layout := read(t, dir, "internal/ui/layout.templ")
+	for _, line := range strings.Split(layout, "\n") {
+		if strings.TrimSpace(line) != "@Toasts()" {
+			continue
+		}
+		if !strings.HasPrefix(line, "\t\t\t@Toasts()") || strings.HasPrefix(line, "\t\t\t\t@Toasts()") {
+			t.Fatalf("the call carries the wrong indentation: %q", line)
+		}
+		return
+	}
+	t.Fatalf("the layout carries no call of Toasts:\n%s", layout)
+}
+
+func TestUIAddBasecoatIsIdempotentWhenTheLayoutAlreadyCarriesThePatch(t *testing.T) {
+	dir := uiProject(t)
+	writeFile(t, dir, "internal/ui/layout.templ", scaffoldLayout(t))
+
+	if code, _, errOut := run(t, dir, "ui", "add", "basecoat"); code != 0 {
+		t.Fatalf("the first run gave %d and said %q", code, errOut)
+	}
+	patched := read(t, dir, "internal/ui/layout.templ")
+
+	code, out, errOut := run(t, dir, "ui", "add", "basecoat")
+	if code != 0 {
+		t.Fatalf("the second run gave %d and said %q", code, errOut)
+	}
+	if got := read(t, dir, "internal/ui/layout.templ"); got != patched {
+		t.Fatalf("the second run changed a layout that already carries the patch:\n%s", got)
+	}
+	if strings.Contains(out, "does not match the scaffold") {
+		t.Fatalf("the second run asked for a change by hand: %q", out)
 	}
 }
 
@@ -337,6 +351,28 @@ func TestUIAddBasecoatLeavesAChangedLayoutAlone(t *testing.T) {
 		t.Fatal("the command changed a layout that it does not recognize")
 	}
 	if !strings.Contains(out, "@Toasts()") {
+		t.Fatalf("the command printed no line to paste: %q", out)
+	}
+}
+
+// TestUIAddBasecoatLeavesALayoutWithAnAddedElementAlone proves that a layout
+// that carries an element beyond the scaffold, such as a footer that a person
+// wrote, does not lose that work. The command compares the whole file, so a
+// layout with an added element matches neither the scaffold nor the patch.
+func TestUIAddBasecoatLeavesALayoutWithAnAddedElementAlone(t *testing.T) {
+	dir := uiProject(t)
+	changed := strings.Replace(scaffoldLayout(t), "</main>",
+		"</main>\n\t\t\t<footer>Written by a person</footer>", 1)
+	writeFile(t, dir, "internal/ui/layout.templ", changed)
+
+	code, out, errOut := run(t, dir, "ui", "add", "basecoat")
+	if code != 0 {
+		t.Fatalf("the command gave %d and said %q", code, errOut)
+	}
+	if read(t, dir, "internal/ui/layout.templ") != changed {
+		t.Fatal("the command changed a layout that carries an element beyond the scaffold")
+	}
+	if !strings.Contains(out, "does not match the scaffold") {
 		t.Fatalf("the command printed no line to paste: %q", out)
 	}
 }

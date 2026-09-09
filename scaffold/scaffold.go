@@ -360,6 +360,19 @@ func execute(name, body string, values data) ([]byte, error) {
 	return []byte(out.String()), nil
 }
 
+// Layout returns the layout that the ssr scaffold writes for an application of
+// this name. `avero ui add` compares a file against it, so it patches a
+// layout that a person did not change and it changes no other layout.
+func Layout(name string) ([]byte, error) {
+	path := "templates/ssr/internal/ui/layout.templ.tmpl"
+	body, err := templates.ReadFile(path)
+	if err != nil {
+		return nil, faultOf(fmt.Sprintf("the template %s does not read", path),
+			"Report the fault, because a template of Avero must always read")
+	}
+	return execute(path, string(body), data{Name: name, Title: title(name)})
+}
+
 // title returns the name with the first letter in upper case and each dash as
 // a space.
 func title(name string) string {
