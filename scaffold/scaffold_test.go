@@ -3,7 +3,6 @@ package scaffold_test
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -353,27 +352,26 @@ func TestWriteSliceRefusesASliceThatExists(t *testing.T) {
 	}
 }
 
-// A scaffolded application requires the version of Avero that the scaffolder
-// names, so the name must be a release that stands. A stale name gives an
-// application that does not compile, because it calls a function that the
-// older release does not carry. Each example replaces the module with the
-// repository, so the examples hide the fault.
-//
-// The name must be the newest tag. A release therefore writes the tag first,
-// and the constant follows it, because `go mod tidy` reads a version that
-// exists and no other.
-func TestTheDefaultAveroVersionNamesTheNewestTag(t *testing.T) {
-	out, err := exec.Command("git", "tag", "--sort=-v:refname").Output()
-	if err != nil {
-		t.Skip("git names no tag here")
+// A build from the source names no version, so go.mod carries no line for
+// Avero. `go mod tidy` then reads the newest release, or the directory that a
+// replace names. A line with an empty version would not parse.
+func TestGoModCarriesNoEmptyVersionOfAvero(t *testing.T) {
+	dir, _ := write(t, scaffold.ShapeAPI)
+	body := readFile(t, filepath.Join(dir, "go.mod"))
+	for _, line := range strings.Split(body, "\n") {
+		if strings.TrimSpace(line) == "require github.com/alternayte/avero" {
+			t.Fatalf("go.mod names Avero with no version:\n%s", body)
+		}
 	}
-	tags := strings.Fields(string(out))
-	if len(tags) == 0 {
-		t.Skip("the clone carries no tag")
+	// The version of a released binary reaches the file.
+	named := filepath.Join(t.TempDir(), "named")
+	if _, err := scaffold.Write(scaffold.Options{
+		Name: "blog", Dir: named, Shape: scaffold.ShapeAPI, Module: "example.test/blog",
+		AveroVersion: "v9.9.9",
+	}); err != nil {
+		t.Fatalf("Write returned %v, want nil", err)
 	}
-	if scaffold.DefaultAveroVersion != tags[0] {
-		t.Fatalf("the scaffolder writes %s and the newest tag is %s\n"+
-			"  → Set DefaultAveroVersion to the newest release, because `avero new` writes it in go.mod",
-			scaffold.DefaultAveroVersion, tags[0])
+	if got := readFile(t, filepath.Join(named, "go.mod")); !strings.Contains(got, "github.com/alternayte/avero v9.9.9") {
+		t.Fatalf("go.mod carries no named version:\n%s", got)
 	}
 }

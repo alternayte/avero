@@ -2,8 +2,8 @@ module [[.Module]]
 
 go [[.GoVersion]]
 
-require github.com/alternayte/avero [[.Avero]]
-
+[[if .Avero]]require github.com/alternayte/avero [[.Avero]]
+[[end]]
 require github.com/alternayte/drel [[.Drel]]
 
 // drel writes the models, the repositories and the migrations of each feature

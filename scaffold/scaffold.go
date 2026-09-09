@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"text/template"
@@ -178,7 +179,7 @@ func validate(opts *Options) error {
 		opts.Dir = opts.Name
 	}
 	if opts.AveroVersion == "" {
-		opts.AveroVersion = DefaultAveroVersion
+		opts.AveroVersion = AveroVersion()
 	}
 	if opts.TemplVersion == "" {
 		opts.TemplVersion = DefaultTemplVersion
@@ -194,8 +195,6 @@ func validate(opts *Options) error {
 
 // The versions that go.mod carries when the caller names none.
 const (
-	// DefaultAveroVersion is the version of the host.
-	DefaultAveroVersion = "v0.2.1"
 	// DefaultGoVersion is the version line of go.mod.
 	DefaultGoVersion = "1.26.2"
 	// DefaultTemplVersion is the version of the templ generator. The ssr
@@ -207,6 +206,28 @@ const (
 	// migrations.
 	DefaultDrelVersion = "v0.7.1"
 )
+
+// AveroVersion returns the version of Avero that a new application requires.
+//
+// The binary reads its own version. A release therefore writes the version
+// that carries these templates, and a constant that a person must raise after
+// each tag is gone.
+//
+// A build from the source names no version, and the answer is empty. go.mod
+// then carries no line for Avero, and `go mod tidy` reads the newest release,
+// or the directory that a replace names. `avero new` runs the command, so the
+// application holds a version either way.
+func AveroVersion() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return ""
+	}
+	version := info.Main.Version
+	if !strings.HasPrefix(version, "v") || strings.Contains(version, "devel") {
+		return ""
+	}
+	return version
+}
 
 // validName reports a name that a module path can carry.
 func validName(name string) bool {

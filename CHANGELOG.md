@@ -3,6 +3,21 @@
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Changed
+
+- The scaffolder reads the version of Avero from the build information of the
+  binary. A release therefore writes the version that carries its templates,
+  and the constant that a person raised after each tag is gone. A build from
+  the source names no version, so go.mod carries no line for Avero, and
+  `go mod tidy` reads the newest release or the directory that a replace
+  names. `avero new` runs the command, so an application holds a version
+  either way.
+- The test of v0.2.2 that compared the constant with the newest tag is gone. A
+  tag build could not pass it: the newest tag is the tag under build, and the
+  constant names the release before it.
+
 ## v0.2.2
 
 ### Fixed

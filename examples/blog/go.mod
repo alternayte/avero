@@ -2,8 +2,6 @@ module blog
 
 go 1.26.2
 
-require github.com/alternayte/avero v0.2.1
-
 require github.com/alternayte/drel v0.7.1
 
 // drel writes the models, the repositories and the migrations of each feature
@@ -13,6 +11,7 @@ tool github.com/alternayte/drel/cmd/drel
 
 require (
 	github.com/a-h/templ v0.3.1020 // indirect
+	github.com/alternayte/avero v0.0.0-00010101000000-000000000000
 	github.com/google/uuid v1.6.0
 )
 
@@ -42,6 +41,7 @@ require (
 	github.com/natefinch/atomic v1.0.1 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
+	github.com/rogpeppe/go-internal v1.16.0 // indirect
 	github.com/tursodatabase/libsql-client-go v0.0.0-20260528064733-9d5d30a29a60 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel v1.41.0 // indirect
