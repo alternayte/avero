@@ -18,12 +18,33 @@ import (
 //
 // The reflection reads the types one time, when the inspection command runs.
 // It never runs on a request path. See design rule 2.
-func Describe(name, version string, routes []router.Route, servers []Server) *Document {
+func Describe(name, version string, routes []router.Route, api router.API) *Document {
+	if api.Title != "" {
+		name = api.Title
+	}
+	if api.Version != "" {
+		version = api.Version
+	}
 	doc := &Document{
 		OpenAPI: Version,
-		Info:    Info{Title: name, Version: version},
-		Servers: servers,
-		Paths:   map[string]PathItem{},
+		Info: Info{
+			Title: name, Version: version,
+			Description:    api.Description,
+			TermsOfService: api.TermsOfService,
+			Contact:        api.Contact,
+			License:        api.License,
+		},
+		Servers:      api.Servers,
+		Tags:         api.Tags,
+		ExternalDocs: api.ExternalDocs,
+		Paths:        map[string]PathItem{},
+	}
+	if len(api.Require) > 0 {
+		schemes := make([]map[string][]string, 0, len(api.Require))
+		for _, scheme := range api.Require {
+			schemes = append(schemes, map[string][]string{scheme: {}})
+		}
+		doc.Security = schemes
 	}
 	schemas := map[string]Schema{}
 	for _, route := range routes {
@@ -36,8 +57,8 @@ func Describe(name, version string, routes []router.Route, servers []Server) *Do
 		}
 		doc.Paths[path][strings.ToLower(route.Method)] = item
 	}
-	if len(schemas) > 0 {
-		doc.Components = &Components{Schemas: schemas}
+	if len(schemas) > 0 || len(api.Security) > 0 {
+		doc.Components = &Components{Schemas: schemas, SecuritySchemes: api.Security}
 	}
 	return doc
 }
@@ -48,14 +69,33 @@ func describeRoute(route router.Route, schemas map[string]Schema) (string, Opera
 	out := Operation{
 		OperationID: opIDOf(route),
 		Summary:     op.Summary,
+		Description: op.Description,
+		Deprecated:  op.Deprecated,
 		Tags:        op.Tags,
 		Responses:   map[string]Response{},
+	}
+	if op.Public {
+		// An empty list states a route that needs no identity.
+		out.Security = &[]map[string][]string{}
+	} else if len(op.Security) > 0 {
+		schemes := make([]map[string][]string, 0, len(op.Security))
+		for _, name := range op.Security {
+			schemes = append(schemes, map[string][]string{name: {}})
+		}
+		out.Security = &schemes
 	}
 	if op.Input() != nil {
 		out.Parameters, out.RequestBody = inputOf(op.Input(), schemas)
 	}
 	for _, answer := range op.Answers {
-		out.Responses[strconv.Itoa(answer.Code)] = answerResponse(answer, schemas)
+		code := strconv.Itoa(answer.Code)
+		next := answerResponse(answer, schemas)
+		if first, ok := out.Responses[code]; ok {
+			// Two answers of one status state that the answer carries one of
+			// two shapes.
+			next = mergeAnswers(first, next)
+		}
+		out.Responses[code] = next
 	}
 	// Every route answers the faults that the router writes. One problem
 	// schema covers them, so a client reads one shape. See RFC 9457.
@@ -103,11 +143,49 @@ func answerResponse(answer router.Answer, schemas map[string]Schema) Response {
 	if out.Description == "" {
 		out.Description = http.StatusText(answer.Code)
 	}
+	for _, header := range answer.Headers {
+		if out.Headers == nil {
+			out.Headers = map[string]HeaderObject{}
+		}
+		out.Headers[header.Name] = HeaderObject{
+			Description: header.Description,
+			Schema:      Schema{Type: "string"},
+		}
+	}
 	body := answer.Body()
 	if body == nil {
 		return out
 	}
 	out.Content = map[string]MediaType{"application/json": {Schema: typeSchema(body, schemas)}}
+	return out
+}
+
+// mergeAnswers joins two answers of one status into one that states oneOf.
+func mergeAnswers(first, second Response) Response {
+	out := first
+	if second.Description != "" && first.Description != "" && second.Description != first.Description {
+		out.Description = first.Description + ", or " + second.Description
+	}
+	for name, header := range second.Headers {
+		if out.Headers == nil {
+			out.Headers = map[string]HeaderObject{}
+		}
+		out.Headers[name] = header
+	}
+	firstBody, firstOK := first.Content["application/json"]
+	secondBody, secondOK := second.Content["application/json"]
+	if !firstOK || !secondOK {
+		return out
+	}
+	one := firstBody.Schema
+	if len(one.OneOf) > 0 {
+		one.OneOf = append(one.OneOf, secondBody.Schema)
+		out.Content["application/json"] = MediaType{Schema: one}
+		return out
+	}
+	out.Content = map[string]MediaType{
+		"application/json": {Schema: Schema{OneOf: []Schema{one, secondBody.Schema}}},
+	}
 	return out
 }
 

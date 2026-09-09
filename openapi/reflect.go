@@ -1,6 +1,7 @@
 package openapi
 
 import (
+	"encoding"
 	"reflect"
 	"sort"
 	"strconv"
@@ -59,10 +60,11 @@ func inputOf(t reflect.Type, schemas map[string]Schema) ([]Parameter, *RequestBo
 // parameterOf builds one parameter of a request.
 func parameterOf(f reflect.StructField, in, member string, r validateRules) Parameter {
 	return Parameter{
-		Name:     member,
-		In:       in,
-		Required: in == "path" || r.required(),
-		Schema:   withRules(Schema{Type: goJSONType(f.Type)}, r),
+		Name:        member,
+		In:          in,
+		Description: f.Tag.Get("doc"),
+		Required:    in == "path" || r.required(),
+		Schema:      describeField(f, withRules(Schema{Type: goJSONType(f.Type)}, r)),
 	}
 }
 
@@ -93,33 +95,104 @@ func omitempty(f reflect.StructField) bool {
 // the components carry it.
 func typeSchema(t reflect.Type, schemas map[string]Schema) Schema {
 	t = deref(t)
+	if known, ok := knownSchema(t); ok {
+		return known
+	}
 	switch t.Kind() {
 	case reflect.Slice, reflect.Array:
+		if t.Elem().Kind() == reflect.Uint8 {
+			// A slice of bytes reaches JSON as a string of base 64.
+			return Schema{Type: "string", Format: "byte"}
+		}
 		item := typeSchema(t.Elem(), schemas)
 		return Schema{Type: "array", Items: &item}
 	case reflect.Map:
-		return Schema{Type: "object"}
+		// The key of a map reaches JSON as a string, and the value carries
+		// its own schema.
+		value := typeSchema(t.Elem(), schemas)
+		return Schema{Type: "object", AdditionalProperties: &value}
 	case reflect.Struct:
-		if t.Name() == "" {
+		name := schemaName(t)
+		if name == "" {
 			return Schema{Type: "object"}
 		}
 		collectInto(schemas, t)
-		return Schema{Ref: "#/components/schemas/" + t.Name()}
+		return Schema{Ref: "#/components/schemas/" + name}
+	case reflect.Interface:
+		// An empty interface carries any value, so the member states no type.
+		return Schema{}
 	default:
 		return Schema{Type: goJSONType(t)}
 	}
 }
 
+// knownSchema returns the schema of a type that JSON writes as one value, and
+// not as an object of its fields.
+//
+// time.Time writes a string of RFC 3339, and a type that marshals itself to
+// text writes a string. A walk of the fields of such a type would state a
+// shape that no answer carries.
+func knownSchema(t reflect.Type) (Schema, bool) {
+	switch t.String() {
+	case "time.Time":
+		return Schema{Type: "string", Format: "date-time"}, true
+	case "time.Duration":
+		return Schema{Type: "integer", Format: "int64"}, true
+	case "uuid.UUID":
+		return Schema{Type: "string", Format: "uuid"}, true
+	case "json.RawMessage":
+		return Schema{}, true
+	}
+	if t.Kind() == reflect.Struct || t.Kind() == reflect.Array {
+		if reflect.PointerTo(t).Implements(textMarshaler) || t.Implements(textMarshaler) {
+			return Schema{Type: "string"}, true
+		}
+	}
+	return Schema{}, false
+}
+
+// textMarshaler is the interface of a type that writes itself as text.
+var textMarshaler = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
+
+// schemaName returns the name of the schema of a struct.
+//
+// A generic type carries its argument in its name, such as Page[main.Task].
+// The characters of such a name do not stand in a reference, so the name loses
+// them and reads PageTask.
+func schemaName(t reflect.Type) string {
+	name := t.Name()
+	if name == "" {
+		return ""
+	}
+	if !strings.ContainsAny(name, "[].*") {
+		return name
+	}
+	var b strings.Builder
+	for _, r := range name {
+		// A reference carries letters and digits, so the name loses the
+		// characters that hold the argument of a generic type.
+		if strings.ContainsRune("[]*, .", r) {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
 // collectInto records the schema of a struct and of every struct that it
 // names. The entry stands before the walk, so a type that names itself ends.
 func collectInto(schemas map[string]Schema, t reflect.Type) {
-	if _, ok := schemas[t.Name()]; ok {
+	key := schemaName(t)
+	if _, ok := schemas[key]; ok {
 		return
 	}
-	schemas[t.Name()] = Schema{Type: "object"}
+	schemas[key] = Schema{Type: "object"}
 
 	closed := false
-	out := Schema{Type: "object", Properties: map[string]Schema{}, AdditionalProperties: &closed}
+	out := Schema{
+		Type: "object", Description: docOf(t),
+		Properties: map[string]Schema{}, AdditionalProperties: &closed,
+	}
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		if !f.IsExported() {
@@ -129,15 +202,99 @@ func collectInto(schemas map[string]Schema, t reflect.Type) {
 		if member == "" {
 			continue
 		}
-		out.Properties[member] = typeSchema(f.Type, schemas)
+		out.Properties[member] = describeField(f, typeSchema(f.Type, schemas))
 		if !omitempty(f) {
 			// Go writes every field of a struct, so the answer carries it.
 			out.Required = append(out.Required, member)
 		}
 	}
 	sort.Strings(out.Required)
-	schemas[t.Name()] = out
+	schemas[key] = out
 }
+
+// describeField puts the prose and the values of the tags of a field on its
+// schema.
+//
+// The doc tag states what a member means, and the example tag states one value
+// that a reader recognises. A tag holds text and names no type, so a wrong
+// word states a wrong sentence and never a reference that does not exist.
+//
+//	Title string `json:"title" doc:"The name that a person reads" example:"A title"`
+func describeField(f reflect.StructField, s Schema) Schema {
+	s.Description = f.Tag.Get("doc")
+	if value, ok := f.Tag.Lookup("example"); ok {
+		s.Example = literal(value, f.Type)
+	}
+	if value, ok := f.Tag.Lookup("default"); ok {
+		s.Default = literal(value, f.Type)
+	}
+	if value, ok := f.Tag.Lookup("format"); ok {
+		s.Format = value
+	}
+	if value, ok := f.Tag.Lookup("pattern"); ok {
+		s.Pattern = value
+	}
+	for _, option := range strings.Split(f.Tag.Get("openapi"), ",") {
+		switch strings.TrimSpace(option) {
+		case "readOnly":
+			s.ReadOnly = true
+		case "writeOnly":
+			s.WriteOnly = true
+		case "deprecated":
+			s.Deprecated = true
+		case "uniqueItems":
+			s.UniqueItems = true
+		}
+	}
+	// A pointer that the answer always carries reaches JSON as null when it
+	// holds nothing. OpenAPI 3.1 states that with a list of types.
+	if f.Type.Kind() == reflect.Pointer && !omitempty(f) && s.Ref == "" && s.Type != nil {
+		s.Type = []any{s.Type, "null"}
+	}
+	return s
+}
+
+// literal reads the value of a tag as the type of its field, so a number
+// reaches the document as a number and not as a string.
+func literal(value string, t reflect.Type) any {
+	switch goJSONType(t) {
+	case "integer":
+		if n, err := strconv.ParseInt(value, 10, 64); err == nil {
+			return n
+		}
+	case "number":
+		if n, err := strconv.ParseFloat(value, 64); err == nil {
+			return n
+		}
+	case "boolean":
+		if b, err := strconv.ParseBool(value); err == nil {
+			return b
+		}
+	}
+	return value
+}
+
+// Documented is a type that states what it means. The description of the API
+// carries the sentence.
+//
+//	func (View) Doc() string { return "One post as the API returns it" }
+type Documented interface {
+	Doc() string
+}
+
+// docOf returns the sentence that a type states, or the empty string.
+func docOf(t reflect.Type) string {
+	if t.Implements(documented) {
+		return reflect.New(t).Elem().Interface().(Documented).Doc()
+	}
+	if reflect.PointerTo(t).Implements(documented) {
+		return reflect.New(t).Interface().(Documented).Doc()
+	}
+	return ""
+}
+
+// documented is the interface of a type that states what it means.
+var documented = reflect.TypeOf((*Documented)(nil)).Elem()
 
 // deref returns the type behind a pointer.
 func deref(t reflect.Type) reflect.Type {

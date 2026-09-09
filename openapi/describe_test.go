@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/alternayte/avero/openapi"
 	"github.com/alternayte/avero/router"
@@ -67,7 +68,7 @@ func describe(t *testing.T) *openapi.Document {
 	if err != nil {
 		t.Fatalf("the router holds a fault: %v", err)
 	}
-	return openapi.Describe("blog", "1.0.0", rep.Routes, nil)
+	return openapi.Describe("blog", "1.0.0", rep.Routes, router.API{})
 }
 
 // The description names the schema of the answer, and the components carry it.
@@ -195,8 +196,125 @@ func TestARouteWithNoTypeStatesNoOperation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the router holds a fault: %v", err)
 	}
-	doc := openapi.Describe("blog", "1.0.0", rep.Routes, nil)
+	doc := openapi.Describe("blog", "1.0.0", rep.Routes, router.API{})
 	if names := doc.PathNames(); len(names) != 1 || names[0] != "/posts" {
 		t.Fatalf("the description holds %v", names)
+	}
+}
+
+// Documented states what a model means. The description carries the sentence,
+// and a type states it in Go and not in a comment that nothing reads.
+type Note struct {
+	// Body carries the tags that state the prose and the value.
+	Body string `json:"body" doc:"The text of the note" example:"A note"`
+	// Count shows that a number reaches the document as a number.
+	Count int `json:"count" example:"7" default:"1"`
+	// Secret shows that a member of a request never reaches an answer.
+	Secret string `json:"secret,omitempty" openapi:"writeOnly"`
+	// When shows that a time reaches the document as a string.
+	When time.Time `json:"when"`
+	// Meta shows that a map states the type of its value.
+	Meta map[string]int `json:"meta,omitempty"`
+	// Rank shows that a pointer that the answer carries reaches null.
+	Rank *int `json:"rank"`
+}
+
+// Doc states what the model means.
+func (Note) Doc() string { return "One note of a reader" }
+
+func note(_ *router.Ctx, _ listInput) (Note, error) { return Note{}, nil }
+
+// The tags of a field state the prose, the example and the value that the
+// service uses when the request carries none.
+func TestTheTagsOfAFieldReachTheDescription(t *testing.T) {
+	r := router.New()
+	router.Get(r, "/notes", note)
+	rep, _ := r.Report()
+	doc := openapi.Describe("blog", "1.0.0", rep.Routes, router.API{})
+
+	schema := doc.Components.Schemas["Note"]
+	if schema.Description != "One note of a reader" {
+		t.Fatalf("the model states %q", schema.Description)
+	}
+	body := schema.Properties["body"]
+	if body.Description != "The text of the note" || body.Example != "A note" {
+		t.Fatalf("the member states %+v", body)
+	}
+	// A number reaches the document as a number, not as a string.
+	if count := schema.Properties["count"]; count.Example != int64(7) || count.Default != int64(1) {
+		t.Fatalf("the number states %+v", count)
+	}
+	if secret := schema.Properties["secret"]; !secret.WriteOnly {
+		t.Fatalf("the secret states %+v", secret)
+	}
+	// A time writes a string of RFC 3339, and not an object of its fields.
+	when := schema.Properties["when"]
+	if when.Type != "string" || when.Format != "date-time" {
+		t.Fatalf("the time states %+v", when)
+	}
+	// A map states the type of its value.
+	meta := schema.Properties["meta"]
+	value, ok := meta.AdditionalProperties.(*openapi.Schema)
+	if !ok || value.Type != "integer" {
+		t.Fatalf("the map states %+v", meta)
+	}
+	// A pointer that the answer carries reaches null.
+	rank := schema.Properties["rank"]
+	list, ok := rank.Type.([]any)
+	if !ok || len(list) != 2 || list[1] != "null" {
+		t.Fatalf("the pointer states %+v", rank)
+	}
+}
+
+// Two answers of one status state that the answer carries one of two shapes.
+func TestTwoAnswersOfOneStatusStateOneOf(t *testing.T) {
+	r := router.New()
+	router.Post(r, "/posts", create,
+		router.Answers[View](http.StatusConflict, "the title is taken"),
+		router.Answers[PostList](http.StatusConflict, "the titles are taken"),
+		router.AnswerHeader(http.StatusCreated, "Location", "the address of the new post"))
+	rep, _ := r.Report()
+	doc := openapi.Describe("blog", "1.0.0", rep.Routes, router.API{})
+
+	op, _ := doc.Operation(http.MethodPost, "/posts")
+	one := op.Responses["409"].Content["application/json"].Schema
+	if len(one.OneOf) != 2 {
+		t.Fatalf("the answer states %+v", one)
+	}
+	// A header of an answer reaches the description.
+	if _, ok := op.Responses["201"].Headers["Location"]; !ok {
+		t.Fatalf("the answer states no header: %+v", op.Responses["201"])
+	}
+}
+
+// The API states the facts that stand above every route.
+func TestTheAPIStatesItsInfoAndItsSchemes(t *testing.T) {
+	r := router.New(router.WithAPI(router.API{
+		Title:       "Blog",
+		Version:     "2.0.0",
+		Description: "The service that holds the posts.",
+		Servers:     []router.Server{{URL: "https://api.example.com", Description: "production"}},
+		Security:    map[string]router.SecurityScheme{"bearer": router.BearerAuth("The token of a session.")},
+		Require:     []string{"bearer"},
+		Tags:        []router.Tag{{Name: "posts", Description: "The posts of the blog."}},
+	}))
+	router.Get(r, "/posts", list)
+	router.Get(r, "/health", list, router.Public())
+	rep, _ := r.Report()
+	doc := openapi.Describe("ignored", "0.0.0", rep.Routes, r.API())
+
+	if doc.Info.Title != "Blog" || doc.Info.Version != "2.0.0" || doc.Info.Description == "" {
+		t.Fatalf("the info states %+v", doc.Info)
+	}
+	if len(doc.Servers) != 1 || len(doc.Security) != 1 || len(doc.Tags) != 1 {
+		t.Fatalf("the document states %+v", doc)
+	}
+	if _, ok := doc.Components.SecuritySchemes["bearer"]; !ok {
+		t.Fatalf("the components hold no scheme: %+v", doc.Components)
+	}
+	// A public route states an empty list, so it stands outside the scheme.
+	op, _ := doc.Operation(http.MethodGet, "/health")
+	if op.Security == nil || len(*op.Security) != 0 {
+		t.Fatalf("the public route states %+v", op.Security)
 	}
 }

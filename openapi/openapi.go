@@ -14,6 +14,8 @@ package openapi
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/alternayte/avero/router"
 	"sort"
 	"strings"
 )
@@ -34,12 +36,32 @@ type Document struct {
 	Paths map[string]PathItem `json:"paths"`
 	// Components holds the schemas that the operations name.
 	Components *Components `json:"components,omitempty"`
+	// Security names the schemes that every route needs.
+	Security []map[string][]string `json:"security,omitempty"`
+	// Tags describe the groups that the operations name.
+	Tags []Tag `json:"tags,omitempty"`
+	// ExternalDocs names a document that stands outside this one.
+	ExternalDocs *ExternalDocs `json:"externalDocs,omitempty"`
 }
+
+// Tag describes one group of operations.
+type Tag = router.Tag
+
+// ExternalDocs names a document that stands outside this one.
+type ExternalDocs = router.ExternalDocs
+
+// Server is one address that answers.
+type Server = router.Server
+
+// SecurityScheme states how a caller proves its identity.
+type SecurityScheme = router.SecurityScheme
 
 // Components holds the schemas of the description.
 type Components struct {
 	// Schemas maps the name of a type to its schema.
 	Schemas map[string]Schema `json:"schemas"`
+	// SecuritySchemes hold the schemes of the identity, by name.
+	SecuritySchemes map[string]SecurityScheme `json:"securitySchemes,omitempty"`
 }
 
 // Info states the name and the version of the application.
@@ -50,14 +72,12 @@ type Info struct {
 	Version string `json:"version"`
 	// Description states what the application does.
 	Description string `json:"description,omitempty"`
-}
-
-// Server is one address of the application.
-type Server struct {
-	// URL is the address.
-	URL string `json:"url"`
-	// Description states what the address is.
-	Description string `json:"description,omitempty"`
+	// TermsOfService is the address of the terms.
+	TermsOfService string `json:"termsOfService,omitempty"`
+	// Contact names the people who own the API.
+	Contact *router.Contact `json:"contact,omitempty"`
+	// License names the licence of the API.
+	License *router.License `json:"license,omitempty"`
 }
 
 // PathItem holds the operations of one path.
@@ -78,6 +98,13 @@ type Operation struct {
 	RequestBody *RequestBody `json:"requestBody,omitempty"`
 	// Responses states the answers of the route.
 	Responses map[string]Response `json:"responses"`
+	// Description states the operation at length.
+	Description string `json:"description,omitempty"`
+	// Deprecated marks an operation that a caller must leave.
+	Deprecated bool `json:"deprecated,omitempty"`
+	// Security names the schemes that the route needs. An empty list states a
+	// route that needs no identity.
+	Security *[]map[string][]string `json:"security,omitempty"`
 }
 
 // Parameter is one value that a route reads outside the body.
@@ -86,6 +113,8 @@ type Parameter struct {
 	Name string `json:"name"`
 	// In is path, query or header.
 	In string `json:"in"`
+	// Description states what the value means.
+	Description string `json:"description,omitempty"`
 	// Required states a value that the route needs.
 	Required bool `json:"required"`
 	// Schema states the type and the rules of the value.
@@ -106,6 +135,16 @@ type Response struct {
 	Description string `json:"description"`
 	// Content holds one media type. An answer with no body holds none.
 	Content map[string]MediaType `json:"content,omitempty"`
+	// Headers name the headers that the answer carries.
+	Headers map[string]HeaderObject `json:"headers,omitempty"`
+}
+
+// HeaderObject is one header of an answer.
+type HeaderObject struct {
+	// Description states what the header holds.
+	Description string `json:"description,omitempty"`
+	// Schema states the type of the value.
+	Schema Schema `json:"schema"`
 }
 
 // MediaType states the shape of one body.
@@ -116,8 +155,34 @@ type MediaType struct {
 
 // Schema is one JSON Schema node.
 type Schema struct {
-	// Type is string, integer, number, boolean, array or object.
-	Type string `json:"type,omitempty"`
+	// Type is string, integer, number, boolean, array or object. A nullable
+	// member carries the type and "null", which OpenAPI 3.1 states.
+	Type any `json:"type,omitempty"`
+	// Title names the schema for a reader.
+	Title string `json:"title,omitempty"`
+	// Description states what the value means.
+	Description string `json:"description,omitempty"`
+	// Example is one value that a reader recognises.
+	Example any `json:"example,omitempty"`
+	// Default is the value that the service uses when the request carries
+	// none.
+	Default any `json:"default,omitempty"`
+	// Pattern is the regular expression that a string must match.
+	Pattern string `json:"pattern,omitempty"`
+	// MinItems and MaxItems bound an array.
+	MinItems *int `json:"minItems,omitempty"`
+	MaxItems *int `json:"maxItems,omitempty"`
+	// UniqueItems states an array that holds each value one time.
+	UniqueItems bool `json:"uniqueItems,omitempty"`
+	// ReadOnly states a member that only an answer carries. WriteOnly states
+	// a member that only a request carries.
+	ReadOnly  bool `json:"readOnly,omitempty"`
+	WriteOnly bool `json:"writeOnly,omitempty"`
+	// Deprecated marks a member that a caller must leave.
+	Deprecated bool `json:"deprecated,omitempty"`
+	// OneOf holds the schemas of an answer that carries one of several
+	// shapes.
+	OneOf []Schema `json:"oneOf,omitempty"`
 	// Format states the shape of a string, such as email or uuid.
 	Format string `json:"format,omitempty"`
 	// MinLength and MaxLength bound a string.
@@ -134,8 +199,10 @@ type Schema struct {
 	Properties map[string]Schema `json:"properties,omitempty"`
 	// Required names the members that the object needs.
 	Required []string `json:"required,omitempty"`
-	// AdditionalProperties states an object that carries other members.
-	AdditionalProperties *bool `json:"additionalProperties,omitempty"`
+	// AdditionalProperties states an object that carries other members. A
+	// bool closes or opens the object, and a schema states the type of the
+	// value of a map.
+	AdditionalProperties any `json:"additionalProperties,omitempty"`
 	// Ref names a schema of the components, such as
 	// #/components/schemas/Task.
 	Ref string `json:"$ref,omitempty"`

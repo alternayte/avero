@@ -87,7 +87,7 @@ func Inspect[T any](args []string, out, errOut io.Writer, r *Router, set *Module
 		// The application names itself, so the description carries the name
 		// that a person reads. The version of the description follows the
 		// binary.
-		doc := openapi.Describe(AppName(), AppVersion(), rep.Routes, nil)
+		doc := openapi.Describe(AppName(), AppVersion(), rep.Routes, r.API())
 		_, _ = io.WriteString(out, doc.String())
 		return 0
 	case "schema":

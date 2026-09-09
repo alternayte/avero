@@ -242,6 +242,56 @@ func BadRequest(detail string) *Problem { return router.BadRequest(detail) }
 // ProblemOf returns the problem that an error carries. See router.ProblemOf.
 func ProblemOf(err error) *Problem { return router.ProblemOf(err) }
 
+// API states the facts of the whole description of an API: the name, the
+// prose, the addresses, the schemes of the identity and the groups. See
+// router.API.
+type API = router.API
+
+// The parts of the description of an API.
+type (
+	// Contact names the people who own the API.
+	Contact = router.Contact
+	// License names the licence of the API.
+	License = router.License
+	// Server is one address that answers.
+	Server = router.Server
+	// Tag describes one group of operations.
+	Tag = router.Tag
+	// ExternalDocs names a document that stands outside this one.
+	ExternalDocs = router.ExternalDocs
+	// SecurityScheme states how a caller proves its identity.
+	SecurityScheme = router.SecurityScheme
+)
+
+// WithAPI states the facts of the whole description of the API.
+func WithAPI(api API) router.Option { return router.WithAPI(api) }
+
+// BearerAuth returns the scheme of a bearer token.
+func BearerAuth(description string) SecurityScheme { return router.BearerAuth(description) }
+
+// BasicAuth returns the scheme of a name and a password.
+func BasicAuth(description string) SecurityScheme { return router.BasicAuth(description) }
+
+// APIKeyAuth returns the scheme of a key that a header carries.
+func APIKeyAuth(header, description string) SecurityScheme {
+	return router.APIKeyAuth(header, description)
+}
+
+// Describe states the operation at length, where a summary is one line.
+func Describe(text string) OpOption { return router.Describe(text) }
+
+// Secured names the schemes that the route needs.
+func Secured(schemes ...string) OpOption { return router.Secured(schemes...) }
+
+// Public states a route that needs no identity.
+func Public() OpOption { return router.Public() }
+
+// AnswerHeader states a header that one answer carries, such as Location on a
+// 201.
+func AnswerHeader(code int, name, description string) OpOption {
+	return router.AnswerHeader(code, name, description)
+}
+
 // NoBody is the answer of a handler that carries none. The router writes 204.
 // See router.NoBody.
 type NoBody = router.NoBody

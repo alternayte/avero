@@ -18,6 +18,15 @@ type Operation struct {
 	Pattern string `json:"pattern"`
 	// Summary names the operation for a person.
 	Summary string `json:"summary,omitempty"`
+	// Description states the operation at length. A summary is one line, and
+	// this holds the paragraph that a reader needs.
+	Description string `json:"description,omitempty"`
+	// Security names the schemes that the route needs. An empty list means
+	// that the route follows the API.
+	Security []string `json:"security,omitempty"`
+	// Public states a route that needs no identity, even when the API states
+	// a scheme.
+	Public bool `json:"public,omitempty"`
 	// Deprecated marks an operation that a caller must leave.
 	Deprecated bool `json:"deprecated,omitempty"`
 	// Tags group the operations of a description.
@@ -34,14 +43,27 @@ type Operation struct {
 }
 
 // Answer is one status that an operation writes, and the type of its body.
+//
+// Two answers of one status state that the answer carries one of two shapes,
+// which OpenAPI writes as oneOf.
 type Answer struct {
 	// Code is the HTTP status.
 	Code int `json:"code"`
 	// Description states the case that produces this answer.
 	Description string `json:"description,omitempty"`
+	// Headers name the headers that this answer carries.
+	Headers []Header `json:"headers,omitempty"`
 
 	// body is the type of the body. A nil value states an answer with none.
 	body reflect.Type
+}
+
+// Header is one header that an answer carries.
+type Header struct {
+	// Name is the name of the header, such as Location.
+	Name string `json:"name"`
+	// Description states what the header holds.
+	Description string `json:"description,omitempty"`
 }
 
 // Body returns the type of the body of the answer, or nil.
@@ -53,9 +75,42 @@ func (o Operation) Input() reflect.Type { return o.input }
 // OpOption states one more fact of an operation.
 type OpOption func(*Operation)
 
-// Summary names the operation for a person.
+// Summary names the operation for a person. It is one line.
 func Summary(text string) OpOption {
 	return func(o *Operation) { o.Summary = text }
+}
+
+// Describe states the operation at length, where a summary is one line.
+func Describe(text string) OpOption {
+	return func(o *Operation) { o.Description = text }
+}
+
+// Secured names the schemes that the route needs. The API states the schemes.
+func Secured(schemes ...string) OpOption {
+	return func(o *Operation) { o.Security = append(o.Security, schemes...) }
+}
+
+// Public states a route that needs no identity, even when the API states a
+// scheme for every route.
+func Public() OpOption {
+	return func(o *Operation) { o.Public = true }
+}
+
+// AnswerHeader states a header that one answer carries, such as Location on a
+// 201.
+func AnswerHeader(code int, name, description string) OpOption {
+	return func(o *Operation) {
+		for i := range o.Answers {
+			if o.Answers[i].Code == code {
+				o.Answers[i].Headers = append(o.Answers[i].Headers, Header{Name: name, Description: description})
+				return
+			}
+		}
+		o.Answers = append(o.Answers, Answer{
+			Code: code, Description: http.StatusText(code),
+			Headers: []Header{{Name: name, Description: description}},
+		})
+	}
 }
 
 // Deprecated marks an operation that a caller must leave.
@@ -74,6 +129,9 @@ func Tags(names ...string) OpOption {
 // the other cases:
 //
 //	avero.Post(r, "/posts", m.Create, avero.Answers[Problem](409, "the title is taken"))
+//
+// Two calls with one status state an answer that carries one of two shapes.
+// The description then writes oneOf.
 func Answers[T any](code int, description string) OpOption {
 	return func(o *Operation) {
 		var body T
