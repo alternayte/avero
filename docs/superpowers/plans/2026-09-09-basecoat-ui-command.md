@@ -677,8 +677,9 @@ The file lives in this repository as a template, and the suffix keeps `templ gen
 - Consumes: nothing.
 - Produces:
   - `package uifiles`
-  - `var Basecoat embed.FS` which holds `toaster.templ.tmpl`
-  - `func Toaster() []byte` which returns the body of the toaster component
+  - `func Toaster() []byte` which returns the body of the toaster component.
+    The embedded value stays private, because nothing outside the package opens
+    a file by name.
 
 - [ ] **Step 1: Write the failing test**
 
