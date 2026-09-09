@@ -10,6 +10,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
@@ -156,10 +157,17 @@ func write(e example, dir, replace string) error {
 	// command and the example never drift. The pin is idempotent, so a tree
 	// that the repository already holds needs no network.
 	if e.Shape == "ssr" {
-		if code := cli.Run(ctx, cli.Streams{Out: os.Stdout, Err: os.Stderr, Dir: dir}, []string{"ui", "add", "basecoat"}); code != 0 {
-			return fmt.Errorf("avero ui add basecoat failed in %s", dir)
+		var out bytes.Buffer
+		code := cli.Run(ctx, cli.Streams{Out: &out, Err: &out, Dir: dir}, []string{"ui", "add", "basecoat"})
+		_, _ = os.Stdout.Write(out.Bytes())
+		if code != 0 {
+			return fmt.Errorf("avero ui add basecoat failed in %s with exit code %d\n%s\n  → Repair the fault that the output names, then run the command again",
+				dir, code, strings.TrimSpace(out.String()))
 		}
-		// The component is new, so templ writes its Go file.
+		// The component is new, so templ writes its Go file. The call sits
+		// here, between the migration and cli.Templ, so the one call of
+		// cli.Templ below compiles the new .templ file with every old one,
+		// in one pass.
 		if err := cli.Drel(ctx, dir); err != nil {
 			return err
 		}
