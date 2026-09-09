@@ -45,10 +45,11 @@ jobs:
       - name: vet
         run: go vet ./...
 
-      # 3. golangci-lint passes.
-      - uses: golangci/golangci-lint-action@v6
+      # 3. golangci-lint passes. The version is pinned, because a linter that
+      # a lower Go version built refuses the target of go.mod.
+      - uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          version: v2.12.2
 
       # 4. Unit tests pass with the race detector.
       - name: test
