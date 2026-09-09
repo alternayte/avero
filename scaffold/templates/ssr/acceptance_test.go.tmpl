@@ -121,6 +121,30 @@ func TestAValidFormWritesAPostAndShowsTheToast(t *testing.T) {
 	if !strings.Contains(body, "The post is saved") {
 		t.Fatalf("the list holds no toast:\n%s", body)
 	}
+	// The toaster of Basecoat holds the message. The server renders it,
+	// because Basecoat watches the document and initializes a toast that
+	// arrives later. See the design of 2026-09-09.
+	if !strings.Contains(body, `id="toaster"`) {
+		t.Fatalf("the list holds no toaster:\n%s", body)
+	}
+	if !strings.Contains(body, `data-category="success"`) {
+		t.Fatalf("the toast states no category:\n%s", body)
+	}
+	if !strings.Contains(body, "data-toast-cancel") {
+		t.Fatalf("the toast carries no dismiss button:\n%s", body)
+	}
+}
+
+func TestTheToasterStandsWithNoToast(t *testing.T) {
+	rec := get(t, app(t), "/", nil)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `id="toaster"`) {
+		t.Fatalf("the page holds no toaster:\n%s", body)
+	}
+	if strings.Contains(body, `class="toast"`) {
+		t.Fatalf("the page holds a toast although no message exists:\n%s", body)
+	}
 }
 
 func TestAnInvalidFormRendersTheOldInputAndTheFieldError(t *testing.T) {
@@ -138,7 +162,7 @@ func TestAnInvalidFormRendersTheOldInputAndTheFieldError(t *testing.T) {
 	if !strings.Contains(body, `value="no"`) {
 		t.Fatalf("the form holds no old input:\n%s", body)
 	}
-	if !strings.Contains(body, `class="error"`) {
+	if !strings.Contains(body, `class="text-destructive text-sm"`) {
 		t.Fatalf("the form holds no field error:\n%s", body)
 	}
 }

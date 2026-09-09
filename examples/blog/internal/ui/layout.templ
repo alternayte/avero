@@ -18,21 +18,9 @@ templ Page(title string, body templ.Component) {
 		<body data-signals-csrf={ "'" + view.CSRFToken(ctx) + "'" }>
 			<header><a href="/">Blog</a></header>
 			<main>
-				@Toasts()
 				@body
 			</main>
+			@Toasts()
 		</body>
 	</html>
-}
-
-// Toasts renders the messages of this response. The flash middleware carries a
-// message across a redirect.
-templ Toasts() {
-	if toasts := view.Toasts(ctx); len(toasts) > 0 {
-		<ul class="toasts">
-			for _, toast := range toasts {
-				<li class={ toast.Level }>{ toast.Message }</li>
-			}
-		</ul>
-	}
 }
