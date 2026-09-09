@@ -1,5 +1,6 @@
 // Command averogen writes the binding and the validation of each handler
-// input. S14 folds it into `avero generate`.
+// input, and the implementation of each client interface. S14 folds it into
+// `avero generate`.
 //
 //	go run github.com/alternayte/avero/internal/cmd/averogen [-check] [dir]
 package main
@@ -10,6 +11,7 @@ import (
 	"os"
 
 	"github.com/alternayte/avero/codegen"
+	"github.com/alternayte/avero/codegen/client"
 )
 
 func main() {
@@ -22,19 +24,26 @@ func main() {
 	}
 
 	if *check {
-		if err := codegen.Check(dir); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+		for _, err := range []error{codegen.Check(dir), client.Check(dir)} {
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
 		}
 		return
 	}
 
-	written, err := codegen.Generate(dir)
+	handlers, err := codegen.Generate(dir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	for _, path := range written {
+	clients, err := client.Generate(dir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	for _, path := range append(handlers, clients...) {
 		fmt.Println(path)
 	}
 }

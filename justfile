@@ -38,7 +38,7 @@ integration:
 generate-check:
     go run ./internal/cmd/averogen -check .
     go generate ./...
-    git diff --exit-code -- '*zz_generated.go'
+    git diff --exit-code -- '*zz_generated*.go'
 
 # 8, 9. Scaffold, build and test the three reference applications.
 reference-apps:
