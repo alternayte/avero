@@ -50,8 +50,16 @@ const Dir = "examples"
 // random value on each run.
 var skipped = []string{"assets/dist/", "go.sum"}
 
-// secretLine matches the generated key of the example environment.
+// secretLine matches the key of the example environment.
 var secretLine = regexp.MustCompile(`(?m)^AVERO_SECRET=.*$`)
+
+// exampleSecret replaces the generated key of an example.
+//
+// The scaffolder writes a new random key for each application. An example
+// stands in a public repository, so its key must be a value that no person
+// trusts. It is long enough to start the application, and it states its own
+// repair.
+const exampleSecret = "AVERO_SECRET=write_a_new_key_with_openssl_rand_hex_32_and_keep_it_secret"
 
 func main() {
 	check := flag.Bool("check", false, "prove that the examples match the templates and write nothing")
@@ -100,6 +108,15 @@ func write(e example, dir, replace string) error {
 	if _, err := client.Generate(dir); err != nil {
 		return err
 	}
+	// The key of an example is a placeholder. See exampleSecret.
+	env := filepath.Join(dir, ".env.example")
+	if body, err := os.ReadFile(env); err == nil {
+		out := secretLine.ReplaceAllString(string(body), exampleSecret)
+		if err := os.WriteFile(env, []byte(out), 0o644); err != nil {
+			return fmt.Errorf("%s does not write: %w", env, err)
+		}
+	}
+
 	// The example must build from the repository, so it carries the sum of
 	// its dependencies. The check runs the same step, so the two go.mod files
 	// hold the same list.
