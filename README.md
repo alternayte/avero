@@ -117,6 +117,7 @@ S7, S8 and S9. Every other shape works today.
 - [Configuration](docs/configuration.md)
 - [Routing and handlers](docs/routing.md)
 - [Views and forms](docs/views.md)
+- [Errors](docs/errors.md)
 - [Assets](docs/assets.md)
 - [The single page shape](docs/spa.md)
 - [HTTP clients](docs/clients.md)

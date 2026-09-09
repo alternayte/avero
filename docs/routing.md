@@ -7,14 +7,23 @@ router.
 
 ```go
 func (m *Module) Routes(r *avero.Router) {
-	r.Get("/{$}", avero.In(m.List))
-	r.Post("/posts", avero.In(m.Create))
-	r.Get("/posts/{id}", avero.In(m.Show))
+	avero.Get(r, "/posts", m.List, avero.Summary("List every post"))
+	avero.Post(r, "/posts", m.Create, avero.Summary("Write one post"))
+	avero.Get(r, "/posts/{id}", m.Show,
+		avero.Summary("Answer one post"),
+		avero.Answers[avero.Problem](http.StatusNotFound, "the post does not exist"))
 }
 ```
 
+The registration reads the type of the input and the type of the answer from
+the handler. The compiler holds both, so a change of either is a fault of the
+build and never a fault of a reader.
+
 Write `/{$}` for the root page. A bare slash takes every path that no other
 route holds, and it conflicts with a mounted handler.
+
+A page of the ssr shape answers a view and names no body, so it registers with
+`r.Get("/posts", avero.In(m.List))`.
 
 `Group` returns a child scope with a prefix and its own middleware. `Mount`
 serves an `http.Handler` under a prefix.
@@ -22,18 +31,27 @@ serves an `http.Handler` under a prefix.
 ## A handler
 
 ```go
-func (m *Module) Create(c *avero.Ctx, in CreateInput) (avero.Response, error) {
-	id, err := m.store.Create(c.Context(), in.Title)
+func (m *Module) Show(c *avero.Ctx, in ShowInput) (avero.Result[View], error) {
+	post, found, err := m.store.Get(c.Context(), in.ID)
 	if err != nil {
-		return nil, err
+		return avero.Result[View]{}, err
 	}
-	c.Success("The post is saved")
-	return avero.Redirect(http.StatusSeeOther, "/"), nil
+	if !found {
+		return avero.Result[View]{}, avero.NotFound("post", in.ID)
+	}
+	return avero.OK(view(post)), nil
 }
 ```
 
-A handler returns a Response. It never writes to the ResponseWriter, so the
-transaction commits before one byte reaches the client.
+The type argument of Result names the body of the answer. `avero.OK` writes
+200, `avero.Created` writes 201, and `avero.Done` writes 204 with no body. A
+handler that answers no body returns `avero.Result[avero.NoBody]`.
+
+A handler never writes to the ResponseWriter, so the transaction commits before
+one byte reaches the client.
+
+A page of the ssr shape answers a view instead, so it returns
+`(avero.Response, error)` and renders with `avero.View`.
 
 ## The input type
 
@@ -122,22 +140,32 @@ handler, and it writes an OpenAPI 3.1 document:
   422 for a request that fails validation, and 500 for a handler that returns
   an error.
 
-A handler states its answer with a directive, and the description then carries
-the schema of the type:
+The command runs the application with its inspection flag and reads the
+operations that the router holds. A route registration touches no database and
+opens no port, so the command needs no infrastructure. It reads no comment.
+
+The type of each handler states the schema of its answer:
 
 ```go
-// List answers every task.
-//
-//avero:response 200 TaskList
-func (m *Module) List(c *avero.Ctx, in ListInput) (avero.Response, error)
+func (m *Module) List(c *avero.Ctx, in ListInput) (avero.Result[TaskList], error)
 ```
 
-The description holds one schema for each type that a directive names, and for
+The description holds one schema for each type that a handler names, and for
 each type that such a type holds. A field is required, because Go writes every
 field of a struct, unless its JSON tag carries omitempty.
 
-A handler with no directive states the status of its answers and no schema,
-because Go states the shape and no tag does.
+An option states what a signature cannot carry:
+
+| Option | Meaning |
+|---|---|
+| `avero.Summary("List every post")` | the line that a person reads |
+| `avero.Tags("posts")` | the group of the operation |
+| `avero.Deprecated()` | the operation that a caller must leave |
+| `avero.Answers[T](code, "why")` | one more status, with the type of its body |
+| `avero.AnswersNothing(code, "why")` | one more status, with no body |
+
+Every route states its faults as a problem document against one Problem schema.
+A route that binds a value states 400 and 422. See [Errors](errors.md).
 
 ## The modules
 

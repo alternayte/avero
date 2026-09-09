@@ -85,16 +85,16 @@ the API, and the generator writes the client of the front end from it:
 Go handler  →  openapi.json  →  web/src/client/  →  Board.tsx
 ```
 
-The handler states its answer with a directive:
+The type of the handler states its answer:
 
 ```go
-// List answers every task.
-//
-//avero:response 200 TaskList
-func (m *Module) List(c *avero.Ctx, in ListInput) (avero.Response, error) {
-	return avero.JSON(http.StatusOK, out), nil
+func (m *Module) List(c *avero.Ctx, in ListInput) (avero.Result[TaskList], error) {
+	return avero.OK(out), nil
 }
 ```
+
+The compiler holds the type, so a change of the answer reaches the front end as
+a fault of the build and never as a surprise at run time.
 
 The generator writes the types, the calls and the TanStack Query options:
 

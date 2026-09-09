@@ -52,9 +52,9 @@ internal/features/          one directory for each feature. Each holds a
                             package that drel writes.
 internal/ui/                the views. They import no feature package.
 web/                        the front end. TypeScript, React and Vite.
-web/src/client/             the generated client. Never edit it. State the
-                            answer of a handler with //avero:response, then
-                            run `avero build`.
+web/src/client/             the generated client. Never edit it. Change the
+                            type of the answer of a handler, then run
+                            `avero build`.
 drel.yaml                   the model packages and the migrations of drel
 assets/                     the source of the stylesheet and of the script
 avero.json                  the shape and the asset pipeline
@@ -74,6 +74,12 @@ avero.json                  the shape and the asset pipeline
 - Never relax a test to make the gate pass. Never skip a test.
 - Never edit a generated file by hand. Change the input type or the model, then
   run `avero generate`.
+- A handler answers `avero.Result[T]`, and the type states the body. Register a
+  route with `avero.Get(r, "/things", m.List)`, which reads the types of the
+  handler. The description of the API needs no comment.
+- A failure returns a problem, such as `avero.NotFound("thing", id)`. The
+  router writes the document that RFC 9457 states. Do not write a map of one
+  string.
 - A store writes no SQL string. It reads and writes with the typed API of drel,
   so a name fault appears at compile time.
 

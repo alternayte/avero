@@ -28,8 +28,18 @@ tests of one feature. A slice imports no other slice.
    `avero generate` after each change.
 
 4. Change the handlers in `handlers.go`. A handler has the shape
-   `func (m *Module) Name(c *avero.Ctx, in Input) (avero.Response, error)`.
-   It returns a Response. It never writes to the ResponseWriter.
+   `func (m *Module) Name(c *avero.Ctx, in Input) (avero.Result[View], error)`.
+   The type argument names the body of the answer, and the description of the
+   API reads it. Write `avero.OK(v)`, `avero.Created(v)` or `avero.Done()`. A
+   handler never writes to the ResponseWriter.
+
+   Answer a failure with a problem, such as `avero.NotFound("<name>", in.ID)`.
+   The router writes the document that RFC 9457 states. Do not write a map of
+   one string.
+
+   Register a route with `avero.Get(r, "/<name>s", m.List)`, which reads the
+   types of the handler. State a further answer with an option, such as
+   `avero.Answers[avero.Problem](404, "the <name> does not exist")`.
 
 5. Change the row in `model/<name>.go`. A `db` tag names the column. Run
    `avero generate`, which writes the columns and the repository.
