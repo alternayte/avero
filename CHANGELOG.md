@@ -3,12 +3,15 @@
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## v0.2.1
 
 ### Changed
 
 - drel v0.7.1. The generated `Tx` fills its module holder now. A call of
-  `db.Tx(ctx).Modules.<Module>.<Rows>` held nil in v0.7.0.
+  `db.Tx(ctx).Modules.<Module>.<Rows>` held nil in v0.7.0. An application
+  that stands already reads the fix with
+  `go get github.com/alternayte/drel@v0.7.1`, then `avero generate`.
+  `avero new` writes v0.7.1 in the go.mod of a new application.
 
 ### Fixed
 
