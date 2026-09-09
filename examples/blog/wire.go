@@ -37,8 +37,6 @@ func wire(engine *drel.Engine, cfg Config) (*avero.Router, *avero.ModuleSet, err
 		return ui.Page("New post", ui.NewPostForm())
 	}))
 
-	r.Use(avero.RequestID())
-	r.Use(avero.Recover(nil))
 	// An inspection command carries a zero configuration. The router only
 	// records the middleware there, so a fixed value keeps the chain of an
 	// inspection identical to the chain of a run.
@@ -46,11 +44,10 @@ func wire(engine *drel.Engine, cfg Config) (*avero.Router, *avero.ModuleSet, err
 	if secret == "" {
 		secret = avero.Secret(strings.Repeat("0", 64))
 	}
-	r.Use(avero.CSRF(secret))
-	r.Use(avero.Flash(secret))
-	if engine != nil {
-		r.Use(avero.Transaction(engine))
-	}
+	// Stack states the order of the chain one time. A nil engine leaves the
+	// transaction out. Add the session and the authentication of auth-all in
+	// the Session and Auth fields, and Stack puts them in the correct place.
+	r.Use(avero.Stack{Secret: secret, Engine: engine}.Middleware()...)
 
 	files, err := fs.Sub(dist, "assets/dist")
 	if err != nil {

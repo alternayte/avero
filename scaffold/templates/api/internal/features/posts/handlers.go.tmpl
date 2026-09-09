@@ -34,7 +34,7 @@ func view(p *model.Post) View {
 // The type of the answer states the shape that the description of the API
 // carries. The compiler holds it, so no comment can drift from it.
 func (m *Module) List(c *avero.Ctx, in ListInput) (PostList, error) {
-	posts, err := m.store.List(c.Context(), in.Search)
+	posts, err := m.store.List(c, in.Search)
 	if err != nil {
 		return PostList{}, err
 	}
@@ -47,7 +47,7 @@ func (m *Module) List(c *avero.Ctx, in ListInput) (PostList, error) {
 
 // Create writes one post.
 func (m *Module) Create(c *avero.Ctx, in CreateInput) (View, error) {
-	post, err := m.store.Create(c.Context(), in.Title, in.Body)
+	post, err := m.store.Create(c, in.Title, in.Body)
 	if err != nil {
 		return View{}, err
 	}
@@ -56,7 +56,7 @@ func (m *Module) Create(c *avero.Ctx, in CreateInput) (View, error) {
 
 // Show answers one post.
 func (m *Module) Show(c *avero.Ctx, in ShowInput) (View, error) {
-	post, found, err := m.store.Get(c.Context(), in.ID)
+	post, found, err := m.store.Get(c, in.ID)
 	if err != nil {
 		return View{}, err
 	}
@@ -69,7 +69,7 @@ func (m *Module) Show(c *avero.Ctx, in ShowInput) (View, error) {
 
 // Delete removes one post.
 func (m *Module) Delete(c *avero.Ctx, in DeleteInput) (avero.NoBody, error) {
-	if err := m.store.Delete(c.Context(), in.ID); err != nil {
+	if err := m.store.Delete(c, in.ID); err != nil {
 		return avero.NoBody{}, err
 	}
 	return avero.NoBody{}, nil

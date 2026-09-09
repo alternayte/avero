@@ -3,6 +3,30 @@
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- **`avero.Ctx` is a `context.Context`.** A handler passes `c` where a context
+  belongs, and it no longer writes `c.Context()`. The four methods read the
+  context of the current request, so a value that a middleware adds after the
+  router built the Ctx is visible. `c.Context()` stays for a caller that wants
+  the plain value.
+- **`avero.Stack` states the middleware chain.** One call gives the order that
+  the SDD names: request ID, recover, access log, trace, flash, session, CSRF,
+  transaction and authentication. A field with no value leaves its middleware
+  out. `Middleware` builds the chain of a browser application and `API` builds
+  the chain of a JSON service, which carries no flash cookie and no CSRF token.
+  The three scaffold shapes use it.
+
+### Fixed
+
+- **`avero.Adapt` reports the status that its middleware wrote.** An adapted
+  `net/http` middleware that answered the request itself always reported 200,
+  so the transaction middleware committed a request that it must roll back. A
+  rejection such as a 401 still commits, because it writes no row. A fault such
+  as a 500 now rolls back.
+
 ## v0.3.1
 
 ### Added
