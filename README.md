@@ -65,6 +65,7 @@ avero doctor          prove the configuration and the database
 avero verify          run the gate
 avero mcp             serve the agent surface over stdio
 avero js pin <pkg>    fetch a bundled module into the vendor directory
+avero ui add <lib>    add a component library, such as basecoat
 avero assets init     write the package.json of tier 1
 ```
 

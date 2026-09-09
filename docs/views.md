@@ -85,6 +85,24 @@ method must send the same token in the field `_csrf` or in the header
 `X-CSRF-Token`. A request that does not match answers 419 and never reaches the
 handler.
 
+## The toaster
+
+`avero ui add basecoat` writes `internal/ui/toaster.templ`, which renders the
+toaster of Basecoat:
+
+```templ
+@Toasts()
+```
+
+The server renders each toast, and Basecoat watches the document with a
+`MutationObserver`. A toast that a Datastar patch inserts into the page
+therefore initializes itself and gets its timer, with no script of the
+application. Every toast carries a dismiss button in its footer, because the
+click handler of the toaster closes a toast for a button of a footer only. A
+pointer that rests on a toast pauses its timer, so a toast with no button
+never hides while the pointer stays on it. See [The command that adds a
+component library](ui.md).
+
 ## A fragment
 
 `ds` and `htmx` render the same components into a fragment or into a stream.
