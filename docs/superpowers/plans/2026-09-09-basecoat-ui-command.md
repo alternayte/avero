@@ -26,7 +26,7 @@
 
 ### Task 1: Prove that esbuild takes the bundle of Basecoat
 
-The scripts of Basecoat are IIFE files and not ES modules. Step 4 of the command adds `import "./vendor/basecoat/js/all.min.js";` to `assets/js/app.js`. If esbuild refuses an IIFE import, the command needs another step, so this task runs first and changes nothing else.
+The scripts of Basecoat are IIFE files and not ES modules. Step 4 of the command adds `import "../vendor/basecoat/js/all.min.js";` to `assets/js/app.js`. If esbuild refuses an IIFE import, the command needs another step, so this task runs first and changes nothing else.
 
 **Files:**
 - Test: `assets/build_test.go` (append)
