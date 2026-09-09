@@ -3,6 +3,7 @@ package scaffold_test
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -349,5 +350,30 @@ func TestWriteSliceRefusesASliceThatExists(t *testing.T) {
 	_, err := scaffold.WriteSlice(scaffold.SliceOptions{Name: "comment", Dir: dir})
 	if err == nil || !strings.Contains(err.Error(), "already exists") {
 		t.Fatalf("WriteSlice returned %v, want a fault", err)
+	}
+}
+
+// A scaffolded application requires the version of Avero that the scaffolder
+// names, so the name must be a release that stands. A stale name gives an
+// application that does not compile, because it calls a function that the
+// older release does not carry. Each example replaces the module with the
+// repository, so the examples hide the fault.
+//
+// The name must be the newest tag. A release therefore writes the tag first,
+// and the constant follows it, because `go mod tidy` reads a version that
+// exists and no other.
+func TestTheDefaultAveroVersionNamesTheNewestTag(t *testing.T) {
+	out, err := exec.Command("git", "tag", "--sort=-v:refname").Output()
+	if err != nil {
+		t.Skip("git names no tag here")
+	}
+	tags := strings.Fields(string(out))
+	if len(tags) == 0 {
+		t.Skip("the clone carries no tag")
+	}
+	if scaffold.DefaultAveroVersion != tags[0] {
+		t.Fatalf("the scaffolder writes %s and the newest tag is %s\n"+
+			"  → Set DefaultAveroVersion to the newest release, because `avero new` writes it in go.mod",
+			scaffold.DefaultAveroVersion, tags[0])
 	}
 }

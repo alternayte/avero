@@ -3,6 +3,23 @@
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.2.2
+
+### Fixed
+
+- `avero new` writes a version of Avero that stands. The scaffolder named
+  v0.1.0, which carries no `MigrationCheckOnFS`, so an application that a
+  released binary wrote did not compile. Every example replaces the module
+  with the repository, so the examples hid the fault. A test proves now that
+  the scaffolder names the newest tag.
+
+### Added
+
+- A test reads one row through `db.Tx(ctx).Modules` of a scaffolded
+  application. No template reads the module holder, so the gate reached no
+  part of it before. The test fails against drel v0.7.0 and passes against
+  v0.7.1.
+
 ## v0.2.1
 
 ### Changed

@@ -547,3 +547,71 @@ func TestTheOpenAPIDescriptionOfAScaffoldedApplication(t *testing.T) {
 		}
 	}
 }
+
+// The generated DB carries a repository for each module of drel.yaml. drel
+// v0.7.0 left the holder empty, so a call of Modules gave a nil pointer. No
+// template reads the holder, so the gate must reach it here.
+func TestTheGeneratedModulesHoldARepository(t *testing.T) {
+	root := repoRoot(t)
+	dir := t.TempDir()
+	if code, _, errOut := run(t, dir, "new", "orders", "--shape", "api", "--replace", root); code != 0 {
+		t.Fatalf("avero new returned %d: %s", code, errOut)
+	}
+	app := filepath.Join(dir, "orders")
+
+	source := `package main
+
+import (
+	"context"
+	"path/filepath"
+	"testing"
+
+	"github.com/alternayte/drel"
+
+	"orders/internal/db"
+	"orders/internal/features/posts/model"
+)
+
+// The module holder must carry the repository of each slice, and the
+// repository must read the table.
+func TestTheModuleHolderReads(t *testing.T) {
+	handle, err := db.Open("file:" + filepath.Join(t.TempDir(), "modules.db"))
+	if err != nil {
+		t.Fatalf("the database does not open: %v", err)
+	}
+	defer handle.Close()
+	if _, err := handle.ApplyMigrationsFS(context.Background(), migrationSets()...); err != nil {
+		t.Fatalf("the migrations do not apply: %v", err)
+	}
+
+	err = handle.WithTx(context.Background(), func(ctx context.Context) error {
+		tx := drel.MustFromContext(ctx)
+		repos := handle.Tx(ctx)
+		if repos.Modules.Posts.Posts == nil {
+			t.Fatal("the module holder carries no repository of the posts slice")
+		}
+		repos.Modules.Posts.Posts.Add(model.NewPost("A title", "A body"))
+		if err := tx.SaveChanges(ctx); err != nil {
+			return err
+		}
+		rows, err := repos.Modules.Posts.Posts.AsNoTracking().All(ctx)
+		if err != nil {
+			return err
+		}
+		if len(rows) != 1 || rows[0].Title != "A title" {
+			t.Fatalf("the module holder read %d rows", len(rows))
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("the transaction returned %v", err)
+	}
+}
+`
+	if err := os.WriteFile(filepath.Join(app, "modules_test.go"), []byte(source), 0o644); err != nil {
+		t.Fatalf("WriteFile returned %v", err)
+	}
+	if out, err := goRun(t, app, "test", "-run", "TestTheModuleHolderReads", "-count=1", "."); err != nil {
+		t.Fatalf("the module holder failed:\n%s", out)
+	}
+}

@@ -2,7 +2,7 @@ module orders
 
 go 1.26.2
 
-require github.com/alternayte/avero v0.1.0
+require github.com/alternayte/avero v0.2.1
 
 require (
 	github.com/alternayte/drel v0.7.1

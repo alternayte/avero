@@ -195,7 +195,7 @@ func validate(opts *Options) error {
 // The versions that go.mod carries when the caller names none.
 const (
 	// DefaultAveroVersion is the version of the host.
-	DefaultAveroVersion = "v0.1.0"
+	DefaultAveroVersion = "v0.2.1"
 	// DefaultGoVersion is the version line of go.mod.
 	DefaultGoVersion = "1.26.2"
 	// DefaultTemplVersion is the version of the templ generator. The ssr
