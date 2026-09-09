@@ -79,6 +79,9 @@ func runUI(ctx context.Context, s Streams, args []string) int {
 	if err := writeToaster(dir, s); err != nil {
 		return fail(s, err)
 	}
+	if err := patchLayout(dir, s); err != nil {
+		return fail(s, err)
+	}
 	_, _ = fmt.Fprintf(s.Out, "\nRun `avero dev` and read the page.\n")
 	return 0
 }
@@ -161,4 +164,70 @@ func writeToaster(dir string, s Streams) error {
 	}
 	_, _ = fmt.Fprintln(s.Out, "wrote internal/ui/toaster.templ")
 	return nil
+}
+
+// scaffoldToasts is the block that the ssr layout of the scaffold defines. The
+// command removes it, because the toaster component defines the same name.
+const scaffoldToasts = "// Toasts renders the messages of this response."
+
+// patchLayout moves the call of Toasts to the end of the body and removes the
+// definition that the scaffold wrote.
+//
+// The command patches a layout that still matches the scaffold. A person who
+// changed the layout owns it, so the command changes nothing and prints the
+// two lines. See the design, D2.
+func patchLayout(dir string, s Streams) error {
+	file := filepath.Join(dir, "internal", "ui", "layout.templ")
+	body, err := os.ReadFile(file)
+	if err != nil {
+		return nil
+	}
+	text := string(body)
+	if !strings.Contains(text, "@Toasts()") || !strings.Contains(text, scaffoldToasts) {
+		printLayoutLines(s)
+		return nil
+	}
+
+	// Remove the call from its place inside main.
+	out := []string{}
+	for _, line := range strings.Split(text, "\n") {
+		if strings.TrimSpace(line) == "@Toasts()" {
+			continue
+		}
+		out = append(out, line)
+	}
+	text = strings.Join(out, "\n")
+
+	// Put the call before the end of the body, because the toaster is a fixed
+	// element of the page and not of the content.
+	at := strings.Index(text, "</body>")
+	if at < 0 {
+		printLayoutLines(s)
+		return nil
+	}
+	text = text[:at] + "\t\t\t@Toasts()\n\t\t" + text[at:]
+
+	// Remove the definition of the scaffold, which reaches to the end of the
+	// file.
+	if cut := strings.Index(text, scaffoldToasts); cut >= 0 {
+		text = strings.TrimRight(text[:cut], "\n") + "\n"
+	}
+
+	if err := os.WriteFile(file, []byte(text), 0o644); err != nil {
+		return fmt.Errorf("avero ui: internal/ui/layout.templ does not write: %w\n  → Give the process the right to write the application directory", err)
+	}
+	_, _ = fmt.Fprintln(s.Out, "patched internal/ui/layout.templ")
+	return nil
+}
+
+// printLayoutLines states the change that a person makes by hand.
+func printLayoutLines(s Streams) {
+	_, _ = fmt.Fprint(s.Out, `
+internal/ui/layout.templ does not match the scaffold, so it did not change.
+Make two changes by hand:
+
+  1. Move @Toasts() out of <main> and put it before </body>.
+  2. Delete the templ Toasts() block, because internal/ui/toaster.templ
+     defines that name now.
+`)
 }

@@ -258,3 +258,85 @@ func TestUIAddRefusesAShapeThatServesJSON(t *testing.T) {
 		t.Fatalf("the fault states no repair: %q", errOut)
 	}
 }
+
+// scaffoldLayout holds the exact body that
+// scaffold/templates/ssr/internal/ui/layout.templ.tmpl writes for an
+// application named blog with Datastar.
+const scaffoldLayout = `package ui
+
+import "github.com/alternayte/avero/view"
+
+// Page wraps a body in the layout of the application.
+templ Page(title string, body templ.Component) {
+	<!doctype html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ title } · blog</title>
+			<link rel="stylesheet" href={ Asset("app.css") }/>
+			<script type="module" src={ Asset("app.js") }></script>
+		</head>
+		// The signal carries the CSRF token, so a Datastar action sends it in
+		// the header that the middleware reads.
+		<body data-signals-csrf={ "'" + view.CSRFToken(ctx) + "'" }>
+			<header><a href="/">blog</a></header>
+			<main>
+				@Toasts()
+				@body
+			</main>
+		</body>
+	</html>
+}
+
+// Toasts renders the messages of this response. The flash middleware carries a
+// message across a redirect.
+templ Toasts() {
+	if toasts := view.Toasts(ctx); len(toasts) > 0 {
+		<ul class="toasts">
+			for _, toast := range toasts {
+				<li class={ toast.Level }>{ toast.Message }</li>
+			}
+		</ul>
+	}
+}
+`
+
+func TestUIAddBasecoatPatchesALayoutThatItRecognizes(t *testing.T) {
+	dir := uiProject(t)
+	writeFile(t, dir, "internal/ui/layout.templ", scaffoldLayout)
+
+	if code, out, errOut := run(t, dir, "ui", "add", "basecoat"); code != 0 {
+		t.Fatalf("the command gave %d, said %q and %q", code, out, errOut)
+	}
+
+	layout := read(t, dir, "internal/ui/layout.templ")
+	if strings.Contains(layout, "templ Toasts()") {
+		t.Fatal("the layout still defines Toasts, so the application holds two definitions")
+	}
+	body := strings.Index(layout, "@Toasts()")
+	main := strings.Index(layout, "</main>")
+	if body < 0 || body < main {
+		t.Fatalf("the call of Toasts stands inside main:\n%s", layout)
+	}
+	if !strings.Contains(layout, "</body>") {
+		t.Fatalf("the patch broke the layout:\n%s", layout)
+	}
+}
+
+func TestUIAddBasecoatLeavesAChangedLayoutAlone(t *testing.T) {
+	dir := uiProject(t)
+	changed := "package ui\n\ntempl Page(title string, body templ.Component) {\n\t<html><body>@body</body></html>\n}\n"
+	writeFile(t, dir, "internal/ui/layout.templ", changed)
+
+	code, out, errOut := run(t, dir, "ui", "add", "basecoat")
+	if code != 0 {
+		t.Fatalf("the command gave %d and said %q", code, errOut)
+	}
+	if read(t, dir, "internal/ui/layout.templ") != changed {
+		t.Fatal("the command changed a layout that it does not recognize")
+	}
+	if !strings.Contains(out, "@Toasts()") {
+		t.Fatalf("the command printed no line to paste: %q", out)
+	}
+}
