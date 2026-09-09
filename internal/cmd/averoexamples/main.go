@@ -12,6 +12,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -161,8 +162,9 @@ func write(e example, dir, replace string) error {
 		code := cli.Run(ctx, cli.Streams{Out: &out, Err: &out, Dir: dir}, []string{"ui", "add", "basecoat"})
 		_, _ = os.Stdout.Write(out.Bytes())
 		if code != 0 {
-			return fmt.Errorf("avero ui add basecoat failed in %s with exit code %d\n%s\n  → Repair the fault that the output names, then run the command again",
+			message := fmt.Sprintf("avero ui add basecoat failed in %s with exit code %d\n%s\n  → Repair the fault that the output names. Run the command again.",
 				dir, code, strings.TrimSpace(out.String()))
+			return errors.New(message)
 		}
 		// The component is new, so templ writes its Go file. The call sits
 		// here, between the migration and cli.Templ, so the one call of
