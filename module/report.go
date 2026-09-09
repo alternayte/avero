@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -129,4 +130,90 @@ func (s *Set) WriteReport(w io.Writer, asJSON bool) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(rep)
+}
+
+// SchemaSchemaID names the schema that a JSON model report follows. See
+// module/schema_models.json.
+const SchemaSchemaID = "https://avero.dev/schema/model-report/v1"
+
+// ModelSchema holds module/schema_models.json. `avero schema --json` emits a
+// document that this schema accepts. See AN-3.
+//
+//go:embed schema_models.json
+var ModelSchema []byte
+
+// SchemaReport lists the models of every module. `avero schema` prints it.
+type SchemaReport struct {
+	// Models holds one row for each model, ordered by module and then by
+	// model name, so that two runs give the same order. See AN-4.
+	Models []ModelRow `json:"models"`
+}
+
+// ModelRow is one model of one module.
+type ModelRow struct {
+	// Module is the module that owns the model.
+	Module string `json:"module"`
+	// Name is the name of the Go type.
+	Name string `json:"name"`
+	// Table is the name of the database table.
+	Table string `json:"table"`
+	// Fields lists the fields of the model.
+	Fields []FieldDesc `json:"fields"`
+}
+
+// Schema returns the models that the modules describe.
+func Schema(s *Set) *SchemaReport {
+	out := &SchemaReport{Models: []ModelRow{}}
+	for _, row := range s.rows {
+		if row.Description == nil {
+			continue
+		}
+		for _, m := range row.Description.Models {
+			fields := m.Fields
+			if fields == nil {
+				fields = []FieldDesc{}
+			}
+			out.Models = append(out.Models, ModelRow{
+				Module: row.Module, Name: m.Name, Table: m.Table, Fields: fields,
+			})
+		}
+	}
+	sort.Slice(out.Models, func(i, j int) bool {
+		if out.Models[i].Module != out.Models[j].Module {
+			return out.Models[i].Module < out.Models[j].Module
+		}
+		return out.Models[i].Name < out.Models[j].Name
+	})
+	return out
+}
+
+// String returns a table with one row for each model.
+func (rep *SchemaReport) String() string {
+	var b strings.Builder
+	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+	_, _ = fmt.Fprintln(w, "MODULE\tMODEL\tTABLE\tFIELDS")
+	for _, row := range rep.Models {
+		names := make([]string, 0, len(row.Fields))
+		for _, f := range row.Fields {
+			names = append(names, f.Name+" "+f.Type)
+		}
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", row.Module, row.Name, row.Table, dash(strings.Join(names, ", ")))
+	}
+	_ = w.Flush()
+	return b.String()
+}
+
+// schemaJSON is the wire shape of a model report.
+type schemaJSON struct {
+	Schema string     `json:"schema"`
+	Models []ModelRow `json:"models"`
+}
+
+// MarshalJSON emits the report with a stable schema. See AN-3.
+func (rep *SchemaReport) MarshalJSON() ([]byte, error) {
+	rows := rep.Models
+	if rows == nil {
+		rows = []ModelRow{}
+	}
+	return json.Marshal(schemaJSON{Schema: SchemaSchemaID, Models: rows})
 }

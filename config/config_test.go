@@ -408,3 +408,24 @@ func TestTheSecretRedactsInTheReport(t *testing.T) {
 		t.Fatalf("the report leaks the secret:\n%s", rep.String())
 	}
 }
+
+func TestARequiredVariableWithAnEmptyValueIsAFault(t *testing.T) {
+	// An empty value is not a value. The loader must stop the process, so the
+	// code behind the variable never reads an empty key. See DX-8.
+	pairs := baseEnv(nil)
+	pairs["AVERO_SECRET"] = ""
+	_, _, err := config.LoadFrom[config.BaseConfig](context.Background(), env(pairs))
+	if err == nil {
+		t.Fatal("LoadFrom accepted an empty AVERO_SECRET")
+	}
+	var faults *config.FaultList
+	if !errors.As(err, &faults) {
+		t.Fatalf("the error is %T, want *config.FaultList", err)
+	}
+	if !strings.Contains(faults.Faults[0].Message, "empty value") {
+		t.Fatalf("the message is %q", faults.Faults[0].Message)
+	}
+	if faults.Faults[0].Repair == "" {
+		t.Fatal("the fault states no repair")
+	}
+}

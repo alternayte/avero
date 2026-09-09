@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avero.dev/schema/verify-report/v1",
+  "title": "Avero verify report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "ok", "records"],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "https://avero.dev/schema/verify-report/v1"
+    },
+    "ok": { "type": "boolean" },
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["step", "state", "message", "file", "line", "column"],
+        "properties": {
+          "step": { "type": "string" },
+          "state": { "type": "string", "enum": ["pass", "fail"] },
+          "message": { "type": "string" },
+          "file": { "type": "string" },
+          "line": { "type": "integer" },
+          "column": { "type": "integer" }
+        }
+      }
+    }
+  }
+}

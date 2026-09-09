@@ -47,7 +47,10 @@ type CreateInput struct {
 // every field that the tags already checked.
 func (in *CreateInput) Check(_ *router.Ctx, f *router.Fields) {
 	if in.Title == "admin" {
-		f.Add("Title", "must not be a reserved word")
+		// A custom rule names the field with the name that the person sent,
+		// as the generated rules do. A view then reads the message with the
+		// name that it writes in the form. See S10.
+		f.Add("title", "must not be a reserved word")
 	}
 }
 

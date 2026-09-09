@@ -1,0 +1,89 @@
+// Command [[.Name]] is an Avero application of the [[.Shape]] shape.
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	"github.com/alternayte/avero"
+	"github.com/alternayte/drel"
+)
+
+// migrationsDir holds the SQL files of the application.
+const migrationsDir = "migrations"
+
+func main() { os.Exit(run()) }
+
+// run builds the application and returns the exit code of the process.
+func run() int {
+	// An inspection command reads the routes and the modules of this
+	// application. It opens no database and it reads no configuration, so
+	// `avero routes` works on a machine with no database.
+	if avero.Inspecting(os.Args[1:]) {
+		r, modules, err := wire(nil, Config{})
+		if err != nil {
+			return avero.Exit(os.Stderr, err)
+		}
+		return avero.Inspect[Config](os.Args[1:], os.Stdout, os.Stderr, r, modules,
+			checks(os.Getenv("DATABASE_URL"), false)...)
+	}
+
+	ctx := context.Background()
+	cfg, err := avero.Load[Config](ctx)
+	if err != nil {
+		return avero.Exit(os.Stderr, err)
+	}
+
+	engine, err := drel.NewEngine(cfg.DatabaseURL)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "the database does not open: %v\n  → Prove DATABASE_URL, and start the database\n", err)
+		return 1
+	}
+	defer engine.Close()
+
+	r, modules, err := wire(engine, *cfg)
+	if err != nil {
+		return avero.Exit(os.Stderr, err)
+	}
+	handler, err := r.Handler()
+	if err != nil {
+		return avero.Exit(os.Stderr, err)
+	}
+	_ = modules
+
+	app := avero.New(cfg.BaseConfig,
+		avero.WithHandler(handler),
+		avero.WithChecks(append([]avero.Check{avero.SecretCheck(cfg.Secret)},
+			checks(cfg.DatabaseURL, cfg.MigrateOnBoot)...)...),
+		avero.WithMigrator(migrator{engine: engine}))
+
+	return avero.Exit(os.Stderr, app.Run(ctx))
+}
+
+// checks are the boot checks of this application. `avero doctor` runs the same
+// list, so a fault appears before the process serves. See DX-8.
+//
+// The pending migration check runs only when the application applies no
+// migration at boot, because the boot applies the migrations after the checks.
+func checks(dsn string, migrateOnBoot bool) []avero.Check {
+	if dsn == "" {
+		return nil
+	}
+	out := []avero.Check{avero.DatabaseCheck(dsn)}
+	if !migrateOnBoot {
+		out = append(out, avero.MigrationCheck(dsn, migrationsDir))
+	}
+	return out
+}
+
+// migrator applies the pending migrations when MIGRATE_ON_BOOT is true.
+type migrator struct {
+	engine *drel.Engine
+}
+
+// Migrate applies every migration that the database does not hold.
+func (m migrator) Migrate(ctx context.Context) error {
+	_, err := m.engine.ApplyMigrations(ctx, migrationsDir)
+	return err
+}

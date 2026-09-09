@@ -128,34 +128,34 @@ func (in *CreateInput) Bind(c *router.Ctx) error {
 // Validate checks CreateInput and records one message for each field that failed.
 func (in *CreateInput) Validate(c *router.Ctx, f *router.Fields) {
 	if strings.TrimSpace(in.BoardID) == "" {
-		f.Add("BoardID", "is required")
+		f.Add("board_id", "is required")
 	}
 	if in.BoardID != "" && !router.IsUUID(in.BoardID) {
-		f.Add("BoardID", "must be a UUID")
+		f.Add("board_id", "must be a UUID")
 	}
 	if strings.TrimSpace(in.Title) == "" {
-		f.Add("Title", "is required")
+		f.Add("title", "is required")
 	}
 	if utf8.RuneCountInString(in.Title) < 3 {
-		f.Add("Title", "must hold at least 3 characters")
+		f.Add("title", "must hold at least 3 characters")
 	}
 	if utf8.RuneCountInString(in.Title) > 50 {
-		f.Add("Title", "must hold at most 50 characters")
+		f.Add("title", "must hold at most 50 characters")
 	}
 	if strings.TrimSpace(in.Email) == "" {
-		f.Add("Email", "is required")
+		f.Add("email", "is required")
 	}
 	if in.Email != "" && !router.IsEmail(in.Email) {
-		f.Add("Email", "must be an email address")
+		f.Add("email", "must be an email address")
 	}
 	if in.Role != "" && !router.OneOf(in.Role, "admin", "member", "viewer") {
-		f.Add("Role", "must be one of admin, member, viewer")
+		f.Add("role", "must be one of admin, member, viewer")
 	}
 	if in.Page < 1 {
-		f.Add("Page", "must be 1 or more")
+		f.Add("page", "must be 1 or more")
 	}
 	if in.Page > 100 {
-		f.Add("Page", "must be 100 or less")
+		f.Add("page", "must be 100 or less")
 	}
 
 	// The custom rule of this input type.
@@ -182,6 +182,6 @@ func (in *ListInput) Bind(c *router.Ctx) error {
 // Validate checks ListInput and records one message for each field that failed.
 func (in *ListInput) Validate(c *router.Ctx, f *router.Fields) {
 	if utf8.RuneCountInString(in.Query) > 64 {
-		f.Add("Query", "must hold at most 64 characters")
+		f.Add("q", "must hold at most 64 characters")
 	}
 }

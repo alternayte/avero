@@ -199,9 +199,31 @@ func (r *Router) Handler() (http.Handler, error) {
 	}
 	mux := http.NewServeMux()
 	for _, route := range r.reg.routes {
-		mux.Handle(route.muxPattern(), r.serve(route))
+		if err := mount(mux, route, r.serve(route)); err != nil {
+			return nil, &Faults{Faults: []*Fault{err}}
+		}
 	}
 	return mux, nil
+}
+
+// mount registers one route on the mux and turns a conflict into a fault.
+//
+// net/http panics when two patterns overlap, for example `GET /` and
+// `/assets/`. The panic names no file that a person wrote, so the router
+// catches it and names the route and its position instead. See DX-6.
+func mount(mux *http.ServeMux, route Route, h http.Handler) (fault *Fault) {
+	defer func() {
+		if r := recover(); r != nil {
+			fault = &Fault{
+				File: route.File, Line: route.Line,
+				Message: fmt.Sprintf("the pattern %s conflicts with another route: %v",
+					route.muxPattern(), r),
+				Repair: "Give one of the two routes a pattern of its own, such as `/{$}` for the root page",
+			}
+		}
+	}()
+	mux.Handle(route.muxPattern(), h)
+	return nil
 }
 
 // serve turns one route into an http.Handler.

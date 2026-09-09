@@ -163,6 +163,17 @@ func (w *walker) leaf(v reflect.Value, sf reflect.StructField, tg tag, name, pat
 	row := Field{Path: path, Name: name, Type: sf.Type.String(), Secret: tg.secret, Required: tg.required}
 
 	switch raw, set := w.loader.lookup(name); {
+	case set && raw == "" && tg.required:
+		// An empty value is not a value. A required variable that holds one
+		// must stop the process, because the code behind it reads a key or an
+		// address that cannot work. See DX-8.
+		row.Source = SourceAbsent
+		w.faults.add(&Fault{
+			Path:    w.root + "." + path,
+			Name:    name,
+			Message: fmt.Sprintf("%s is required and it holds an empty value", name),
+			Repair:  fmt.Sprintf("Set %s in the environment, or run `avero doctor` to see every variable", name),
+		})
 	case set:
 		row.Source = SourceEnv
 		row.Value = show(raw, tg.secret)

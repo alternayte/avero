@@ -59,6 +59,12 @@ func emitBind(b *strings.Builder, in input, imports map[string]bool) {
 	b.WriteString("// The sources are the JSON body, the form, the query and the path, in that\n")
 	b.WriteString("// order. A later source replaces an earlier one, so the path wins.\n")
 	fmt.Fprintf(b, "func (in *%s) Bind(c *router.Ctx) error {\n", in.Name)
+	if len(in.Fields) == 0 {
+		// An input with no field reads nothing. The request stays unread,
+		// because a declared and unused variable does not compile.
+		b.WriteString("\treturn nil\n}\n\n")
+		return
+	}
 	b.WriteString("\tr := c.Request()\n")
 
 	if anyJSON(in) {
@@ -174,9 +180,24 @@ func emitValidate(b *strings.Builder, in input, imports map[string]bool) {
 	b.WriteString("}\n\n")
 }
 
+// wire returns the name that a message carries for one field.
+//
+// It is the name that the person sent: the form member, then the JSON member,
+// then the query member, then the path member. A view reads the error with the
+// same name that it writes in the form, so the message lands beside the field.
+// See S10. A field with no source tag keeps its Go name.
+func wire(f field) string {
+	for _, name := range []string{f.Form, f.JSON, f.Query, f.Path} {
+		if name != "" {
+			return name
+		}
+	}
+	return f.Name
+}
+
 // emitRule writes one rule.
 func emitRule(b *strings.Builder, f field, r rule, imports map[string]bool) {
-	name := strconv.Quote(f.Name)
+	name := strconv.Quote(wire(f))
 	switch r.Name {
 	case ruleRequired:
 		switch f.Kind {

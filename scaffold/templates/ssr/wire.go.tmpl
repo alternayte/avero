@@ -1,0 +1,66 @@
+package main
+
+import (
+	"embed"
+	"io/fs"
+	"net/http"
+	"strings"
+
+	"github.com/alternayte/avero"
+	"github.com/alternayte/avero/assets"
+	"github.com/alternayte/drel"
+
+	"[[.Module]]/internal/features/posts"
+	"[[.Module]]/internal/ui"
+)
+
+// dist holds the built assets. `avero build` writes them, and the binary
+// carries them, so the server needs no directory beside it.
+//
+//go:embed all:assets/dist
+var dist embed.FS
+
+// wire builds the router and the module set.
+//
+// An inspection command passes a nil engine and a zero configuration, because
+// a route registration touches no database and needs no key.
+func wire(engine *drel.Engine, cfg Config) (*avero.Router, *avero.ModuleSet, error) {
+	manifest, err := avero.LoadManifest(dist, "assets/dist/manifest.json")
+	if err != nil {
+		return nil, nil, err
+	}
+	ui.SetManifest(manifest)
+
+	r := avero.NewRouter(avero.WithForm(func(c *avero.Ctx, f *avero.Fields) avero.ViewComponent {
+		// The form failed validation. The page renders again with the old
+		// input and the field errors. See S10.
+		return ui.Page("New post", ui.NewPostForm())
+	}))
+
+	r.Use(avero.RequestID())
+	r.Use(avero.Recover(nil))
+	// An inspection command carries a zero configuration. The router only
+	// records the middleware there, so a fixed value keeps the chain of an
+	// inspection identical to the chain of a run.
+	secret := cfg.Secret
+	if secret == "" {
+		secret = avero.Secret(strings.Repeat("0", 64))
+	}
+	r.Use(avero.CSRF(secret))
+	r.Use(avero.Flash(secret))
+	if engine != nil {
+		r.Use(avero.Transaction(engine))
+	}
+
+	files, err := fs.Sub(dist, "assets/dist")
+	if err != nil {
+		return nil, nil, err
+	}
+	r.Mount("/assets/", http.StripPrefix("/assets/", assets.Handler(files, manifest)))
+
+	modules := avero.Modules(posts.New(engine))
+	if err := modules.Attach(r); err != nil {
+		return nil, nil, err
+	}
+	return r, modules, nil
+}

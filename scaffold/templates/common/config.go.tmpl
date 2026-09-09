@@ -1,0 +1,15 @@
+package main
+
+import "github.com/alternayte/avero"
+
+// Config holds every variable that this application reads.
+//
+// `avero doctor` prints the whole table, and a variable that is absent stops
+// the process before it serves. See DX-8.
+type Config struct {
+	avero.BaseConfig
+
+	// DatabaseURL is the address of the database. A file address opens
+	// SQLite, and a postgres address opens PostgreSQL.
+	DatabaseURL string `env:"DATABASE_URL" default:"file:[[.Name]].db"`
+}

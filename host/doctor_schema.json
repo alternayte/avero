@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avero.dev/schema/doctor-report/v1",
+  "title": "Avero doctor report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "ok", "checks"],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "https://avero.dev/schema/doctor-report/v1"
+    },
+    "ok": { "type": "boolean" },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "state", "message", "repair"],
+        "properties": {
+          "name": { "type": "string" },
+          "state": { "type": "string", "enum": ["pass", "fail"] },
+          "message": { "type": "string" },
+          "repair": { "type": "string" }
+        }
+      }
+    },
+    "config": { "type": "object" }
+  }
+}

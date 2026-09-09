@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avero.dev/schema/model-report/v1",
+  "title": "Avero model report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "models"],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "https://avero.dev/schema/model-report/v1"
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["module", "name", "table", "fields"],
+        "properties": {
+          "module": { "type": "string" },
+          "name": { "type": "string" },
+          "table": { "type": "string" },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "type"],
+              "properties": {
+                "name": { "type": "string" },
+                "type": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

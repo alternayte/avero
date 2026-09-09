@@ -2,6 +2,7 @@ package router_test
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -278,5 +279,24 @@ func TestAnEmptyReportValidatesAgainstTheSchema(t *testing.T) {
 func TestTheSchemaClosesItsObjects(t *testing.T) {
 	if !strings.Contains(string(router.ReportSchema), `"additionalProperties": false`) {
 		t.Fatal("router/schema.json does not close its objects")
+	}
+}
+
+func TestHandlerReportsAPatternConflict(t *testing.T) {
+	// net/http panics on two patterns that overlap. The router must name the
+	// route and state the repair instead.
+	r := router.New()
+	r.Get("/", ok("root"))
+	r.Mount("/assets/", http.NotFoundHandler())
+	_, err := r.Handler()
+	if err == nil {
+		t.Fatal("Handler returned nil, want a fault")
+	}
+	var faults *router.Faults
+	if !errors.As(err, &faults) {
+		t.Fatalf("the error is %T, want *router.Faults", err)
+	}
+	if !strings.Contains(faults.Faults[0].Repair, "{$}") {
+		t.Fatalf("the repair is %q", faults.Faults[0].Repair)
 	}
 }

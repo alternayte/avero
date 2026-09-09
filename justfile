@@ -24,11 +24,13 @@ lint:
 test:
     go test ./... -race -count=1
 
-# 5, 6. Integration tests. The asset suite needs the network. The database
-# suite and the broker suite arrive with S7.
+# 5, 6. Integration tests. The asset suite needs the network. The CLI suite
+# scaffolds an application and drives its commands. The broker suite arrives
+# with S7.
 integration:
     go test ./assets/... -race -tags=integration -timeout 10m
-    @echo "integration: no database test and no broker test exist yet. S7 adds the first one."
+    go test ./internal/cli/... -tags=integration -run 'TestTheDoctor|TestTheRoutesAndThe|TestVerifyRuns' -timeout 20m
+    @echo "integration: no broker test exists yet. S7 adds the first one."
 
 # 7. Every generated file is current.
 #
@@ -42,8 +44,9 @@ generate-check:
 
 # 8, 9. Scaffold, build and test the three reference applications.
 reference-apps:
-    @echo "reference-apps: no scaffolder exists yet. S14 adds it."
+    go test ./internal/cli/... -tags=integration -run TestEachShapeScaffolds -timeout 20m
 
 # 10. Measure DX-1 to DX-5.
 budgets:
-    @echo "budgets: no scaffolded application exists yet. S14 adds it."
+    go test ./internal/cli/... -tags=integration -run TestDX1 -timeout 15m -v
+    @cat artifacts/verification.md

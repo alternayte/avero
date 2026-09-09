@@ -182,3 +182,26 @@ func TestWriteReportReturnsTheFault(t *testing.T) {
 		t.Fatalf("WriteReport wrote %q, want nothing", out.String())
 	}
 }
+
+func TestTheModelReportValidatesAgainstItsSchema(t *testing.T) {
+	var schema root
+	if err := json.Unmarshal(module.ModelSchema, &schema); err != nil {
+		t.Fatalf("module/schema_models.json does not parse: %v", err)
+	}
+	rep := module.Schema(module.Modules(full{}, bare{}))
+	if len(rep.Models) != 1 || rep.Models[0].Table != "invoices" {
+		t.Fatalf("the report holds %+v", rep.Models)
+	}
+	b, err := json.Marshal(rep)
+	if err != nil {
+		t.Fatalf("Marshal returned an error: %v", err)
+	}
+	var doc any
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatalf("Unmarshal returned an error: %v", err)
+	}
+	validate(t, schema, map[string]any(schema), doc, "")
+	if !strings.Contains(rep.String(), "invoices") {
+		t.Fatalf("the table holds %q", rep.String())
+	}
+}

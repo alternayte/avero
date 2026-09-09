@@ -194,7 +194,7 @@ func TestRuleRequired(t *testing.T) {
 	if rec.Code != 422 {
 		t.Fatalf("gave %d, want 422", rec.Code)
 	}
-	if got := errorsOf(t, rec)["Title"]; got != "is required" {
+	if got := errorsOf(t, rec)["title"]; got != "is required" {
 		t.Fatalf("Title reads %q", got)
 	}
 }
@@ -203,7 +203,7 @@ func TestRuleMinOnAString(t *testing.T) {
 	h := handler(t)
 	rec := post(t, h, cards(""),
 		"application/x-www-form-urlencoded", "title=ab&email=person@example.com&role=member")
-	if got := errorsOf(t, rec)["Title"]; !strings.Contains(got, "at least 3") {
+	if got := errorsOf(t, rec)["title"]; !strings.Contains(got, "at least 3") {
 		t.Fatalf("Title reads %q", got)
 	}
 }
@@ -213,7 +213,7 @@ func TestRuleMaxOnAString(t *testing.T) {
 	long := strings.Repeat("x", 51)
 	rec := post(t, h, cards(""),
 		"application/x-www-form-urlencoded", "title="+long+"&email=person@example.com&role=member")
-	if got := errorsOf(t, rec)["Title"]; !strings.Contains(got, "at most 50") {
+	if got := errorsOf(t, rec)["title"]; !strings.Contains(got, "at most 50") {
 		t.Fatalf("Title reads %q", got)
 	}
 }
@@ -222,12 +222,12 @@ func TestRuleMinAndMaxOnANumber(t *testing.T) {
 	h := handler(t)
 	rec := post(t, h, "/boards/"+validUUID+"/cards?page=0",
 		"application/x-www-form-urlencoded", valid())
-	if got := errorsOf(t, rec)["Page"]; !strings.Contains(got, "1 or more") {
+	if got := errorsOf(t, rec)["page"]; !strings.Contains(got, "1 or more") {
 		t.Fatalf("Page reads %q", got)
 	}
 	rec = post(t, h, "/boards/"+validUUID+"/cards?page=101",
 		"application/x-www-form-urlencoded", valid())
-	if got := errorsOf(t, rec)["Page"]; !strings.Contains(got, "100 or less") {
+	if got := errorsOf(t, rec)["page"]; !strings.Contains(got, "100 or less") {
 		t.Fatalf("Page reads %q", got)
 	}
 }
@@ -236,7 +236,7 @@ func TestRuleEmail(t *testing.T) {
 	h := handler(t)
 	rec := post(t, h, cards(""),
 		"application/x-www-form-urlencoded", "title=a good title&email=not-an-address&role=member")
-	if got := errorsOf(t, rec)["Email"]; got != "must be an email address" {
+	if got := errorsOf(t, rec)["email"]; got != "must be an email address" {
 		t.Fatalf("Email reads %q", got)
 	}
 }
@@ -245,7 +245,7 @@ func TestRuleUUID(t *testing.T) {
 	h := handler(t)
 	rec := post(t, h, "/boards/not-a-uuid/cards?page=1",
 		"application/x-www-form-urlencoded", valid())
-	if got := errorsOf(t, rec)["BoardID"]; got != "must be a UUID" {
+	if got := errorsOf(t, rec)["board_id"]; got != "must be a UUID" {
 		t.Fatalf("BoardID reads %q", got)
 	}
 }
@@ -254,7 +254,7 @@ func TestRuleOneOf(t *testing.T) {
 	h := handler(t)
 	rec := post(t, h, cards(""),
 		"application/x-www-form-urlencoded", "title=a good title&email=person@example.com&role=owner")
-	if got := errorsOf(t, rec)["Role"]; !strings.Contains(got, "admin, member, viewer") {
+	if got := errorsOf(t, rec)["role"]; !strings.Contains(got, "admin, member, viewer") {
 		t.Fatalf("Role reads %q", got)
 	}
 }
@@ -263,7 +263,7 @@ func TestTheCustomRule(t *testing.T) {
 	h := handler(t)
 	rec := post(t, h, cards(""),
 		"application/x-www-form-urlencoded", "title=admin&email=person@example.com&role=member")
-	if got := errorsOf(t, rec)["Title"]; got != "must not be a reserved word" {
+	if got := errorsOf(t, rec)["title"]; got != "must not be a reserved word" {
 		t.Fatalf("Title reads %q", got)
 	}
 }
@@ -273,7 +273,7 @@ func TestTheCustomRuleRunsAfterTheTagRules(t *testing.T) {
 	h := handler(t)
 	rec := post(t, h, cards(""),
 		"application/x-www-form-urlencoded", "title=&email=person@example.com&role=member")
-	if got := errorsOf(t, rec)["Title"]; got != "is required" {
+	if got := errorsOf(t, rec)["title"]; got != "is required" {
 		t.Fatalf("Title reads %q", got)
 	}
 }
@@ -283,7 +283,7 @@ func TestEveryFailedFieldIsReported(t *testing.T) {
 	rec := post(t, h, "/boards/not-a-uuid/cards?page=1",
 		"application/x-www-form-urlencoded", "title=ab&email=nope&role=owner")
 	got := errorsOf(t, rec)
-	for _, field := range []string{"BoardID", "Title", "Email", "Role"} {
+	for _, field := range []string{"board_id", "title", "email", "role"} {
 		if got[field] == "" {
 			t.Fatalf("the report drops %s: %v", field, got)
 		}

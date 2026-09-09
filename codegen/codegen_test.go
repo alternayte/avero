@@ -204,3 +204,35 @@ func TestCheckFailsForAMissingFile(t *testing.T) {
 
 // generateFaults runs the generator and returns the whole fault list.
 func generateFaults(dir string) ([]string, error) { return codegen.Generate(dir) }
+
+func TestAnInputWithNoFieldCompiles(t *testing.T) {
+	// A form with no field is a real shape: a page that only proves the CSRF
+	// token. The generated Bind must read no request, because a declared and
+	// unused variable does not compile.
+	dir := t.TempDir()
+	source := `package api
+
+import "github.com/alternayte/avero/router"
+
+type Module struct{}
+
+type EmptyInput struct{}
+
+func (m *Module) Show(c *router.Ctx, in EmptyInput) (router.Response, error) {
+	return router.NoContent(), nil
+}
+`
+	if err := os.WriteFile(filepath.Join(dir, "api.go"), []byte(source), 0o644); err != nil {
+		t.Fatalf("WriteFile returned %v", err)
+	}
+	if _, err := codegen.Generate(dir); err != nil {
+		t.Fatalf("Generate returned %v, want nil", err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, codegen.GeneratedFile))
+	if err != nil {
+		t.Fatalf("ReadFile returned %v", err)
+	}
+	if strings.Contains(string(body), "r := c.Request()") {
+		t.Fatalf("the generated Bind reads the request of an input with no field:\n%s", body)
+	}
+}
