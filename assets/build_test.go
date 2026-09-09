@@ -221,3 +221,24 @@ func TestBuildNamesTheRepairForAnAbsentEntry(t *testing.T) {
 		t.Fatalf("the fault does not name the entry:\n%v", err)
 	}
 }
+
+func TestTheBuildTakesAnIIFEModule(t *testing.T) {
+	dir := project(t)
+	// The scripts of Basecoat are IIFE files. An application imports one for
+	// its side effect, so the bundle must hold its body.
+	write(t, dir, "assets/vendor/basecoat/js/all.min.js",
+		"(() => { window.basecoat = { initAll: () => 1 }; })();\n")
+	write(t, dir, "assets/js/app.js",
+		"import \"../vendor/basecoat/js/all.min.js\";\ndocument.title = \"hi\";\n")
+
+	if _, err := assets.Build(context.Background(), config(dir)); err != nil {
+		t.Fatalf("Build returned %v, want nil", err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "assets", "dist", "js", "app.js"))
+	if err != nil {
+		t.Fatalf("the bundle is absent: %v", err)
+	}
+	if !strings.Contains(string(body), "initAll") {
+		t.Fatalf("the bundle holds no body of the module: %s", body)
+	}
+}

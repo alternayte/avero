@@ -49,10 +49,17 @@ func TestTheBuildTakesAnIIFEModule(t *testing.T) {
 	write(t, dir, "assets/js/app.js",
 		"import \"../vendor/basecoat/js/all.min.js\";\ndocument.title = \"hi\";\n")
 
-	if _, err := assets.Build(context.Background(), config(dir)); err != nil {
+	m, err := assets.Build(context.Background(), config(dir))
+	if err != nil {
 		t.Fatalf("Build returned %v, want nil", err)
 	}
-	body, err := os.ReadFile(filepath.Join(dir, "assets", "dist", "js", "app.js"))
+	// The build writes a hash into the name of a file, so the test reads the
+	// name from the manifest. See TestTierZeroBundlesWithNoNodeModules.
+	entry, ok := m.Entry("js/app.js")
+	if !ok {
+		t.Fatalf("the manifest holds no js/app.js, it holds %v", m.Names())
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "assets/dist", entry.File))
 	if err != nil {
 		t.Fatalf("the bundle is absent: %v", err)
 	}
