@@ -149,6 +149,55 @@ func TestPinPackageFailsOnAHashMismatch(t *testing.T) {
 	}
 }
 
+// TestPinPackageRemovesTheFileOfAnOlderRelease proves that a pin deletes the
+// files that the previous release of the same name wrote, when the new
+// release does not carry them. The lock and the tree must then name one list.
+func TestPinPackageRemovesTheFileOfAnOlderRelease(t *testing.T) {
+	dir := t.TempDir()
+	firstURL := "https://registry.example.com/basecoat-css-1.0.1.tgz"
+	secondURL := "https://registry.example.com/basecoat-css-1.0.2.tgz"
+	f := &fetcher{bodies: map[string]string{
+		firstURL: tarball(t, map[string]string{
+			"package/dist/basecoat.css": "@import \"./basecoat-vega.css\";\n",
+			"package/dist/old.css":      "body{}\n",
+		}),
+		secondURL: tarball(t, map[string]string{
+			"package/dist/basecoat.css": "@import \"./basecoat-vega.css\";\n",
+		}),
+	}}
+	cfg := assets.PinConfig{Dir: dir, Fetch: f}
+
+	if err := assets.PinPackage(context.Background(), cfg, "basecoat", firstURL); err != nil {
+		t.Fatalf("the first pin returned %v", err)
+	}
+	root := filepath.Join(dir, "assets", "vendor", "basecoat")
+	if _, err := os.Stat(filepath.Join(root, "old.css")); err != nil {
+		t.Fatalf("the first pin did not write old.css: %v", err)
+	}
+
+	if err := assets.PinPackage(context.Background(), cfg, "basecoat", secondURL); err != nil {
+		t.Fatalf("the second pin returned %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "old.css")); !os.IsNotExist(err) {
+		t.Fatalf("old.css survives the pin of a release that holds no such file: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "basecoat.css")); err != nil {
+		t.Fatalf("basecoat.css is absent: %v", err)
+	}
+
+	lock, err := assets.LoadLock(dir)
+	if err != nil {
+		t.Fatalf("LoadLock returned %v, want nil", err)
+	}
+	pin, ok := lock.Package("basecoat")
+	if !ok {
+		t.Fatal("the lock holds no package")
+	}
+	if len(pin.Files) != 1 || pin.Files[0] != "basecoat.css" {
+		t.Fatalf("the lock records %v, want [basecoat.css]", pin.Files)
+	}
+}
+
 func TestPinPackageRefusesAPathThatLeavesTheDirectory(t *testing.T) {
 	dir := t.TempDir()
 	f := &fetcher{bodies: map[string]string{packageURL: tarball(t, map[string]string{

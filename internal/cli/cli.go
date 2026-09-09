@@ -8,6 +8,8 @@ import (
 	"io"
 	"sort"
 	"strings"
+
+	"github.com/alternayte/avero/assets"
 )
 
 // Streams holds the input and the output of one run.
@@ -22,6 +24,9 @@ type Streams struct {
 	// Dir is the working directory. An empty value is the process
 	// directory.
 	Dir string
+	// Fetch reads the package of a library. A nil value reads over HTTP. A
+	// test sets it, so the gate needs no network.
+	Fetch assets.Fetcher
 }
 
 // command is one command of the binary.

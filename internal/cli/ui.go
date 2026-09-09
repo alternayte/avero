@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,13 +16,6 @@ import (
 // BasecoatStyles names the eight styles that Basecoat publishes. The first one
 // is the default. dist/basecoat.css imports the default style.
 var BasecoatStyles = []string{"vega", "nova", "maia", "lyra", "mira", "luma", "sera", "rhea"}
-
-// uiFetch reads the package of a library. A nil value reads over HTTP. A test
-// replaces it, so the gate needs no network.
-var uiFetch assets.Fetcher
-
-// SetUIFetcher replaces the fetcher of `avero ui`. A test calls it.
-func SetUIFetcher(f assets.Fetcher) { uiFetch = f }
 
 // BasecoatURL returns the address of one release of Basecoat.
 func BasecoatURL(version string) string {
@@ -62,7 +56,14 @@ func runUI(ctx context.Context, s Streams, args []string) int {
 		return failf(s, "avero ui: the shape of this application is %q and it renders no page\n  → Add Basecoat to an application of the ssr shape", project.Shape)
 	}
 
-	cfg := assets.PinConfig{Dir: dir, Fetch: uiFetch}
+	if err := checkFollows(dir, "assets/css/app.css", "@import \"tailwindcss\";"); err != nil {
+		return fail(s, err)
+	}
+	if err := checkFollows(dir, "assets/js/app.js", "import \"datastar\";"); err != nil {
+		return fail(s, err)
+	}
+
+	cfg := assets.PinConfig{Dir: dir, Fetch: s.Fetch}
 	if err := assets.PinPackage(ctx, cfg, "basecoat", BasecoatURL(assets.BasecoatVersion)); err != nil {
 		return fail(s, err)
 	}
@@ -74,7 +75,8 @@ func runUI(ctx context.Context, s Streams, args []string) int {
 		return fail(s, err)
 	}
 	if err := addLine(dir, "assets/js/app.js",
-		"import \"../vendor/basecoat/js/all.min.js\";", ""); err != nil {
+		"import \"../vendor/basecoat/js/all.min.js\";",
+		"import \"datastar\";"); err != nil {
 		return fail(s, err)
 	}
 	if err := writeToaster(dir, s); err != nil {
@@ -118,11 +120,7 @@ func addLine(dir, name, line, follows string) error {
 	if err != nil {
 		return fmt.Errorf("avero ui: %s does not open: %w\n  → Run the command in the root of an application that `avero new` wrote", name, err)
 	}
-	eol := "\n"
-	if strings.Contains(string(body), "\r\n") {
-		eol = "\r\n"
-	}
-	lines := strings.Split(string(body), eol)
+	lines, eol := splitLines(body)
 	want := strings.TrimSpace(line)
 	for _, one := range lines {
 		if strings.TrimSpace(one) == want {
@@ -131,17 +129,11 @@ func addLine(dir, name, line, follows string) error {
 	}
 	at := 0
 	if follows != "" {
-		found := false
-		for i, one := range lines {
-			if strings.TrimSpace(one) == strings.TrimSpace(follows) {
-				at = i + 1
-				found = true
-				break
-			}
-		}
+		i, found := indexOfFollows(lines, follows)
 		if !found {
-			return fmt.Errorf("avero ui: %s states no %q line\n  → Add the line by hand, or restore the entry point that `avero new` wrote", name, follows)
+			return followsFault(name, follows)
 		}
+		at = i
 	}
 	out := append([]string{}, lines[:at]...)
 	out = append(out, line)
@@ -150,6 +142,52 @@ func addLine(dir, name, line, follows string) error {
 		return fmt.Errorf("avero ui: %s does not write: %w\n  → Give the process the right to write the application directory", name, err)
 	}
 	return nil
+}
+
+// checkFollows proves that a file holds the anchor line that addLine needs,
+// with no change to the file. runUI calls it before the fetch, so a fetch of
+// 5.1 MB never runs when the later write must fail. See AGENTS.md, the error
+// rules.
+func checkFollows(dir, name, follows string) error {
+	file := filepath.Join(dir, filepath.FromSlash(name))
+	body, err := os.ReadFile(file)
+	if err != nil {
+		return fmt.Errorf("avero ui: %s does not open: %w\n  → Run the command in the root of an application that `avero new` wrote", name, err)
+	}
+	lines, _ := splitLines(body)
+	if _, found := indexOfFollows(lines, follows); !found {
+		return followsFault(name, follows)
+	}
+	return nil
+}
+
+// splitLines splits the body of a file into lines, and reports the line end
+// that the file uses. It reads CRLF when the file holds one CRLF pair, and LF
+// otherwise.
+func splitLines(body []byte) (lines []string, eol string) {
+	eol = "\n"
+	if strings.Contains(string(body), "\r\n") {
+		eol = "\r\n"
+	}
+	return strings.Split(string(body), eol), eol
+}
+
+// indexOfFollows returns the line after the line that follows names, with the
+// spaces of each end removed, and whether the file holds that line.
+func indexOfFollows(lines []string, follows string) (int, bool) {
+	want := strings.TrimSpace(follows)
+	for i, one := range lines {
+		if strings.TrimSpace(one) == want {
+			return i + 1, true
+		}
+	}
+	return 0, false
+}
+
+// followsFault states the fault that addLine and checkFollows raise when a
+// file holds no line that follows names.
+func followsFault(name, follows string) error {
+	return fmt.Errorf("avero ui: %s states no %q line\n  → Add the line by hand, or restore the entry point that `avero new` wrote", name, follows)
 }
 
 // writeToaster writes the toaster component. A file that exists does not
@@ -201,8 +239,11 @@ const scaffoldToasts = "// Toasts renders the messages of this response."
 func patchLayout(dir string, s Streams, name string) error {
 	file := filepath.Join(dir, "internal", "ui", "layout.templ")
 	got, err := os.ReadFile(file)
-	if err != nil {
+	if errors.Is(err, os.ErrNotExist) {
 		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("avero ui: internal/ui/layout.templ does not open: %w\n  → Give the process the right to read the application directory", err)
 	}
 
 	want, err := scaffold.Layout(name)
