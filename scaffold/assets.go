@@ -19,6 +19,14 @@ const (
 		"// esbuild.\n"
 )
 
+// WriteStarterAssets writes the output directory of the assets of an
+// application that already exists.
+//
+// A clone of a repository holds no built asset, because an application ignores
+// its output directory. The command that runs an example calls this function,
+// so the embedded file system holds a manifest before the first build.
+func WriteStarterAssets(dir string) ([]string, error) { return writeStarterAssets(dir) }
+
 // writeStarterAssets writes the output directory of the assets.
 //
 // The application embeds that directory, so it must hold a manifest before the

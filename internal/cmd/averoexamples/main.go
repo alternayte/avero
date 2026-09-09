@@ -63,8 +63,16 @@ const exampleSecret = "AVERO_SECRET=write_a_new_key_with_openssl_rand_hex_32_and
 
 func main() {
 	check := flag.Bool("check", false, "prove that the examples match the templates and write nothing")
+	assets := flag.Bool("assets", false, "write the starter assets of each example and nothing else")
 	flag.Parse()
 
+	if *assets {
+		if err := starters(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(*check); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -84,6 +92,25 @@ func run(check bool) error {
 			return err
 		}
 		fmt.Println(filepath.Join(Dir, e.Name))
+	}
+	return nil
+}
+
+// starters writes the output directory of the assets of each example.
+//
+// An example ignores its output directory, as every application does, so a
+// clone holds no built asset. The application embeds that directory, so it
+// needs a manifest before it builds.
+func starters() error {
+	for _, e := range examples {
+		if e.Shape == "api" {
+			continue
+		}
+		dir := filepath.Join(Dir, e.Name)
+		if _, err := scaffold.WriteStarterAssets(dir); err != nil {
+			return err
+		}
+		fmt.Println(filepath.Join(dir, "assets", "dist"))
 	}
 	return nil
 }

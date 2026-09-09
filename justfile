@@ -50,6 +50,9 @@ generate-check:
 # 8, 9. Scaffold, build and test the three reference applications.
 reference-apps: examples-check
     go test ./internal/cli/... -tags=integration -run TestEachShapeScaffolds -timeout 20m
+    # A clone holds no built asset, because an example ignores its output
+    # directory. The starter assets let each example build.
+    go run ./internal/cmd/averoexamples -assets
     cd examples/blog && go build ./... && go test ./... -count=1
     cd examples/board && go build ./... && go test ./... -count=1
     cd examples/orders && go build ./... && go test ./... -count=1

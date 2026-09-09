@@ -71,6 +71,14 @@ avero assets init     write the package.json of tier 1
 `examples/` holds one application of each shape. The gate writes them again and
 compares them, so they never drift from `avero new`.
 
+An example ignores its output directory, as every application does, so a clone
+holds no built asset. Write the starter assets one time:
+
+```
+go run ./internal/cmd/averoexamples -assets
+cd examples/blog && go run .
+```
+
 ## The state of the subsystems
 
 | ID | Subsystem | State |
