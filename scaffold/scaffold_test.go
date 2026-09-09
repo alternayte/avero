@@ -1,6 +1,7 @@
 package scaffold_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -173,4 +174,78 @@ func readFile(t *testing.T, name string) string {
 		t.Fatalf("ReadFile returned %v", err)
 	}
 	return string(body)
+}
+
+func TestTheAgentFilesStandInEveryShape(t *testing.T) {
+	// S16 part B. Every shape carries the agent files, and each skill states
+	// the steps, the files and the command that proves the work.
+	for _, shape := range []string{scaffold.ShapeSSR, scaffold.ShapeSPA, scaffold.ShapeAPI} {
+		dir, _ := write(t, shape)
+		agents := readFile(t, filepath.Join(dir, "AGENTS.md"))
+		for i := 1; i <= 8; i++ {
+			if !strings.Contains(agents, fmt.Sprintf("\n%d. ", i)) {
+				t.Fatalf("the %s shape states no design rule %d", shape, i)
+			}
+		}
+		for _, want := range []string{"avero verify", "internal/features/", "Technical English"} {
+			if !strings.Contains(agents, want) {
+				t.Fatalf("AGENTS.md of the %s shape holds no %q", shape, want)
+			}
+		}
+		for _, skill := range []string{"add-slice", "add-projection", "add-inbox-handler", "add-client"} {
+			body := readFile(t, filepath.Join(dir, ".avero", "skills", skill+".md"))
+			for _, want := range []string{"## Steps", "The command that proves the work"} {
+				if !strings.Contains(body, want) {
+					t.Fatalf("the skill %s of the %s shape holds no %q", skill, shape, want)
+				}
+			}
+		}
+	}
+}
+
+func TestWriteSliceWritesTheFeatureAndItsMigration(t *testing.T) {
+	dir, _ := write(t, scaffold.ShapeAPI)
+	written, err := scaffold.WriteSlice(scaffold.SliceOptions{Name: "Comments", Dir: dir})
+	if err != nil {
+		t.Fatalf("WriteSlice returned %v, want nil", err)
+	}
+	if len(written) != 7 {
+		t.Fatalf("WriteSlice wrote %v", written)
+	}
+	body := readFile(t, filepath.Join(dir, "internal", "features", "comments", "module.go"))
+	if !strings.Contains(body, "package comments") || !strings.Contains(body, `r.Get("/comments"`) {
+		t.Fatalf("module.go holds %q", body)
+	}
+	if strings.Contains(body, "[[") {
+		t.Fatalf("module.go holds an unrendered marker:\n%s", body)
+	}
+
+	registered, err := scaffold.RegisterSlice(dir, "example.test/blog", "comments")
+	if err != nil {
+		t.Fatalf("RegisterSlice returned %v, want nil", err)
+	}
+	if !registered {
+		t.Fatal("RegisterSlice changed no file")
+	}
+	wire := readFile(t, filepath.Join(dir, "wire.go"))
+	if !strings.Contains(wire, "comments.New(engine)") || !strings.Contains(wire, `"example.test/blog/internal/features/comments"`) {
+		t.Fatalf("wire.go holds %q", wire)
+	}
+	// A second registration changes nothing, because the module already
+	// stands in the file.
+	again, err := scaffold.RegisterSlice(dir, "example.test/blog", "comments")
+	if err != nil || again {
+		t.Fatalf("RegisterSlice returned %v and %v, want no change", again, err)
+	}
+}
+
+func TestWriteSliceRefusesASliceThatExists(t *testing.T) {
+	dir, _ := write(t, scaffold.ShapeAPI)
+	if _, err := scaffold.WriteSlice(scaffold.SliceOptions{Name: "comment", Dir: dir}); err != nil {
+		t.Fatalf("WriteSlice returned %v, want nil", err)
+	}
+	_, err := scaffold.WriteSlice(scaffold.SliceOptions{Name: "comment", Dir: dir})
+	if err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("WriteSlice returned %v, want a fault", err)
+	}
 }

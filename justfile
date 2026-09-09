@@ -31,6 +31,7 @@ integration:
     go test ./assets/... -race -tags=integration -timeout 10m
     go test ./internal/cli/... -tags=integration -run 'TestTheDoctor|TestTheRoutesAndThe|TestVerifyRuns' -timeout 20m
     go test ./cmd/avero/dev/... -tags=integration -run TestTheProductionBuild -timeout 10m
+    go test ./mcp/... -tags=integration -timeout 20m
     @echo "integration: no broker test exists yet. S7 adds the first one."
 
 # 7. Every generated file is current.

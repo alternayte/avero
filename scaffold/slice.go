@@ -1,0 +1,236 @@
+package scaffold
+
+import (
+	"fmt"
+	"go/format"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+	"unicode"
+)
+
+// SliceOptions states one feature slice.
+type SliceOptions struct {
+	// Name is the name of the feature, such as comment or order.
+	Name string
+	// Dir is the root of the application.
+	Dir string
+	// Module is the module path of the application. An empty value reads
+	// go.mod.
+	Module string
+}
+
+// sliceData is the value that a slice template reads.
+type sliceData struct {
+	// Name is the name of the module, which is the plural form.
+	Name string
+	// Package is the name of the Go package.
+	Package string
+	// Singular is the name of one row.
+	Singular string
+	// Plural is the path segment and the table name.
+	Plural string
+	// Type is the name of the Go type of one row.
+	Type string
+	// Table is the name of the database table.
+	Table string
+	// Module is the module path of the application.
+	Module string
+}
+
+// WriteSlice writes one feature slice and its migration. It returns the files
+// that it wrote, in order.
+//
+// `avero slice` calls it, and the MCP tool scaffold_slice calls the same
+// function, so an agent and a person write the same files. See the SDD, S16.
+func WriteSlice(opts SliceOptions) ([]string, error) {
+	if opts.Dir == "" {
+		opts.Dir = "."
+	}
+	name := strings.TrimSpace(strings.ToLower(opts.Name))
+	if name == "" {
+		return nil, faultOf("the slice has no name",
+			"Run `avero slice <name>`, such as `avero slice comment`")
+	}
+	if !validName(name) {
+		return nil, faultOf(fmt.Sprintf("the name %q holds a character that a Go package cannot carry", opts.Name),
+			"Write a name of letters and digits, such as `comment`")
+	}
+	module, err := modulePath(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	singular := strings.TrimSuffix(name, "s")
+	plural := singular + "s"
+	values := sliceData{
+		Name:     plural,
+		Package:  plural,
+		Singular: singular,
+		Plural:   plural,
+		Type:     upper(singular),
+		Table:    plural,
+		Module:   module,
+	}
+
+	dir := filepath.Join(opts.Dir, "internal", "features", values.Package)
+	if entries, err := os.ReadDir(dir); err == nil && len(entries) > 0 {
+		return nil, faultOf(fmt.Sprintf("the slice %s already exists", values.Package),
+			"Give the feature another name, or delete the directory that holds it")
+	}
+
+	written, err := renderSlice(dir, values)
+	if err != nil {
+		return nil, err
+	}
+	migration, err := writeSliceMigration(opts.Dir, values)
+	if err != nil {
+		return nil, err
+	}
+	written = append(written, migration...)
+	return written, nil
+}
+
+// renderSlice writes the Go files of one slice.
+func renderSlice(dir string, values sliceData) ([]string, error) {
+	entries, err := templates.ReadDir("templates/slice")
+	if err != nil {
+		return nil, faultOf("the slice templates are absent",
+			"Report the fault, because Avero carries the templates")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, faultOf(fmt.Sprintf("the directory %s does not open", dir),
+			"Give the process the right to write the application directory")
+	}
+
+	var written []string
+	for _, entry := range entries {
+		body, readErr := templates.ReadFile("templates/slice/" + entry.Name())
+		if readErr != nil {
+			return nil, readErr
+		}
+		out, renderErr := executeSlice(entry.Name(), string(body), values)
+		if renderErr != nil {
+			return nil, renderErr
+		}
+		name := strings.TrimSuffix(entry.Name(), ".tmpl")
+		if name == "slice_test.go" {
+			name = values.Package + "_test.go"
+		}
+		target := filepath.Join(dir, name)
+		if err := os.WriteFile(target, out, 0o644); err != nil {
+			return nil, faultOf(fmt.Sprintf("the file %s does not write", target),
+				"Give the process the right to write the application directory")
+		}
+		written = append(written, target)
+	}
+	return written, nil
+}
+
+// writeSliceMigration writes the table of one slice.
+func writeSliceMigration(dir string, values sliceData) ([]string, error) {
+	migrations := filepath.Join(dir, "migrations")
+	if err := os.MkdirAll(migrations, 0o755); err != nil {
+		return nil, faultOf("the migrations directory does not open",
+			"Give the process the right to write the application directory")
+	}
+	version := time.Now().UTC().Format("20060102150405")
+	up := filepath.Join(migrations, version+"_create_"+values.Table+".up.sql")
+	down := filepath.Join(migrations, version+"_create_"+values.Table+".down.sql")
+
+	upSQL := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (\n"+
+		"    id         TEXT PRIMARY KEY,\n"+
+		"    title      TEXT NOT NULL,\n"+
+		"    created_at TIMESTAMP NOT NULL\n);\n", values.Table)
+	if err := os.WriteFile(up, []byte(upSQL), 0o644); err != nil {
+		return nil, faultOf(fmt.Sprintf("the file %s does not write", up),
+			"Give the process the right to write the migrations directory")
+	}
+	if err := os.WriteFile(down, []byte("DROP TABLE IF EXISTS "+values.Table+";\n"), 0o644); err != nil {
+		return nil, faultOf(fmt.Sprintf("the file %s does not write", down),
+			"Give the process the right to write the migrations directory")
+	}
+	return []string{up, down}, nil
+}
+
+// modulePath returns the module path of one slice.
+func modulePath(opts SliceOptions) (string, error) {
+	if opts.Module != "" {
+		return opts.Module, nil
+	}
+	return ModulePath(opts.Dir)
+}
+
+// ModulePath returns the module path that go.mod names.
+func ModulePath(dir string) (string, error) {
+	body, err := os.ReadFile(filepath.Join(dir, "go.mod"))
+	if err != nil {
+		return "", faultOf("this directory holds no go.mod",
+			"Run the command in the directory of an Avero application, or write one with `avero new`")
+	}
+	for _, line := range strings.Split(string(body), "\n") {
+		if after, found := strings.CutPrefix(strings.TrimSpace(line), "module "); found {
+			return strings.TrimSpace(after), nil
+		}
+	}
+	return "", faultOf("go.mod names no module",
+		"Write the module line in go.mod, such as `module blog`")
+}
+
+// upper returns the name with the first letter in upper case.
+func upper(name string) string {
+	if name == "" {
+		return name
+	}
+	runes := []rune(name)
+	runes[0] = unicode.ToUpper(runes[0])
+	return string(runes)
+}
+
+// RegisterSlice adds the feature to wire.go: the import and the module in the
+// call to avero.Modules. It reports whether it changed the file.
+//
+// It changes nothing when it does not find the two places, so it never breaks
+// a wiring that a person wrote by hand. The caller then states the two lines
+// to write.
+func RegisterSlice(dir, module, pkg string) (bool, error) {
+	name := filepath.Join(dir, "wire.go")
+	body, err := os.ReadFile(name)
+	if err != nil {
+		return false, nil
+	}
+	source := string(body)
+	importLine := "\t\"" + module + "/internal/features/" + pkg + "\""
+	call := "avero.Modules("
+	if strings.Contains(source, importLine) || !strings.Contains(source, call) {
+		return false, nil
+	}
+
+	marker := "\t\"" + module + "/internal/features/"
+	i := strings.LastIndex(source, marker)
+	if i < 0 {
+		return false, nil
+	}
+	end := strings.Index(source[i:], "\n")
+	if end < 0 {
+		return false, nil
+	}
+	end += i + 1
+	source = source[:end] + importLine + "\n" + source[end:]
+
+	j := strings.Index(source, call)
+	source = source[:j+len(call)] + pkg + ".New(engine), " + source[j+len(call):]
+
+	// The file must read as gofmt writes it, so the import block sorts again.
+	out, err := format.Source([]byte(source))
+	if err != nil {
+		return false, faultOf("wire.go does not format after the registration",
+			"Add the module to avero.Modules by hand, and report the fault")
+	}
+	if err := os.WriteFile(name, out, 0o644); err != nil {
+		return false, faultOf("wire.go does not write",
+			"Give the process the right to write the application directory")
+	}
+	return true, nil
+}

@@ -1,0 +1,57 @@
+package [[.Package]]
+
+import (
+	"net/http"
+
+	"github.com/alternayte/avero"
+)
+
+// View is one [[.Singular]] as the answer carries it.
+type View struct {
+	// ID identifies the row.
+	ID string `json:"id"`
+	// Title is the name that a person reads.
+	Title string `json:"title"`
+}
+
+// List answers every [[.Singular]].
+func (m *Module) List(c *avero.Ctx, in ListInput) (avero.Response, error) {
+	rows, err := m.store.List(c.Context(), in.Search)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]View, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, View{ID: row.ID, Title: row.Title})
+	}
+	return avero.JSON(http.StatusOK, map[string]any{"[[.Plural]]": out}), nil
+}
+
+// Create writes one [[.Singular]].
+func (m *Module) Create(c *avero.Ctx, in CreateInput) (avero.Response, error) {
+	id, err := m.store.Create(c.Context(), in.Title)
+	if err != nil {
+		return nil, err
+	}
+	return avero.JSON(http.StatusCreated, View{ID: id, Title: in.Title}), nil
+}
+
+// Show answers one [[.Singular]].
+func (m *Module) Show(c *avero.Ctx, in ShowInput) (avero.Response, error) {
+	row, found, err := m.store.Get(c.Context(), in.ID)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return avero.JSON(http.StatusNotFound, map[string]string{"error": "the [[.Singular]] is absent"}), nil
+	}
+	return avero.JSON(http.StatusOK, View{ID: row.ID, Title: row.Title}), nil
+}
+
+// Delete removes one [[.Singular]].
+func (m *Module) Delete(c *avero.Ctx, in DeleteInput) (avero.Response, error) {
+	if err := m.store.Delete(c.Context(), in.ID); err != nil {
+		return nil, err
+	}
+	return avero.NoContent(), nil
+}

@@ -1,0 +1,47 @@
+// Package [[.Package]] holds the [[.Name]] feature: its routes, its handlers,
+// its input types, its store and its tests. It imports no other feature.
+package [[.Package]]
+
+import (
+	"github.com/alternayte/avero"
+	"github.com/alternayte/drel"
+)
+
+//go:generate go run github.com/alternayte/avero/internal/cmd/averogen .
+
+// Module is the [[.Name]] feature.
+type Module struct {
+	// store reads and writes the rows of the feature.
+	store *Store
+}
+
+// New builds the feature. main.go supplies the engine. See design rule 3.
+func New(engine *drel.Engine) *Module { return &Module{store: NewStore(engine)} }
+
+// Name identifies the module in the contribution table.
+func (m *Module) Name() string { return "[[.Name]]" }
+
+// Routes registers the routes of the feature.
+func (m *Module) Routes(r *avero.Router) {
+	r.Get("/[[.Plural]]", avero.In(m.List))
+	r.Post("/[[.Plural]]", avero.In(m.Create))
+	r.Get("/[[.Plural]]/{id}", avero.In(m.Show))
+	r.Delete("/[[.Plural]]/{id}", avero.In(m.Delete))
+}
+
+// Describe states what the feature contributes. `avero schema` and the agent
+// surface read it. See AN-3.
+func (m *Module) Describe() avero.Description {
+	return avero.Description{
+		Name: "[[.Name]]",
+		Models: []avero.ModelDesc{{
+			Name:  "[[.Type]]",
+			Table: "[[.Table]]",
+			Fields: []avero.FieldDesc{
+				{Name: "ID", Type: "string"},
+				{Name: "Title", Type: "string"},
+				{Name: "CreatedAt", Type: "time.Time"},
+			},
+		}},
+	}
+}

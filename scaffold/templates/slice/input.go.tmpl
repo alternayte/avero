@@ -1,0 +1,25 @@
+package [[.Package]]
+
+// ListInput holds the query of the list call.
+type ListInput struct {
+	// Search filters the list. An empty value returns every row.
+	Search string `query:"q"`
+}
+
+// CreateInput holds the body of a new [[.Singular]].
+type CreateInput struct {
+	// Title is the name that a person reads.
+	Title string `json:"title" form:"title" validate:"required,min=1,max=200"`
+}
+
+// ShowInput holds the identifier of one [[.Singular]].
+type ShowInput struct {
+	// ID comes from the path.
+	ID string `path:"id" validate:"required"`
+}
+
+// DeleteInput holds the identifier of the [[.Singular]] to delete.
+type DeleteInput struct {
+	// ID comes from the path.
+	ID string `path:"id" validate:"required"`
+}

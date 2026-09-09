@@ -111,8 +111,10 @@ func Write(opts Options) ([]string, error) {
 		Secret:     secret(),
 	}
 
+	// The agent files stand in their own set, because every shape carries
+	// them and S16 states them. See the SDD, S16 part B.
 	var written []string
-	for _, set := range []string{"common", opts.Shape} {
+	for _, set := range []string{"common", "agents", opts.Shape} {
 		files, err := render(set, dir, values)
 		if err != nil {
 			return nil, err
@@ -274,6 +276,21 @@ func mode(target string) os.FileMode {
 		return 0o755
 	}
 	return 0o644
+}
+
+// executeSlice renders one slice template.
+func executeSlice(name, body string, values sliceData) ([]byte, error) {
+	t, err := template.New(name).Delims("[[", "]]").Parse(body)
+	if err != nil {
+		return nil, faultOf(fmt.Sprintf("the template %s does not parse: %v", name, err),
+			"Report the fault, because a template of Avero must always parse")
+	}
+	var out strings.Builder
+	if err := t.Execute(&out, values); err != nil {
+		return nil, faultOf(fmt.Sprintf("the template %s does not render: %v", name, err),
+			"Report the fault, because a template of Avero must always render")
+	}
+	return []byte(out.String()), nil
 }
 
 // execute renders one template.

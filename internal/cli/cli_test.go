@@ -24,13 +24,13 @@ func TestHelpListsEveryCommandAndTheOnesThatWait(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("the code is %d, want 0", code)
 	}
-	for _, name := range []string{"new", "generate", "build", "migrate", "routes", "modules",
-		"schema", "doctor", "verify", "js", "assets", "version"} {
+	for _, name := range []string{"new", "slice", "generate", "build", "migrate", "routes", "modules",
+		"schema", "doctor", "verify", "js", "assets", "dev", "mcp", "version"} {
 		if !strings.Contains(out, name) {
 			t.Fatalf("the help holds no %q:\n%s", name, out)
 		}
 	}
-	for _, name := range []string{"avero es replay", "avero mcp", "S7", "S16"} {
+	for _, name := range []string{"avero es replay", "avero outbox dead", "S7", "S9"} {
 		if !strings.Contains(out, name) {
 			t.Fatalf("the help does not name %q:\n%s", name, out)
 		}
@@ -219,5 +219,60 @@ func TestTheEnvironmentFileReachesTheLoop(t *testing.T) {
 	}
 	if strings.Contains(errOut, "AVERO_SECRET is absent") {
 		t.Fatalf("the loop did not read .env: %q", errOut)
+	}
+}
+
+func TestMCPServesOverTheStreamsOfTheCommand(t *testing.T) {
+	// The command speaks the protocol on its own streams, so a test drives it
+	// with no process.
+	var out, errOut bytes.Buffer
+	line := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}` + "\n"
+	code := cli.Run(context.Background(), cli.Streams{
+		Out: &out, Err: &errOut, In: strings.NewReader(line), Dir: t.TempDir(),
+	}, []string{"mcp"})
+	if code != 0 {
+		t.Fatalf("the code is %d: %s", code, errOut.String())
+	}
+	for _, tool := range []string{"list_modules", "scaffold_slice", "run_verify", "explain_error"} {
+		if !strings.Contains(out.String(), tool) {
+			t.Fatalf("the answer holds no %q:\n%s", tool, out.String())
+		}
+	}
+}
+
+func TestMCPRefusesAFlag(t *testing.T) {
+	code, _, errOut := run(t, t.TempDir(), "mcp", "--stdio")
+	if code != 1 || !strings.Contains(errOut, "avero mcp") {
+		t.Fatalf("the code is %d and the fault is %q", code, errOut)
+	}
+}
+
+func TestSliceWritesAFeature(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module blog\n\ngo 1.26.2\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile returned %v", err)
+	}
+	code, out, errOut := run(t, dir, "slice", "comment")
+	if code != 0 {
+		t.Fatalf("the code is %d: %s", code, errOut)
+	}
+	for _, name := range []string{"module.go", "handlers.go", "input.go", "store.go", "comments_test.go"} {
+		if _, err := os.Stat(filepath.Join(dir, "internal", "features", "comments", name)); err != nil {
+			t.Fatalf("the command wrote no %s", name)
+		}
+	}
+	if !strings.Contains(out, "avero migrate up") {
+		t.Fatalf("the output states no next step:\n%s", out)
+	}
+	// A second run refuses, because the slice already exists.
+	if code, _, errOut := run(t, dir, "slice", "comment"); code != 1 || !strings.Contains(errOut, "already exists") {
+		t.Fatalf("the code is %d and the fault is %q", code, errOut)
+	}
+}
+
+func TestSliceNeedsAName(t *testing.T) {
+	code, _, errOut := run(t, t.TempDir(), "slice")
+	if code != 1 || !strings.Contains(errOut, "avero slice <name>") {
+		t.Fatalf("the code is %d and the fault is %q", code, errOut)
 	}
 }

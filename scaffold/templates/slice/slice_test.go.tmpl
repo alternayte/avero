@@ -1,0 +1,93 @@
+package [[.Package]]_test
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/alternayte/avero"
+	"github.com/alternayte/drel"
+
+	"[[.Module]]/internal/features/[[.Package]]"
+)
+
+// The test drives the routes of the feature against a real database. Write the
+// test before the code that it judges. See AGENTS.md.
+
+// handler returns the routes of this feature and the database behind them.
+func handler(t *testing.T) http.Handler {
+	t.Helper()
+	engine, err := drel.NewEngine("file:" + filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("the database does not open: %v", err)
+	}
+	t.Cleanup(func() { engine.Close() })
+	if _, err := engine.Exec(context.Background(),
+		"CREATE TABLE [[.Table]] (id TEXT PRIMARY KEY, title TEXT NOT NULL, created_at TIMESTAMP NOT NULL)"); err != nil {
+		t.Fatalf("the table does not open: %v", err)
+	}
+
+	r := avero.NewRouter()
+	set := avero.Modules([[.Package]].New(engine))
+	if err := set.Attach(r); err != nil {
+		t.Fatalf("the module holds a fault: %v", err)
+	}
+	h, err := r.Handler()
+	if err != nil {
+		t.Fatalf("the router holds a fault: %v", err)
+	}
+	return h
+}
+
+// call performs one request.
+func call(t *testing.T, h http.Handler, method, path, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestTheFeatureWritesReadsAndDeletes(t *testing.T) {
+	h := handler(t)
+	created := call(t, h, http.MethodPost, "/[[.Plural]]", `{"title":"A title"}`)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201:\n%s", created.Code, created.Body.String())
+	}
+	var row struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(created.Body.Bytes(), &row); err != nil {
+		t.Fatalf("the answer does not parse: %v", err)
+	}
+
+	if list := call(t, h, http.MethodGet, "/[[.Plural]]", ""); !strings.Contains(list.Body.String(), "A title") {
+		t.Fatalf("the list holds %q", list.Body.String())
+	}
+	if one := call(t, h, http.MethodGet, "/[[.Plural]]/"+row.ID, ""); one.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", one.Code)
+	}
+	if removed := call(t, h, http.MethodDelete, "/[[.Plural]]/"+row.ID, ""); removed.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", removed.Code)
+	}
+	if again := call(t, h, http.MethodGet, "/[[.Plural]]/"+row.ID, ""); again.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404 after the delete", again.Code)
+	}
+}
+
+func TestAnInvalidBodyAnswersTheFieldError(t *testing.T) {
+	rec := call(t, handler(t), http.MethodPost, "/[[.Plural]]", `{"title":""}`)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "title") {
+		t.Fatalf("the answer holds %q", rec.Body.String())
+	}
+}

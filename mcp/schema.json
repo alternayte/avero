@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avero.dev/schema/mcp-results/v1",
+  "title": "Avero MCP tool results",
+  "description": "The structured result of each tool of `avero mcp`. The member of $defs carries the name of the tool.",
+  "type": "object",
+  "$defs": {
+    "list_modules": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["schema", "modules"],
+      "properties": {
+        "schema": { "type": "string" },
+        "modules": { "type": "array" }
+      }
+    },
+    "describe_module": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["module", "interfaces", "routes", "description"],
+      "properties": {
+        "module": { "type": "string" },
+        "interfaces": { "type": "array", "items": { "type": "string" } },
+        "routes": { "type": "array" },
+        "description": { "type": "object" }
+      }
+    },
+    "list_routes": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["schema", "routes"],
+      "properties": {
+        "schema": { "type": "string" },
+        "routes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["method", "pattern", "handler", "middleware"],
+            "properties": {
+              "method": { "type": "string" },
+              "pattern": { "type": "string" },
+              "handler": { "type": "string" },
+              "middleware": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "describe_model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["module", "name", "table", "fields"],
+      "properties": {
+        "module": { "type": "string" },
+        "name": { "type": "string" },
+        "table": { "type": "string" },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "type"],
+            "properties": {
+              "name": { "type": "string" },
+              "type": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "scaffold_slice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slice", "files", "registered", "next"],
+      "properties": {
+        "slice": { "type": "string" },
+        "files": { "type": "array", "items": { "type": "string" } },
+        "registered": { "type": "boolean" },
+        "next": { "type": "string" }
+      }
+    },
+    "run_verify": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "ok", "records"],
+      "properties": {
+        "schema": { "type": "string" },
+        "ok": { "type": "boolean" },
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "status", "duration_ms", "message", "file", "line", "column"],
+            "properties": {
+              "name": { "type": "string" },
+              "status": { "type": "string", "enum": ["pass", "fail"] },
+              "duration_ms": { "type": "integer" },
+              "message": { "type": "string" },
+              "file": { "type": "string" },
+              "line": { "type": "integer" },
+              "column": { "type": "integer" }
+            }
+          }
+        }
+      }
+    },
+    "explain_error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["faults"],
+      "properties": {
+        "faults": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "file", "line", "column", "message", "repair", "generated", "source_file", "source_line"],
+            "properties": {
+              "kind": { "type": "string" },
+              "file": { "type": "string" },
+              "line": { "type": "integer" },
+              "column": { "type": "integer" },
+              "message": { "type": "string" },
+              "repair": { "type": "string" },
+              "generated": { "type": "boolean" },
+              "source_file": { "type": "string" },
+              "source_line": { "type": "integer" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

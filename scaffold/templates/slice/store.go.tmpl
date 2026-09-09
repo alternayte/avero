@@ -1,0 +1,128 @@
+package [[.Package]]
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"time"
+
+	"github.com/alternayte/drel"
+)
+
+// [[.Type]] is one row of the [[.Table]] table.
+type [[.Type]] struct {
+	// ID identifies the row.
+	ID string
+	// Title is the name that a person reads.
+	Title string
+	// CreatedAt is the time of the write.
+	CreatedAt time.Time
+}
+
+// Store reads and writes the rows. It takes the engine as a field, so a test
+// passes its own database. See design rule 3.
+type Store struct {
+	engine *drel.Engine
+}
+
+// NewStore builds the store.
+func NewStore(engine *drel.Engine) *Store { return &Store{engine: engine} }
+
+// List returns the rows, newest first. An empty search returns every row.
+func (s *Store) List(ctx context.Context, search string) ([][[.Type]], error) {
+	sql := "SELECT id, title FROM [[.Table]] ORDER BY created_at DESC"
+	args := []any{}
+	if search != "" {
+		sql = "SELECT id, title FROM [[.Table]] WHERE title LIKE " + s.mark(1) + " ORDER BY created_at DESC"
+		args = append(args, "%"+search+"%")
+	}
+	rows, err := s.query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("the rows do not read: %w", err)
+	}
+	defer rows.Close()
+
+	var out [][[.Type]]
+	for rows.Next() {
+		var row [[.Type]]
+		if err := rows.Scan(&row.ID, &row.Title); err != nil {
+			return nil, fmt.Errorf("a row does not read: %w", err)
+		}
+		out = append(out, row)
+	}
+	return out, rows.Err()
+}
+
+// Get returns one row and reports whether the table holds it.
+func (s *Store) Get(ctx context.Context, id string) ([[.Type]], bool, error) {
+	rows, err := s.query(ctx, "SELECT id, title FROM [[.Table]] WHERE id = "+s.mark(1), id)
+	if err != nil {
+		return [[.Type]]{}, false, fmt.Errorf("the row does not read: %w", err)
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return [[.Type]]{}, false, rows.Err()
+	}
+	var row [[.Type]]
+	if err := rows.Scan(&row.ID, &row.Title); err != nil {
+		return [[.Type]]{}, false, fmt.Errorf("the row does not read: %w", err)
+	}
+	return row, true, nil
+}
+
+// Create writes one row and returns its identifier.
+func (s *Store) Create(ctx context.Context, title string) (string, error) {
+	id := newID()
+	sql := fmt.Sprintf("INSERT INTO [[.Table]] (id, title, created_at) VALUES (%s, %s, %s)",
+		s.mark(1), s.mark(2), s.mark(3))
+	if err := s.exec(ctx, sql, id, title, time.Now().UTC()); err != nil {
+		return "", fmt.Errorf("the row does not write: %w", err)
+	}
+	return id, nil
+}
+
+// Delete removes one row.
+func (s *Store) Delete(ctx context.Context, id string) error {
+	if err := s.exec(ctx, "DELETE FROM [[.Table]] WHERE id = "+s.mark(1), id); err != nil {
+		return fmt.Errorf("the row does not delete: %w", err)
+	}
+	return nil
+}
+
+// query runs a read inside the transaction of the request when one is open.
+func (s *Store) query(ctx context.Context, sql string, args ...any) (drel.Rows, error) {
+	if tx, ok := drel.FromContext(ctx); ok {
+		return tx.Query(ctx, sql, args...)
+	}
+	return s.engine.Query(ctx, sql, args...)
+}
+
+// exec runs a write inside the transaction of the request when one is open, so
+// the write and the response commit together. See S4.
+func (s *Store) exec(ctx context.Context, sql string, args ...any) error {
+	if tx, ok := drel.FromContext(ctx); ok {
+		_, err := tx.Exec(ctx, sql, args...)
+		return err
+	}
+	_, err := s.engine.Exec(ctx, sql, args...)
+	return err
+}
+
+// mark returns the parameter mark of the dialect. PostgreSQL counts its
+// parameters and SQLite does not.
+func (s *Store) mark(n int) string {
+	if s.engine != nil && s.engine.DialectName() == "postgres" {
+		return fmt.Sprintf("$%d", n)
+	}
+	return "?"
+}
+
+// newID returns a random identifier.
+func newID() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return time.Now().UTC().Format("20060102150405.000000000")
+	}
+	return hex.EncodeToString(b)
+}

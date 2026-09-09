@@ -10,12 +10,15 @@ import (
 	"strings"
 )
 
-// Streams holds the output of one run.
+// Streams holds the input and the output of one run.
 type Streams struct {
 	// Out receives the result of a command.
 	Out io.Writer
 	// Err receives a fault.
 	Err io.Writer
+	// In carries the requests of `avero mcp`. A nil value reads the standard
+	// input.
+	In io.Reader
 	// Dir is the working directory. An empty value is the process
 	// directory.
 	Dir string
@@ -44,6 +47,8 @@ func init() {
 			Summary: "write a new application", Run: runNew},
 		{Name: "generate", Usage: "avero generate [--check]",
 			Summary: "write the generated files of this application", Run: runGenerate},
+		{Name: "slice", Usage: "avero slice <name>",
+			Summary: "write a new feature slice", Run: runSlice},
 		{Name: "dev", Usage: "avero dev [--port 8080]",
 			Summary: "run the application and rebuild it on each change", Run: runDev},
 		{Name: "build", Usage: "avero build [--minify]",
@@ -64,6 +69,8 @@ func init() {
 			Summary: "fetch a bundled module into the vendor directory", Run: runJS},
 		{Name: "assets", Usage: "avero assets init",
 			Summary: "write the package.json of tier 1", Run: runAssets},
+		{Name: "mcp", Usage: "avero mcp",
+			Summary: "serve the agent surface over stdio", Run: runMCP},
 		{Name: "version", Usage: "avero version", Summary: "print the version", Run: runVersion},
 		{Name: "help", Usage: "avero help [command]", Summary: "print this text", Run: runHelp},
 	}
@@ -76,7 +83,6 @@ var later = []struct{ Name, Subsystem string }{
 	{"avero outbox dead --list|--replay", "S7, the outbox relay"},
 	{"avero inbox dead --list|--replay", "S8, the inbox consumer"},
 	{"avero es replay|streams|checkpoints", "S9, the event sourcing"},
-	{"avero mcp", "S16, the agent surface"},
 }
 
 // Run performs one command and returns the exit code of the process.

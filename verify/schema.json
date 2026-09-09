@@ -16,10 +16,11 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["step", "state", "message", "file", "line", "column"],
+        "required": ["name", "status", "duration_ms", "message", "file", "line", "column"],
         "properties": {
-          "step": { "type": "string" },
-          "state": { "type": "string", "enum": ["pass", "fail"] },
+          "name": { "type": "string" },
+          "status": { "type": "string", "enum": ["pass", "fail"] },
+          "duration_ms": { "type": "integer" },
           "message": { "type": "string" },
           "file": { "type": "string" },
           "line": { "type": "integer" },

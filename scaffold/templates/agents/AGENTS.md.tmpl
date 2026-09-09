@@ -4,12 +4,26 @@
 configuration, the telemetry and the routing. This application owns the
 semantics.
 
-## Commands
+## The gate
 
 ```
 avero verify          the gate. Run it before you say that the work is done.
+```
+
+`avero verify --json` writes one record for each step, with the name, the
+status, the time and, for a failure, the file, the line and the message. The
+order never changes.
+
+## The other commands
+
+```
 avero generate        write the generated files after a change to an input type
+avero slice <name>    write a new feature slice
 avero doctor          prove the configuration, the database and the broker
+avero routes          print the routes
+avero modules         print the contribution of each module
+avero schema          print the models
+avero dev             run the application and rebuild it on each change
 go test ./... -race
 ```
 
@@ -24,6 +38,20 @@ go test ./... -race
 6. Explicit beats short. Do not add magic to save a line.
 7. One feature directory holds its handlers, its models, its views and its
    tests. A feature does not import another feature.
+8. Move a fault to compile time when you can.
+
+## The layout
+
+```
+main.go                     the composition root
+config.go                   every variable that the application reads
+wire.go                     the router, the middleware and the modules
+internal/features/          one directory for each feature
+internal/ui/                the views. They import no feature package.
+migrations/                 the SQL files
+assets/                     the source of the stylesheet and of the script
+avero.json                  the shape and the asset pipeline
+```
 
 ## Error rules
 

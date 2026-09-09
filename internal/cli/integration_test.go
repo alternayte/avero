@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/alternayte/avero/internal/budget"
-	"github.com/alternayte/avero/internal/cli"
+	"github.com/alternayte/avero/verify"
 )
 
 // The integration suite scaffolds each shape, builds it and runs its
@@ -162,22 +162,19 @@ func TestVerifyRunsTheGateAndValidatesAgainstItsSchema(t *testing.T) {
 		t.Fatalf("avero verify returned %d:\n%s\n%s", code, out, errOut)
 	}
 	var report struct {
-		Schema  string `json:"schema"`
-		OK      bool   `json:"ok"`
-		Records []struct {
-			Step, State, Message, File string
-			Line, Column               int
-		} `json:"records"`
+		Schema  string          `json:"schema"`
+		OK      bool            `json:"ok"`
+		Records []verify.Record `json:"records"`
 	}
 	if err := json.Unmarshal([]byte(out), &report); err != nil {
 		t.Fatalf("the report does not parse: %v\n%s", err, out)
 	}
-	if report.Schema != cli.VerifySchemaID || !report.OK {
+	if report.Schema != verify.SchemaID || !report.OK {
 		t.Fatalf("the report holds %+v", report)
 	}
 	steps := make([]string, 0, len(report.Records))
 	for _, row := range report.Records {
-		steps = append(steps, row.Step)
+		steps = append(steps, row.Name)
 	}
 	if strings.Join(steps, ",") != "gofmt,vet,generate,test,build" {
 		t.Fatalf("the steps are %v, and the order must not change", steps)
