@@ -242,6 +242,49 @@ func BadRequest(detail string) *Problem { return router.BadRequest(detail) }
 // ProblemOf returns the problem that an error carries. See router.ProblemOf.
 func ProblemOf(err error) *Problem { return router.ProblemOf(err) }
 
+// Result is the answer of a typed handler. The type argument names the body,
+// so the compiler holds the shape of the answer and the description of the API
+// reads it. See router.Result.
+type Result[T any] = router.Result[T]
+
+// NoBody is the body of an answer that carries none.
+type NoBody = router.NoBody
+
+// OK returns 200 with this body.
+func OK[T any](body T) Result[T] { return router.OK(body) }
+
+// Created returns 201 with this body.
+func Created[T any](body T) Result[T] { return router.Created(body) }
+
+// Done returns 204 and no body.
+func Done() Result[NoBody] { return router.Done() }
+
+// OpOption states one more fact of an operation, such as a tag or another
+// answer.
+type OpOption = router.OpOption
+
+// Summary names the operation for a person.
+func Summary(text string) OpOption { return router.Summary(text) }
+
+// Deprecated marks an operation that a caller must leave.
+func Deprecated() OpOption { return router.Deprecated() }
+
+// Tags group the operations of a description.
+func Tags(names ...string) OpOption { return router.Tags(names...) }
+
+// Answers states one more status that the operation writes.
+//
+//	avero.Post(r, "/posts", m.Create, avero.Answers[avero.Problem](409, "the title is taken"))
+func Answers[T any](code int, description string) OpOption {
+	return router.Answers[T](code, description)
+}
+
+// AnswersNothing states one more status that the operation writes with no
+// body.
+func AnswersNothing(code int, description string) OpOption {
+	return router.AnswersNothing(code, description)
+}
+
 // NoContent returns 204 with no body.
 func NoContent() Response { return router.NoContent() }
 

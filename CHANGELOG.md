@@ -7,6 +7,21 @@ The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Typed routes and a runtime describer.** A route registers with the type of
+  its input and the type of the body of its answer:
+
+  ```go
+  avero.Get(r, "/posts/{id}", m.Show,
+      avero.Answers[avero.Problem](http.StatusNotFound, "the post does not exist"))
+
+  func (m *Module) Show(c *avero.Ctx, in ShowInput) (avero.Result[View], error)
+  ```
+
+  The compiler holds both types, so a wrong name does not build.
+  `avero.Result`, `avero.OK`, `avero.Created` and `avero.Done` write the
+  answer. The options `avero.Summary`, `avero.Tags`, `avero.Deprecated`,
+  `avero.Answers` and `avero.AnswersNothing` state what a signature cannot
+  carry, such as a second status.
 - **Typed errors and Problem Details, RFC 9457.** `avero.Problem` is an error
   and a response. A handler returns `avero.NotFound("post", id)`, and the
   router writes `application/problem+json` with the status, the title, the
@@ -15,8 +30,36 @@ The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `errors.Is(err, avero.ErrNotFound)` answers for every 404, and a problem
   wraps a cause, so a store keeps its own error and the client never reads it.
 
+- The DX-3 budget is 5 s. It was 3 s. Four measurements of one quiet laptop
+  read 3.1 s, 5.7 s, 5.7 s and 7.3 s, so 3 s held only on the best run of an
+  idle machine, and the gate failed for the load of its machine and not for a
+  fault of the loop. The parts of one rebuild stand in the SDD, section 3.
+
+### Removed
+
+- The generator that read the source of an application to write the
+  description of its API, 1350 lines with its tests. The application states
+  its own routes now.
+
 ### Changed
 
+- `avero routes --openapi` runs the application through the inspection channel
+  that `avero routes` already used, and reads the operations that the router
+  holds. It reads no comment and no source text. A route registration touches
+  no database and opens no port, so the command still needs no infrastructure.
+  The reflection reads the types one time, and never on a request path.
+- The `//avero:response` directive is gone. A comment stated a type that
+  nothing checked, so a name with one wrong letter wrote a reference to a
+  schema that did not exist, and the client of the front end broke with no
+  message.
+- The wrapper `avero.In` is gone from the JSON shapes. `avero.Get`,
+  `avero.Post`, `avero.Put`, `avero.Patch` and `avero.Delete` register a typed
+  handler and read its types. The ssr shape keeps `avero.In`, because a page
+  answers a view and names no body.
+- The description states the error answers of every route against one Problem
+  schema. A route that binds a value states 400 and 422.
+- A summary comes from `avero.Summary` now. The generator read the comment of
+  a handler before, and the description carries what the code states.
 - A handler error answers the problem that it carries. An error that carries
   no problem stays a 500, and its message stays in the log.
 - The validation fault and the bind fault answer problem documents. The field

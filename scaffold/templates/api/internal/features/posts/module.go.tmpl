@@ -3,6 +3,8 @@
 package posts
 
 import (
+	"net/http"
+
 	"github.com/alternayte/avero"
 	"github.com/alternayte/drel"
 )
@@ -22,11 +24,18 @@ func New(engine *drel.Engine) *Module { return &Module{store: NewStore(engine)} 
 func (m *Module) Name() string { return "posts" }
 
 // Routes registers the JSON routes of the feature.
+//
+// The registration reads the type of the input and the type of the answer from
+// the handler, so the description of the API needs no comment.
 func (m *Module) Routes(r *avero.Router) {
-	r.Get("/posts", avero.In(m.List))
-	r.Post("/posts", avero.In(m.Create))
-	r.Get("/posts/{id}", avero.In(m.Show))
-	r.Delete("/posts/{id}", avero.In(m.Delete))
+	avero.Get(r, "/posts", m.List, avero.Summary("List every post"))
+	avero.Post(r, "/posts", m.Create, avero.Summary("Write one post"))
+	// An answer that the signature cannot carry stands in an option, so the
+	// description names every case that a client meets.
+	avero.Get(r, "/posts/{id}", m.Show,
+		avero.Summary("Answer one post"),
+		avero.Answers[avero.Problem](http.StatusNotFound, "the post does not exist"))
+	avero.Delete(r, "/posts/{id}", m.Delete, avero.Summary("Delete one post"))
 }
 
 // Describe states what the feature contributes. `avero schema` reads it.

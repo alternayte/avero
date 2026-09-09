@@ -3,7 +3,6 @@ package cli_test
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -310,61 +309,16 @@ func TestJSPinStatesTheFormOfTheCommand(t *testing.T) {
 	}
 }
 
-func TestRoutesWritesTheOpenAPIDescription(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module blog\n\ngo 1.26.2\n"), 0o644); err != nil {
-		t.Fatalf("WriteFile returned %v", err)
+// The description comes from the running application now, so a directory that
+// holds no application states the repair. A scaffolded application proves the
+// document itself. See TestTheOpenAPIDescriptionOfAScaffoldedApplication.
+func TestRoutesNeedsAnApplicationForTheDescription(t *testing.T) {
+	code, _, errOut := run(t, t.TempDir(), "routes", "--openapi")
+	if code != 1 {
+		t.Fatalf("the code is %d, want 1", code)
 	}
-	source := `package main
-
-import "github.com/alternayte/avero"
-
-type Module struct{}
-
-type ShowInput struct {
-	ID string ` + "`path:\"id\" validate:\"required\"`" + `
-}
-
-// Show answers one post.
-func (m *Module) Show(c *avero.Ctx, in ShowInput) (avero.Response, error) {
-	return avero.NoContent(), nil
-}
-
-func (m *Module) Routes(r *avero.Router) {
-	r.Get("/posts/{id}", avero.In(m.Show))
-}
-`
-	if err := os.WriteFile(filepath.Join(dir, "posts.go"), []byte(source), 0o644); err != nil {
-		t.Fatalf("WriteFile returned %v", err)
-	}
-
-	code, out, errOut := run(t, dir, "routes", "--openapi")
-	if code != 0 {
-		t.Fatalf("the code is %d: %s", code, errOut)
-	}
-	var doc map[string]any
-	if err := json.Unmarshal([]byte(out), &doc); err != nil {
-		t.Fatalf("the description does not parse: %v\n%s", err, out)
-	}
-	paths, _ := doc["paths"].(map[string]any)
-	if _, ok := paths["/posts/{id}"]; !ok {
-		t.Fatalf("the description holds %v", paths)
-	}
-
-	// The file form writes the same document.
-	code, out, errOut = run(t, dir, "routes", "--openapi", "--out", "openapi.json", "--server", "https://api.example.com")
-	if code != 0 {
-		t.Fatalf("the code is %d: %s", code, errOut)
-	}
-	if !strings.Contains(out, "1 paths") {
-		t.Fatalf("the output holds %q", out)
-	}
-	body, err := os.ReadFile(filepath.Join(dir, "openapi.json"))
-	if err != nil {
-		t.Fatalf("the command wrote no file: %v", err)
-	}
-	if !strings.Contains(string(body), "https://api.example.com") {
-		t.Fatalf("the document names no server:\n%s", body)
+	if !strings.Contains(errOut, "avero new") {
+		t.Fatalf("the fault states no repair: %q", errOut)
 	}
 }
 

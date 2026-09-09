@@ -1,18 +1,19 @@
-// Package openapi writes the OpenAPI description of an application, S14.
+// Package openapi writes the OpenAPI description of an application, S13.
 //
-// `avero routes --openapi` reads the routes of each module and the input type
-// of each handler, and it writes an OpenAPI 3.1 document. It reads the source
-// and runs nothing, so it needs no database and no running application.
+// `avero routes --openapi` runs the application with its inspection flag and
+// reads the operations that the router holds. A route registration touches no
+// database and opens no port, so the command needs no infrastructure.
 //
 // The description carries what the code states: the path, the method, the
-// parameters, the body and the validation of each field. It carries no answer
-// schema, because a handler states its answer in Go and not in a tag. Write
-// the answer of a route in the description of its module when a client needs
-// it.
+// parameters, the body, the validation of each field, and the type of the
+// answer. The types come from the signature of each handler, so the compiler
+// holds them and no comment can drift from them. Describe reads the types one
+// time, and never on a request path. See design rule 2.
 package openapi
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 )
@@ -173,4 +174,17 @@ func (d *Document) Operation(method, path string) (Operation, bool) {
 	}
 	op, ok := item[strings.ToLower(method)]
 	return op, ok
+}
+
+// Parse reads a description that an application wrote.
+//
+// `avero routes --openapi` runs the application, which prints the document.
+// The command reads it back, so it can add the address of a server before it
+// writes the file.
+func Parse(body []byte) (*Document, error) {
+	var doc Document
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return nil, fmt.Errorf("avero routes: the application wrote no description\n  → Run `go build ./...` and repair the fault that the compiler names: %w", err)
+	}
+	return &doc, nil
 }

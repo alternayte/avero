@@ -15,6 +15,15 @@ import type { Task } from "./client";
 // Every call comes from src/client, which `avero build` writes from the
 // description of the API. A change to a Go handler therefore reaches this file
 // as a type fault, and no shape is written two times.
+// reason reads the message of a failure.
+//
+// The API answers a problem document, which RFC 9457 states. The detail names
+// this one answer, and the title names the kind of fault.
+function reason(error: unknown): string {
+    const problem = error as { detail?: string; title?: string } | null;
+    return problem?.detail ?? problem?.title ?? "the request failed";
+}
+
 export function Board() {
     const queries = useQueryClient();
     const [title, setTitle] = useState("");
@@ -46,7 +55,7 @@ export function Board() {
         return <p>The board loads.</p>;
     }
     if (tasks.isError) {
-        return <p className="error">The board does not load: {tasks.error.message}</p>;
+        return <p className="error">The board does not load: {reason(tasks.error)}</p>;
     }
 
     const rows: Task[] = tasks.data?.tasks ?? [];

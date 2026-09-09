@@ -1,8 +1,6 @@
 package posts
 
 import (
-	"net/http"
-
 	"github.com/alternayte/avero"
 
 	"[[.Module]]/internal/features/posts/model"
@@ -33,50 +31,46 @@ func view(p *model.Post) View {
 
 // List answers every post.
 //
-//avero:response 200 PostList
-func (m *Module) List(c *avero.Ctx, in ListInput) (avero.Response, error) {
+// The type of the answer states the shape that the description of the API
+// carries. The compiler holds it, so no comment can drift from it.
+func (m *Module) List(c *avero.Ctx, in ListInput) (avero.Result[PostList], error) {
 	posts, err := m.store.List(c.Context(), in.Search)
 	if err != nil {
-		return nil, err
+		return avero.Result[PostList]{}, err
 	}
 	out := PostList{Posts: make([]View, 0, len(posts))}
 	for _, p := range posts {
 		out.Posts = append(out.Posts, view(p))
 	}
-	return avero.JSON(http.StatusOK, out), nil
+	return avero.OK(out), nil
 }
 
 // Create writes one post.
-//
-//avero:response 201 View
-func (m *Module) Create(c *avero.Ctx, in CreateInput) (avero.Response, error) {
+func (m *Module) Create(c *avero.Ctx, in CreateInput) (avero.Result[View], error) {
 	post, err := m.store.Create(c.Context(), in.Title, in.Body)
 	if err != nil {
-		return nil, err
+		return avero.Result[View]{}, err
 	}
-	return avero.JSON(http.StatusCreated, view(post)), nil
+	return avero.Created(view(post)), nil
 }
 
 // Show answers one post.
-//
-//avero:response 200 View
-func (m *Module) Show(c *avero.Ctx, in ShowInput) (avero.Response, error) {
+func (m *Module) Show(c *avero.Ctx, in ShowInput) (avero.Result[View], error) {
 	post, found, err := m.store.Get(c.Context(), in.ID)
 	if err != nil {
-		return nil, err
+		return avero.Result[View]{}, err
 	}
 	if !found {
-		return nil, avero.NotFound("post", in.ID)
+		// The router writes the problem document. See RFC 9457.
+		return avero.Result[View]{}, avero.NotFound("post", in.ID)
 	}
-	return avero.JSON(http.StatusOK, view(post)), nil
+	return avero.OK(view(post)), nil
 }
 
 // Delete removes one post.
-//
-//avero:response 204
-func (m *Module) Delete(c *avero.Ctx, in DeleteInput) (avero.Response, error) {
+func (m *Module) Delete(c *avero.Ctx, in DeleteInput) (avero.Result[avero.NoBody], error) {
 	if err := m.store.Delete(c.Context(), in.ID); err != nil {
-		return nil, err
+		return avero.Done(), err
 	}
-	return avero.NoContent(), nil
+	return avero.Done(), nil
 }

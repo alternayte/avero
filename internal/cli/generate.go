@@ -12,6 +12,7 @@ import (
 	"github.com/alternayte/avero/assets"
 	"github.com/alternayte/avero/codegen"
 	"github.com/alternayte/avero/codegen/client"
+	"github.com/alternayte/avero/internal/inspect"
 	"github.com/alternayte/avero/openapi"
 )
 
@@ -190,7 +191,16 @@ func Describe(ctx context.Context, dir string, project *Project, s Streams) erro
 		return nil
 	}
 
-	doc, err := openapi.Generate(openapi.Options{Dir: dir, Title: project.Name})
+	// The application states its own routes. See runOpenAPI.
+	result, err := inspect.Run(ctx, dir, inspect.OpenAPI, false)
+	if err != nil {
+		return err
+	}
+	if result.Code != 0 {
+		return fmt.Errorf("avero build: the description of the API does not write\n%s\n  → Repair the fault that the message names, then run the command again",
+			strings.TrimSpace(result.Stderr))
+	}
+	doc, err := openapi.Parse([]byte(result.Stdout))
 	if err != nil {
 		return err
 	}

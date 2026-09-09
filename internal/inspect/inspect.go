@@ -27,6 +27,8 @@ const (
 	Routes = "routes"
 	// Modules returns the contribution of each module.
 	Modules = "modules"
+	// OpenAPI returns the description of the API of the application.
+	OpenAPI = "openapi"
 	// Schema returns the models that the modules describe.
 	Schema = "schema"
 	// Doctor proves the configuration, the database and the broker.

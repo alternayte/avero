@@ -3,6 +3,8 @@
 package [[.Package]]
 
 import (
+	"net/http"
+
 	"github.com/alternayte/avero"
 	"github.com/alternayte/drel"
 )
@@ -23,10 +25,12 @@ func (m *Module) Name() string { return "[[.Name]]" }
 
 // Routes registers the routes of the feature.
 func (m *Module) Routes(r *avero.Router) {
-	r.Get("/[[.Plural]]", avero.In(m.List))
-	r.Post("/[[.Plural]]", avero.In(m.Create))
-	r.Get("/[[.Plural]]/{id}", avero.In(m.Show))
-	r.Delete("/[[.Plural]]/{id}", avero.In(m.Delete))
+	avero.Get(r, "/[[.Plural]]", m.List, avero.Summary("List every [[.Singular]]"))
+	avero.Post(r, "/[[.Plural]]", m.Create, avero.Summary("Write one [[.Singular]]"))
+	avero.Get(r, "/[[.Plural]]/{id}", m.Show,
+		avero.Summary("Answer one [[.Singular]]"),
+		avero.Answers[avero.Problem](http.StatusNotFound, "the [[.Singular]] does not exist"))
+	avero.Delete(r, "/[[.Plural]]/{id}", m.Delete, avero.Summary("Delete one [[.Singular]]"))
 }
 
 // Describe states what the feature contributes. `avero schema` and the agent

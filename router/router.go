@@ -154,8 +154,14 @@ func (r *Router) Mount(prefix string, h http.Handler) {
 // register records one route. It records a fault instead of the route when the
 // registration is wrong, so that every fault reaches one report.
 func (r *Router) register(method, pattern string, h Handler) {
+	r.registerOp(method, pattern, h, nil, 3)
+}
+
+// registerOp records one route and the operation that a typed registration
+// states. A plain handler passes a nil operation.
+func (r *Router) registerOp(method, pattern string, h Handler, op *Operation, skip int) {
 	full := joinPattern(r.prefix, pattern)
-	file, line := caller(2)
+	file, line := caller(skip)
 	switch {
 	case pattern == "":
 		r.fault(file, line, fmt.Sprintf("the %s route has an empty pattern", method),
@@ -170,10 +176,20 @@ func (r *Router) register(method, pattern string, h Handler) {
 			"Pass a handler to the route, or delete the registration")
 		return
 	}
+	name := handlerName(h)
+	if op != nil {
+		op.Pattern = full
+		// The wrapper of a typed route is a closure, so the table names the
+		// function that a person wrote.
+		if op.Handler != "" {
+			name = op.Handler
+		}
+	}
 	r.add(Route{
 		Method:     method,
 		Pattern:    full,
-		Handler:    handlerName(h),
+		Op:         op,
+		Handler:    name,
 		Middleware: names(r.mws),
 		File:       file,
 		Line:       line,

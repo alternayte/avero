@@ -20,6 +20,10 @@ type Route struct {
 	// surrounds a mounted handler.
 	Mounted bool `json:"mounted"`
 
+	// Op states what the route answers. A typed registration fills it, and
+	// the description of the API reads it. A plain handler leaves it nil.
+	Op *Operation `json:"operation,omitempty"`
+
 	handler  Handler
 	mws      []Middleware
 	mount    http.Handler

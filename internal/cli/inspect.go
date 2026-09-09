@@ -15,7 +15,7 @@ import (
 func runRoutes(ctx context.Context, s Streams, args []string) int {
 	for i, a := range args {
 		if a == "--openapi" || a == "-openapi" {
-			return runOpenAPI(s, append(append([]string(nil), args[:i]...), args[i+1:]...))
+			return runOpenAPI(ctx, s, append(append([]string(nil), args[:i]...), args[i+1:]...))
 		}
 	}
 	return ask(ctx, s, inspect.Routes, args)
@@ -23,8 +23,10 @@ func runRoutes(ctx context.Context, s Streams, args []string) int {
 
 // runOpenAPI writes the OpenAPI description of the application.
 //
-// It reads the source, so it needs no database and no running application.
-func runOpenAPI(s Streams, args []string) int {
+// The application states its own routes, so the command runs it with the
+// inspection flag. A route registration touches no database and opens no
+// port, so the command needs no infrastructure. See the SDD, S13.
+func runOpenAPI(ctx context.Context, s Streams, args []string) int {
 	out := ""
 	server := ""
 	for i := 0; i < len(args); i++ {
@@ -53,13 +55,22 @@ func runOpenAPI(s Streams, args []string) int {
 	}
 
 	dir := dirOf(s)
-	project, err := LoadProject(dir)
+	result, err := inspect.Run(ctx, dir, inspect.OpenAPI, false)
 	if err != nil {
 		return fail(s, err)
 	}
-	doc, err := openapi.Generate(openapi.Options{Dir: dir, Title: project.Name, Server: server})
+	if result.Code != 0 {
+		if result.Stderr != "" {
+			_, _ = fmt.Fprintln(s.Err, result.Stderr)
+		}
+		return result.Code
+	}
+	doc, err := openapi.Parse([]byte(result.Stdout))
 	if err != nil {
 		return fail(s, err)
+	}
+	if server != "" {
+		doc.Servers = []openapi.Server{{URL: server}}
 	}
 	body := doc.String() + "\n"
 	if out == "" {

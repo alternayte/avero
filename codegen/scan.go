@@ -108,9 +108,10 @@ func scan(fset *token.FileSet, name string, files []*ast.File, c *collector) pkg
 
 // handlerInput returns the input type of a handler method. A handler is
 //
-//	func (m *Module) Name(ctx *avero.Ctx, in Input) (avero.Response, error)
+//	func (m *Module) Name(ctx *avero.Ctx, in Input) (avero.Result[View], error)
 //
-// The generator reads the shape and needs no marker comment.
+// The older shape answers avero.Response, and the generator reads it too. The
+// generator reads the shape and needs no marker comment.
 func handlerInput(d *ast.FuncDecl) (string, bool) {
 	if d.Recv == nil || d.Type.Params == nil || d.Type.Results == nil {
 		return "", false
@@ -125,13 +126,22 @@ func handlerInput(d *ast.FuncDecl) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	if !isSelectorNamed(d.Type.Results.List[0].Type, "Response") {
+	if !answersAResult(d.Type.Results.List[0].Type) {
 		return "", false
 	}
 	if id, ok := d.Type.Results.List[1].Type.(*ast.Ident); !ok || id.Name != "error" {
 		return "", false
 	}
 	return in.Name, true
+}
+
+// answersAResult reports the first result of a handler. It is avero.Result of
+// one type, or avero.Response.
+func answersAResult(expr ast.Expr) bool {
+	if index, ok := expr.(*ast.IndexExpr); ok {
+		return isSelectorNamed(index.X, "Result")
+	}
+	return isSelectorNamed(expr, "Response")
 }
 
 // checkReceiver returns the type of a custom validation hook. The hook is

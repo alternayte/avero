@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"net"
 	"net/url"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/alternayte/avero/host"
 	"github.com/alternayte/avero/internal/migrations"
 	"github.com/alternayte/avero/module"
+	"github.com/alternayte/avero/openapi"
 	"github.com/alternayte/drel"
 )
 
@@ -76,6 +78,18 @@ func Inspect[T any](args []string, out, errOut io.Writer, r *Router, set *Module
 			return 1
 		}
 		return write(out, errOut, rep, rep.String(), asJSON)
+	case "openapi":
+		rep, err := r.Report()
+		if err != nil {
+			_, _ = fmt.Fprintln(errOut, err)
+			return 1
+		}
+		// The application names itself, so the description carries the name
+		// that a person reads. The version of the description follows the
+		// binary.
+		doc := openapi.Describe(AppName(), AppVersion(), rep.Routes, nil)
+		_, _ = io.WriteString(out, doc.String())
+		return 0
 	case "schema":
 		rep := Schema(set)
 		return write(out, errOut, rep, rep.String(), asJSON)
@@ -93,7 +107,7 @@ func Inspect[T any](args []string, out, errOut io.Writer, r *Router, set *Module
 		}
 		return 0
 	default:
-		_, _ = fmt.Fprintf(errOut, "avero: the inspection command %q is not known\n  → Run routes, modules, schema or doctor\n", name)
+		_, _ = fmt.Fprintf(errOut, "avero: the inspection command %q is not known\n  → Run routes, modules, openapi, schema or doctor\n", name)
 		return 1
 	}
 }
@@ -310,4 +324,31 @@ func defaultPort(scheme string) string {
 	default:
 		return "5672"
 	}
+}
+
+// AppName returns the name of the application, which the description of the
+// API carries.
+//
+// The binary reads its own module path, so a person needs to state the name in
+// no second place.
+func AppName() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok || info.Main.Path == "" {
+		return "application"
+	}
+	path := info.Main.Path
+	if i := strings.LastIndex(path, "/"); i >= 0 && i+1 < len(path) {
+		return path[i+1:]
+	}
+	return path
+}
+
+// AppVersion returns the version of the application, which the description of
+// the API carries. A build from the source names 0.0.0.
+func AppVersion() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok || info.Main.Version == "" || strings.Contains(info.Main.Version, "devel") {
+		return "0.0.0"
+	}
+	return strings.TrimPrefix(info.Main.Version, "v")
 }

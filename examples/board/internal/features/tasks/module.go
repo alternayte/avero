@@ -3,6 +3,8 @@
 package tasks
 
 import (
+	"net/http"
+
 	"github.com/alternayte/avero"
 	"github.com/alternayte/drel"
 )
@@ -22,11 +24,16 @@ func New(engine *drel.Engine) *Module { return &Module{store: NewStore(engine)} 
 func (m *Module) Name() string { return "tasks" }
 
 // Routes registers the JSON routes that the front end calls.
+//
+// The registration reads the type of the input and the type of the answer from
+// the handler, so the description of the API needs no comment.
 func (m *Module) Routes(r *avero.Router) {
-	r.Get("/api/tasks", avero.In(m.List))
-	r.Post("/api/tasks", avero.In(m.Create))
-	r.Patch("/api/tasks/{id}", avero.In(m.Update))
-	r.Delete("/api/tasks/{id}", avero.In(m.Delete))
+	avero.Get(r, "/api/tasks", m.List, avero.Summary("List every task"))
+	avero.Post(r, "/api/tasks", m.Create, avero.Summary("Write one task"))
+	avero.Patch(r, "/api/tasks/{id}", m.Update,
+		avero.Summary("Mark one task complete, or open again"),
+		avero.Answers[avero.Problem](http.StatusNotFound, "the task does not exist"))
+	avero.Delete(r, "/api/tasks/{id}", m.Delete, avero.Summary("Delete one task"))
 }
 
 // Describe states what the feature contributes. `avero schema` reads it.

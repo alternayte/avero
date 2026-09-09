@@ -168,13 +168,21 @@ func TestTheSpaShapeCarriesAViteProject(t *testing.T) {
 			t.Fatalf("openapi-ts.config.ts holds no %q", want)
 		}
 	}
-	// The handlers state the answer of each route, so the description carries
-	// the shape that the front end reads.
+	// The type of each handler states the answer of its route, so the
+	// description carries the shape that the front end reads. A comment
+	// states nothing, and the compiler holds the type.
 	handlers := readFile(t, filepath.Join(dir, "internal", "features", "tasks", "handlers.go"))
-	for _, want := range []string{"//avero:response 200 TaskList", "//avero:response 201 Task", "//avero:response 204"} {
+	for _, want := range []string{
+		"(avero.Result[TaskList], error)",
+		"(avero.Result[Task], error)",
+		"(avero.Result[avero.NoBody], error)",
+	} {
 		if !strings.Contains(handlers, want) {
 			t.Fatalf("handlers.go states no %q", want)
 		}
+	}
+	if strings.Contains(handlers, "//avero:response") {
+		t.Fatalf("handlers.go still carries a response directive:\n%s", handlers)
 	}
 	// The index document of the front end stands until Vite writes its own,
 	// so the application builds and runs at once.
@@ -315,7 +323,7 @@ func TestWriteSliceWritesTheFeatureAndItsMigration(t *testing.T) {
 		t.Fatalf("WriteSlice wrote %v", written)
 	}
 	body := readFile(t, filepath.Join(dir, "internal", "features", "comments", "module.go"))
-	if !strings.Contains(body, "package comments") || !strings.Contains(body, `r.Get("/comments"`) {
+	if !strings.Contains(body, "package comments") || !strings.Contains(body, `avero.Get(r, "/comments"`) {
 		t.Fatalf("module.go holds %q", body)
 	}
 	if strings.Contains(body, "[[") {
