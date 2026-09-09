@@ -46,7 +46,7 @@ blog/
 ├── migrations/               the SQL files
 ├── assets/                   the source of the stylesheet and of the script
 ├── AGENTS.md                 the rules that an agent reads
-└── .avero/skills/            one file for each task that repeats
+└── .claude/skills/           one skill for each task that repeats
 ```
 
 ## Add a feature

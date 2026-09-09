@@ -263,8 +263,12 @@ func targetName(name string) string {
 		return ".gitignore"
 	case name == "env.example":
 		return ".env.example"
-	case strings.HasPrefix(name, "avero-skills/"):
-		return ".avero/skills/" + strings.TrimPrefix(name, "avero-skills/")
+	case strings.HasPrefix(name, "claude-skills/"):
+		// The skills follow the Agent Skills format: one directory for each
+		// skill, and a SKILL.md with a name and a description in its
+		// frontmatter. A coding agent reads .claude/skills of a project
+		// without a setting. See the SDD, S16 part B.
+		return ".claude/skills/" + strings.TrimPrefix(name, "claude-skills/")
 	default:
 		return name
 	}

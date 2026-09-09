@@ -126,6 +126,17 @@ func New(cfg Config) (*Server, error) {
 	return s, nil
 }
 
+// Watch returns the source files of the first change of the tree. A test reads
+// it. The loop runs the same watcher.
+func (s *Server) Watch(ctx context.Context) ([]string, error) {
+	w, err := newWatcher(s.cfg.Dir)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = w.Close() }()
+	return w.next(ctx)
+}
+
 // Sweep returns the source files of the tree that changed after a time. The
 // loop calls it after each rebuild, and a test reads it.
 func (s *Server) Sweep(since time.Time) []string {

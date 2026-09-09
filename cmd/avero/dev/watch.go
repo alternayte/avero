@@ -84,7 +84,10 @@ func (w *watcher) drain() {
 		if !ok {
 			return
 		}
-		if e.Op&fsnotify.Chmod != 0 {
+		if e.Op == fsnotify.Chmod {
+			// A change of the mode alone is no change of the content. A
+			// write carries the mode with it on macOS, which reports
+			// WRITE|CHMOD, so the test is an equality and not a mask.
 			continue
 		}
 		if isDir(e.Name) {

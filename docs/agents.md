@@ -6,17 +6,29 @@ no feature that calls a language model.
 ## The scaffolded files
 
 `avero new` writes `AGENTS.md` with the eight design rules, the layout and the
-gate. It writes four skills:
+gate. It writes four skills in the Agent Skills format:
 
 ```
-.avero/skills/add-slice.md
-.avero/skills/add-projection.md
-.avero/skills/add-inbox-handler.md
-.avero/skills/add-client.md
+.claude/skills/add-slice/SKILL.md
+.claude/skills/add-client/SKILL.md
+.claude/skills/add-projection/SKILL.md
+.claude/skills/add-inbox-handler/SKILL.md
 ```
 
-Each skill states the steps, the files to write and the command that proves the
-work.
+Each skill carries a name and a description in its frontmatter, and then the
+steps, the files to write and the command that proves the work. A coding agent
+reads `.claude/skills` of a project without a setting, so a person needs no
+configuration.
+
+```yaml
+---
+name: add-slice
+description: Use when the task adds a feature to this Avero application, ...
+---
+```
+
+The description states when to use the skill, so an agent chooses the right one
+before it reads the body.
 
 ## The MCP server
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -30,7 +31,7 @@ func TestEachShapeWritesItsFiles(t *testing.T) {
 	}{
 		{scaffold.ShapeSSR, []string{
 			"main.go", "wire.go", "config.go", "avero.json", "AGENTS.md",
-			".avero/skills/add-slice.md", ".env.example", ".gitignore",
+			".claude/skills/add-slice/SKILL.md", ".env.example", ".gitignore",
 			"internal/features/posts/module.go", "internal/ui/ui.go",
 			"assets/dist/manifest.json", "acceptance_test.go",
 		}},
@@ -166,6 +167,34 @@ func TestWriteRefusesAnUnknownShapeAndAWrongName(t *testing.T) {
 	}
 }
 
+// skillName is the name that the Agent Skills format accepts.
+var skillName = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+
+// frontmatter returns the name and the description of a skill.
+func frontmatter(t *testing.T, body string) (name, description string) {
+	t.Helper()
+	if !strings.HasPrefix(body, "---\n") {
+		t.Fatalf("the skill carries no frontmatter:\n%s", body)
+	}
+	end := strings.Index(body[4:], "\n---\n")
+	if end < 0 {
+		t.Fatalf("the frontmatter does not close:\n%s", body)
+	}
+	for _, line := range strings.Split(body[4:4+end], "\n") {
+		key, value, found := strings.Cut(line, ":")
+		if !found {
+			continue
+		}
+		switch strings.TrimSpace(key) {
+		case "name":
+			name = strings.TrimSpace(value)
+		case "description":
+			description = strings.TrimSpace(value)
+		}
+	}
+	return name, description
+}
+
 // readFile returns the content of a file.
 func readFile(t *testing.T, name string) string {
 	t.Helper()
@@ -193,11 +222,27 @@ func TestTheAgentFilesStandInEveryShape(t *testing.T) {
 			}
 		}
 		for _, skill := range []string{"add-slice", "add-projection", "add-inbox-handler", "add-client"} {
-			body := readFile(t, filepath.Join(dir, ".avero", "skills", skill+".md"))
+			body := readFile(t, filepath.Join(dir, ".claude", "skills", skill, "SKILL.md"))
 			for _, want := range []string{"## Steps", "The command that proves the work"} {
 				if !strings.Contains(body, want) {
 					t.Fatalf("the skill %s of the %s shape holds no %q", skill, shape, want)
 				}
+			}
+			name, description := frontmatter(t, body)
+			// The Agent Skills format states a name of lower case letters,
+			// digits and dashes, and a description that says when to use the
+			// skill. An agent reads the two lines to decide.
+			if name != skill {
+				t.Fatalf("the skill %s names itself %q", skill, name)
+			}
+			if !skillName.MatchString(name) || len(name) > 64 {
+				t.Fatalf("the name %q does not follow the format", name)
+			}
+			if len(description) < 40 || len(description) > 1024 {
+				t.Fatalf("the description of %s holds %d characters", skill, len(description))
+			}
+			if !strings.HasPrefix(description, "Use when") {
+				t.Fatalf("the description of %s does not state when to use it: %q", skill, description)
 			}
 		}
 	}

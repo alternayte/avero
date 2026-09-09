@@ -385,3 +385,41 @@ func TestTheSweepFindsAChangeThatArrivedDuringABuild(t *testing.T) {
 		t.Fatalf("the sweep found %v after the change, want none", later)
 	}
 }
+
+func TestTheWatcherReportsAWriteThatCarriesAModeChange(t *testing.T) {
+	// os.WriteFile writes the content and the mode, and macOS reports
+	// WRITE|CHMOD for it. A filter that drops every event with the mode bit
+	// loses the change, and the page then holds the old answer.
+	dir := t.TempDir()
+	name := filepath.Join(dir, "main.go")
+	if err := os.WriteFile(name, []byte("package main\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile returned %v", err)
+	}
+
+	server, _, _, _ := loop(t, dir)
+	changed := make(chan []string, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	go func() {
+		files, err := server.Watch(ctx)
+		if err != nil {
+			return
+		}
+		changed <- files
+	}()
+
+	// The watcher needs a moment to reach the tree.
+	time.Sleep(100 * time.Millisecond)
+	if err := os.WriteFile(name, []byte("package main\n\n// changed\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile returned %v", err)
+	}
+
+	select {
+	case files := <-changed:
+		if len(files) != 1 || filepath.Base(files[0]) != "main.go" {
+			t.Fatalf("the watcher reported %v, want main.go", files)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("the watcher reported no change")
+	}
+}

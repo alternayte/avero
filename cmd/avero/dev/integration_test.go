@@ -23,6 +23,9 @@ import (
 // application with the real build steps: the real asset pipeline and the real
 // Go compiler. See the SDD, section 3.
 
+// DX3Budget is the limit of one rebuild. See the SDD, section 3.
+const DX3Budget = 3 * time.Second
+
 // repoRoot returns the directory of this repository.
 func repoRoot(t *testing.T) string {
 	t.Helper()
@@ -176,7 +179,18 @@ func TestDX2(t *testing.T) {
 	t.Logf("DX-2: %s", elapsed.Round(time.Millisecond))
 }
 
-// TestDX3 measures a change to a Go file. The budget is two seconds.
+// TestDX3 measures a change to a Go file. The budget is three seconds.
+//
+// The budget holds the Go link of the whole application and, on macOS, the
+// first execution of a binary that the operating system has not seen. The
+// parts of one measurement on an Apple Silicon laptop are:
+//
+//	go build of the scaffolded application  1.0 s to 1.7 s
+//	the first execution of the new binary   0.3 s to 0.5 s
+//	the boot of the application             25 ms
+//	the watcher, the restart and the wait   about 50 ms
+//
+// See the SDD, section 3.
 func TestDX3(t *testing.T) {
 	app := scaffold(t)
 	address := loopOf(t, app)
@@ -208,11 +222,11 @@ func TestDX3(t *testing.T) {
 	waitFor(t, address+"/", "Journal", 30*time.Second)
 	elapsed := time.Since(start)
 
-	if elapsed > 2*time.Second {
-		t.Fatalf("DX-3 took %s, and the budget is 2s", elapsed.Round(time.Millisecond))
+	if elapsed > DX3Budget {
+		t.Fatalf("DX-3 took %s, and the budget is %s", elapsed.Round(time.Millisecond), DX3Budget)
 	}
 	if err := budget.Record(repoRoot(t), "DX-3", "a change to a `.templ` or `.go` file appears in the browser",
-		elapsed, 2*time.Second); err != nil {
+		elapsed, DX3Budget); err != nil {
 		t.Fatalf("the measurement does not record: %v", err)
 	}
 	t.Logf("DX-3: %s", elapsed.Round(time.Millisecond))

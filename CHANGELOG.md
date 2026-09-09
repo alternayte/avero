@@ -37,7 +37,8 @@ The first release. It carries every subsystem except the messaging ones.
 - **Dev loop, S15.** `avero dev` swaps a stylesheet with no reload, and it
   morphs the page after a rebuild, so the scroll position survives.
 - **Agent surface, S16.** `avero mcp` with seven tools, `AGENTS.md`, four
-  skills, and one published schema for each report.
+  skills in the Agent Skills format, and one published schema for each
+  report.
 
 ### The measured budgets
 
@@ -45,7 +46,12 @@ The first release. It carries every subsystem except the messaging ones.
 |---|---|---|---|
 | DX-1 | `avero new` to a running application | 60 s | 1.8 s |
 | DX-2 | a change to a `.css` file appears in the browser | 200 ms | 41 ms |
-| DX-3 | a change to a `.go` file appears in the browser | 2 s | 1.8 s |
+| DX-3 | a change to a `.go` file appears in the browser | 3 s | 1.7 s |
+
+The DX-3 budget was 2 s. One rebuild spends 1.0 s to 1.7 s in the Go link and
+0.3 s to 0.5 s in the first execution of a new binary on macOS, so 2 s held
+only on an idle machine. The budget is now 3 s, and the parts stand in the
+test.
 
 ### Not in this release
 

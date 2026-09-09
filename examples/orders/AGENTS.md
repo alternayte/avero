@@ -76,5 +76,15 @@ use contractions.
 
 ## The skills
 
-`.avero/skills/` holds one file for each task that repeats. Read the file
-before you start the task.
+`.claude/skills/` holds one skill for each task that repeats:
+
+```
+.claude/skills/add-slice/SKILL.md            add a feature
+.claude/skills/add-client/SKILL.md           call another service
+.claude/skills/add-projection/SKILL.md       add a read model
+.claude/skills/add-inbox-handler/SKILL.md    consume a message
+```
+
+Each skill follows the Agent Skills format: a name and a description in the
+frontmatter, then the steps, the files to write and the command that proves
+the work. A coding agent reads them without a setting.
