@@ -3,7 +3,10 @@
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## v0.3.0
+
+This release changes the shape of every handler and of every route table. See
+"To move an application from v0.2" at the end of the entry.
 
 ### Added
 
@@ -53,6 +56,22 @@ The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The generator that read the source of an application to write the
   description of its API, 1350 lines with its tests. The application states
   its own routes now.
+- `avero.In` for a route that answers JSON, and the `//avero:response`
+  directive.
+
+### To move an application from v0.2
+
+1. Change each handler that answers JSON to return its value:
+   `func (m *Module) Show(c *avero.Ctx, in ShowInput) (View, error)`. A
+   handler that answers no body returns `avero.NoBody`.
+2. Delete each `//avero:response` comment.
+3. Change each registration of such a route from
+   `r.Get("/posts", avero.In(m.List))` to `avero.Get(r, "/posts", m.List)`,
+   and state each summary with `avero.Summary`.
+4. Answer a failure with a problem, such as `avero.NotFound("post", id)`, in
+   place of a map of one string.
+5. A page of the ssr shape does not change. It answers `avero.Response` and
+   registers with `avero.In`.
 
 ### Changed
 
