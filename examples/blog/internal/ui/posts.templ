@@ -27,6 +27,8 @@ templ PostRowItem(row PostRow) {
 		<a href={ templ.URL("/posts/" + row.ID) }>{ row.Title }</a>
 		<button
 			type="button"
+			class="btn"
+			data-variant="destructive"
 			data-on-click={ "@delete('/posts/" + row.ID + "', {headers: {'X-CSRF-Token': $csrf}})" }
 		>Delete</button>
 	</li>
@@ -42,6 +44,8 @@ templ PostDetail(row PostRow) {
 		<a href="/">Back to the posts</a>
 		<button
 			type="button"
+			class="btn"
+			data-variant="destructive"
 			data-on-click={ "@delete('/posts/" + row.ID + "', {headers: {'X-CSRF-Token': $csrf}})" }
 		>Delete</button>
 	</p>
@@ -55,32 +59,32 @@ templ NewPostForm() {
 		@view.CSRF()
 		@Field("title", "Title")
 		@Area("body", "Body")
-		<button type="submit">Save</button>
+		<button type="submit" class="btn">Save</button>
 	</form>
 }
 
 // Field renders one text field with its old value and its error.
 templ Field(name string, label string) {
-	<p>
-		<label for={ name }>{ label }</label>
-		<input id={ name } name={ name } value={ view.Old(ctx, name) }/>
+	<div class="grid gap-2">
+		<label for={ name } class="label">{ label }</label>
+		<input id={ name } name={ name } value={ view.Old(ctx, name) } class="input"/>
 		@Error(name)
-	</p>
+	</div>
 }
 
 // Area renders one text area with its old value and its error.
 templ Area(name string, label string) {
-	<p>
-		<label for={ name }>{ label }</label>
-		<textarea id={ name } name={ name }>{ view.Old(ctx, name) }</textarea>
+	<div class="grid gap-2">
+		<label for={ name } class="label">{ label }</label>
+		<textarea id={ name } name={ name } class="textarea">{ view.Old(ctx, name) }</textarea>
 		@Error(name)
-	</p>
+	</div>
 }
 
 // Error renders the validation message of one field.
 templ Error(name string) {
 	if view.HasError(ctx, name) {
-		<span class="error">{ view.Error(ctx, name) }</span>
+		<span class="text-destructive text-sm">{ view.Error(ctx, name) }</span>
 	}
 }
 

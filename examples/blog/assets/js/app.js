@@ -1,3 +1,4 @@
+import "../vendor/basecoat/js/all.min.js";
 // The script of the application.
 //
 // Datastar reads the data- attributes of the page and patches an element from

@@ -152,6 +152,18 @@ func write(e example, dir, replace string) error {
 	if err := fixMigrationVersion(dir); err != nil {
 		return err
 	}
+	// The blog proves `avero ui add basecoat` on every run of the gate, so the
+	// command and the example never drift. The pin is idempotent, so a tree
+	// that the repository already holds needs no network.
+	if e.Shape == "ssr" {
+		if code := cli.Run(ctx, cli.Streams{Out: os.Stdout, Err: os.Stderr, Dir: dir}, []string{"ui", "add", "basecoat"}); code != 0 {
+			return fmt.Errorf("avero ui add basecoat failed in %s", dir)
+		}
+		// The component is new, so templ writes its Go file.
+		if err := cli.Drel(ctx, dir); err != nil {
+			return err
+		}
+	}
 	if err := cli.Templ(ctx, dir); err != nil {
 		return err
 	}

@@ -2,8 +2,6 @@
 
 body {
     margin: 0;
-    font-family: system-ui, sans-serif;
-    line-height: 1.5;
 }
 
 header,
@@ -11,13 +9,4 @@ main {
     max-width: 40rem;
     margin: 0 auto;
     padding: 1rem;
-}
-
-.error {
-    color: #b91c1c;
-}
-
-.toasts {
-    list-style: none;
-    padding: 0;
 }
