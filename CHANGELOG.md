@@ -38,6 +38,16 @@ The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   idle machine, and the gate failed for the load of its machine and not for a
   fault of the loop. The parts of one rebuild stand in the SDD, section 3.
 
+- The media type of a request comes from the tags of its input. A field with
+  a `json` tag reads JSON, and a field with a `form` tag reads a form.
+
+### Known limits
+
+- A route reads no file. The generated Bind reads the form of a request and
+  no multipart body, so the description states no `multipart/form-data`. A
+  description of a capability that the binder does not carry would be worse
+  than the gap.
+
 ### Removed
 
 - The generator that read the source of an application to write the

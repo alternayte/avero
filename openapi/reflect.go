@@ -20,6 +20,7 @@ func inputOf(t reflect.Type, schemas map[string]Schema) ([]Parameter, *RequestBo
 		return nil, nil
 	}
 	var params []Parameter
+	var kinds bodyKinds
 	body := Schema{Type: "object", Properties: map[string]Schema{}}
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
@@ -36,8 +37,14 @@ func inputOf(t reflect.Type, schemas map[string]Schema) ([]Parameter, *RequestBo
 			params = append(params, parameterOf(f, "header", name(f, "header"), checks))
 		default:
 			member := name(f, "json")
-			if member == "" {
-				member = name(f, "form")
+			if member != "" {
+				kinds.json = true
+			}
+			if form := name(f, "form"); form != "" {
+				kinds.form = true
+				if member == "" {
+					member = form
+				}
 			}
 			if member == "" {
 				continue
@@ -52,9 +59,40 @@ func inputOf(t reflect.Type, schemas map[string]Schema) ([]Parameter, *RequestBo
 		return params, nil
 	}
 	sort.Strings(body.Required)
-	return params, &RequestBody{Required: true, Content: map[string]MediaType{
-		"application/json": {Schema: body},
-	}}
+	return params, &RequestBody{Required: true, Content: mediaTypes(kinds, body)}
+}
+
+// The media types that a request carries.
+const (
+	// JSONContent is the media type of a body of JSON.
+	JSONContent = "application/json"
+	// FormContent is the media type of a body of a form.
+	FormContent = "application/x-www-form-urlencoded"
+)
+
+// mediaTypes returns the media types that the tags of an input state.
+//
+// A field with a json tag reads a body of JSON, and a field with a form tag
+// reads a form. A page of the ssr shape states both tags, so the route reads
+// both, and the description says so.
+func mediaTypes(kinds bodyKinds, body Schema) map[string]MediaType {
+	out := map[string]MediaType{}
+	if kinds.json {
+		out[JSONContent] = MediaType{Schema: body}
+	}
+	if kinds.form {
+		out[FormContent] = MediaType{Schema: body}
+	}
+	if len(out) == 0 {
+		out[JSONContent] = MediaType{Schema: body}
+	}
+	return out
+}
+
+// bodyKinds states the tags that the members of a body carry.
+type bodyKinds struct {
+	json bool
+	form bool
 }
 
 // parameterOf builds one parameter of a request.

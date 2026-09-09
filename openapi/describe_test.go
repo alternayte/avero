@@ -318,3 +318,35 @@ func TestTheAPIStatesItsInfoAndItsSchemes(t *testing.T) {
 		t.Fatalf("the public route states %+v", op.Security)
 	}
 }
+
+// formInput reads a form, as a page of the ssr shape does.
+type formInput struct {
+	Title string `form:"title" validate:"required"`
+}
+
+func (i *formInput) Bind(_ *router.Ctx) error                 { return nil }
+func (i *formInput) Validate(_ *router.Ctx, _ *router.Fields) {}
+
+func send(_ *router.Ctx, _ formInput) (View, error) { return View{}, nil }
+
+// The tags of the input state the media type that the route reads. A field
+// with a form tag reads a form, and a field with a json tag reads JSON.
+func TestTheTagsOfTheInputStateTheMediaType(t *testing.T) {
+	r := router.New()
+	router.Post(r, "/forms", send)
+	router.Post(r, "/posts", create)
+	rep, _ := r.Report()
+	doc := openapi.Describe("blog", "1.0.0", rep.Routes, router.API{})
+
+	form, _ := doc.Operation(http.MethodPost, "/forms")
+	if _, ok := form.RequestBody.Content[openapi.FormContent]; !ok {
+		t.Fatalf("the form route reads %v", form.RequestBody.Content)
+	}
+	if _, ok := form.RequestBody.Content[openapi.JSONContent]; ok {
+		t.Fatalf("the form route also reads JSON: %v", form.RequestBody.Content)
+	}
+	post, _ := doc.Operation(http.MethodPost, "/posts")
+	if _, ok := post.RequestBody.Content[openapi.JSONContent]; !ok {
+		t.Fatalf("the JSON route reads %v", post.RequestBody.Content)
+	}
+}

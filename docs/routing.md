@@ -162,13 +162,88 @@ An option states what a signature cannot carry:
 | Option | Meaning |
 |---|---|
 | `avero.Summary("List every post")` | the line that a person reads |
+| `avero.Describe("...")` | the paragraph, where a summary is one line |
 | `avero.Tags("posts")` | the group of the operation |
 | `avero.Deprecated()` | the operation that a caller must leave |
 | `avero.Answers[T](code, "why")` | one more status, with the type of its body |
 | `avero.AnswersNothing(code, "why")` | one more status, with no body |
+| `avero.AnswerHeader(201, "Location", "...")` | a header that one answer carries |
+| `avero.Secured("bearer")` | the scheme that the route needs |
+| `avero.Public()` | the route that needs no identity |
+
+Two calls of `avero.Answers` with one status state an answer that carries one
+of two shapes. The description writes `oneOf`.
 
 Every route states its faults as a problem document against one Problem schema.
 A route that binds a value states 400 and 422. See [Errors](errors.md).
+
+## The prose of a model
+
+A tag states what a member means, and what a reader recognises:
+
+```go
+type View struct {
+	// Title is the name that a person reads.
+	Title string `json:"title" doc:"The name that a person reads" example:"A title"`
+	// Rank orders the post.
+	Rank *int `json:"rank" openapi:"readOnly" default:"0"`
+}
+```
+
+| Tag | Meaning |
+|---|---|
+| `doc:"..."` | the description of the member |
+| `example:"..."` | one value that a reader recognises |
+| `default:"..."` | the value that the service uses when the request carries none |
+| `format:"..."` | the format, where the rule of the field states none |
+| `pattern:"..."` | the regular expression that a string must match |
+| `openapi:"readOnly"` | the member that only an answer carries |
+| `openapi:"writeOnly"` | the member that only a request carries |
+| `openapi:"deprecated"` | the member that a caller must leave |
+| `openapi:"uniqueItems"` | the array that holds each value one time |
+
+A number in a tag reaches the document as a number.
+
+A model states its own sentence with a method, because a type carries no tag:
+
+```go
+// Doc states what the model means.
+func (View) Doc() string { return "One post as the API returns it" }
+```
+
+## The facts of the whole API
+
+```go
+r := avero.NewRouter(avero.WithAPI(avero.API{
+	Title:       "Blog",
+	Description: "The service that holds the posts.",
+	Servers:     []avero.Server{{URL: "https://api.example.com", Description: "production"}},
+	Security:    map[string]avero.SecurityScheme{"bearer": avero.BearerAuth("The token of a session.")},
+	Require:     []string{"bearer"},
+	Tags:        []avero.Tag{{Name: "posts", Description: "The posts of the blog."}},
+}))
+```
+
+The block carries the name, the version, the prose, the terms, the contact, the
+licence, the addresses, the schemes of the identity, the groups and the
+document that stands outside. `avero.BearerAuth`, `avero.BasicAuth` and
+`avero.APIKeyAuth` write a scheme.
+
+## The types that a description carries
+
+| Go | The document |
+|---|---|
+| `time.Time` | `string`, `date-time` |
+| `time.Duration` | `integer`, `int64` |
+| `uuid.UUID` | `string`, `uuid` |
+| `[]byte` | `string`, `byte` |
+| `map[string]T` | an object, with the schema of T |
+| `*T` that an answer carries | the type of T, and `null` |
+| a type with `MarshalText` | `string` |
+| a struct | a reference, and the components hold it |
+
+The media type of a request comes from the tags of its input. A field with a
+`json` tag reads JSON, and a field with a `form` tag reads a form.
 
 ## The modules
 
