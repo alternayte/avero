@@ -24,11 +24,10 @@ var dist embed.FS
 // a route registration touches no database and needs no key.
 func wire(engine *drel.Engine, cfg Config) (*avero.Router, *avero.ModuleSet, error) {
 	r := avero.NewRouter()
-	r.Use(avero.RequestID())
-	r.Use(avero.Recover(nil))
-	if engine != nil {
-		r.Use(avero.Transaction(engine))
-	}
+	// Stack states the order of the chain one time. API leaves the flash
+	// cookie and the CSRF token out, because a JSON client needs neither. A
+	// nil engine leaves the transaction out.
+	r.Use(avero.Stack{Secret: cfg.Secret, Engine: engine}.API()...)
 
 	modules := avero.Modules(tasks.New(engine))
 	if err := modules.Attach(r); err != nil {

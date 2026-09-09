@@ -329,3 +329,46 @@ func TestALongParentChainReachesAGroupInOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestAdaptReportsTheStatusThatTheMiddlewareWrote(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		write int
+		want  int
+	}{
+		{"a rejection", http.StatusUnauthorized, http.StatusUnauthorized},
+		{"a fault", http.StatusInternalServerError, http.StatusInternalServerError},
+		{"an implicit answer", 0, http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got int
+			r := router.New()
+			// The probe sits outside the adapted middleware, so it reads the
+			// Response that Adapt returns. The transaction middleware reads
+			// the same value.
+			r.Use(router.Middleware{Name: "probe", Wrap: func(next router.Handler) router.Handler {
+				return func(c *router.Ctx) (router.Response, error) {
+					res, err := next(c)
+					if res != nil {
+						got = res.Status()
+					}
+					return res, err
+				}
+			}})
+			r.Use(router.Adapt("answer", func(http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					if tc.write != 0 {
+						w.WriteHeader(tc.write)
+					}
+					_, _ = w.Write([]byte("no"))
+				})
+			}))
+			r.Get("/x", ok("done"))
+
+			serve(t, r, http.MethodGet, "/x")
+			if got != tc.want {
+				t.Fatalf("Adapt reported %d, want %d", got, tc.want)
+			}
+		})
+	}
+}

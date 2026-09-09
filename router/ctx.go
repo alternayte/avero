@@ -3,6 +3,7 @@ package router
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/alternayte/auth-all/store"
 	"github.com/alternayte/drel"
@@ -59,6 +60,28 @@ func (c *Ctx) Writer() http.ResponseWriter { return c.w }
 // Context returns the request context. It carries the transaction and the
 // session.
 func (c *Ctx) Context() context.Context { return c.r.Context() }
+
+// Deadline reports the time at which the request context ends.
+//
+// This method and the three below make *Ctx a context.Context, so a handler
+// passes the Ctx itself to a store, to a client or to any function that takes
+// a context. Each one reads the context of the current request, so a value
+// that a middleware adds after the router built the Ctx is visible here.
+//
+//	rows, err := m.store.List(c, in.Page)
+//
+// A Ctx is valid for one request, exactly as an *http.Request is. Do not hold
+// it after the handler returns.
+func (c *Ctx) Deadline() (time.Time, bool) { return c.r.Context().Deadline() }
+
+// Done returns the channel that closes when the request context ends.
+func (c *Ctx) Done() <-chan struct{} { return c.r.Context().Done() }
+
+// Err returns the reason that the request context ended, or nil.
+func (c *Ctx) Err() error { return c.r.Context().Err() }
+
+// Value returns the value that the request context carries for a key.
+func (c *Ctx) Value(key any) any { return c.r.Context().Value(key) }
 
 // setRequest replaces the request. A middleware that adds a context value
 // calls it.

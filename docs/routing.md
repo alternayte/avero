@@ -32,7 +32,7 @@ serves an `http.Handler` under a prefix.
 
 ```go
 func (m *Module) Show(c *avero.Ctx, in ShowInput) (View, error) {
-	post, found, err := m.store.Get(c.Context(), in.ID)
+	post, found, err := m.store.Get(c, in.ID)
 	if err != nil {
 		return View{}, err
 	}
@@ -52,6 +52,13 @@ answers no body returns `avero.NoBody`.
 
 A handler never writes to the ResponseWriter, so the transaction commits before
 one byte reaches the client.
+
+The `Ctx` is a `context.Context`, so a handler passes `c` to a store, to a
+generated client or to any function that takes a context. The value always
+reads the context of the current request, so a value that a middleware adds
+later is visible. `c.Context()` returns the plain context for a caller that
+wants it. A `Ctx` is valid for one request only. Do not hold it after the
+handler returns.
 
 A page of the ssr shape answers a view instead, so it returns
 `(avero.Response, error)` and renders with `avero.View`.
@@ -107,18 +114,36 @@ message, or the form again when the router carries `avero.WithForm`.
 
 ## The middleware
 
+`avero.Stack` states the whole chain in one call. The order of the chain is a
+correctness property, so Avero owns it and no application repeats it.
+
 ```go
-r.Use(avero.RequestID())
-r.Use(avero.Recover(logger))
-r.Use(avero.AccessLog(logger))
-r.Use(avero.CSRF(cfg.Secret))
-r.Use(avero.Flash(cfg.Secret))
-r.Use(avero.Transaction(engine))
+r.Use(avero.Stack{
+	Secret:  cfg.Secret,
+	Logger:  logger,
+	Trace:   provider.HTTPMiddleware(),
+	Engine:  engine,
+	Session: []avero.Middleware{avero.Adapt("session", auth.LoadSession)},
+	Auth:    []avero.Middleware{avero.Adapt("auth", auth.RequireAuth)},
+}.Middleware()...)
 ```
+
+The order is request ID, recover, access log, trace, flash, session, CSRF,
+transaction and authentication. A field with no value leaves its middleware
+out, so an inspection command passes a nil engine and runs no transaction.
+
+`Middleware` builds the chain of an application that serves a browser.
+`API` builds the same chain without the flash cookie and without the CSRF
+token, because a JSON client needs neither. The name states the choice, so a
+page that needs the CSRF token cannot lose it through a forgotten field.
+
+A person who wants another chain calls the middleware one at a time, as
+`r.Use(avero.RequestID())` does.
 
 The transaction middleware opens one transaction for each request. It reads the
 status of the response and commits or rolls back. `avero.Adapt` turns a
-`net/http` middleware into an Avero middleware.
+`net/http` middleware into an Avero middleware, and it reports the status that
+the middleware wrote, so a middleware that answers 500 rolls back.
 
 ## The description of the API
 

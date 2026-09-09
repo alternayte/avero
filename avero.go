@@ -333,6 +333,12 @@ func Status(code int) Response { return router.Status(code) }
 
 // The middleware. See the router package for the scaffolded order.
 
+// Stack builds the whole middleware chain in the order that the SDD states.
+// An application states the parts that it runs, and Stack orders them.
+//
+//	r.Use(avero.Stack{Secret: cfg.Secret, Logger: log, Engine: engine}.Middleware()...)
+type Stack = router.Stack
+
 // RequestID gives each request an identifier.
 func RequestID() Middleware { return router.RequestID() }
 

@@ -29,7 +29,7 @@ type TaskList struct {
 // The type of the answer states the shape that the description of the API
 // carries, and the front end reads the same shape.
 func (m *Module) List(c *avero.Ctx, in ListInput) (TaskList, error) {
-	tasks, err := m.store.List(c.Context(), in.Search)
+	tasks, err := m.store.List(c, in.Search)
 	if err != nil {
 		return TaskList{}, err
 	}
@@ -42,7 +42,7 @@ func (m *Module) List(c *avero.Ctx, in ListInput) (TaskList, error) {
 
 // Create writes one task.
 func (m *Module) Create(c *avero.Ctx, in CreateInput) (Task, error) {
-	task, err := m.store.Create(c.Context(), in.Title)
+	task, err := m.store.Create(c, in.Title)
 	if err != nil {
 		return Task{}, err
 	}
@@ -51,7 +51,7 @@ func (m *Module) Create(c *avero.Ctx, in CreateInput) (Task, error) {
 
 // Update marks one task complete, or open again.
 func (m *Module) Update(c *avero.Ctx, in UpdateInput) (Task, error) {
-	task, found, err := m.store.SetDone(c.Context(), in.ID, in.Done)
+	task, found, err := m.store.SetDone(c, in.ID, in.Done)
 	if err != nil {
 		return Task{}, err
 	}
@@ -64,7 +64,7 @@ func (m *Module) Update(c *avero.Ctx, in UpdateInput) (Task, error) {
 
 // Delete removes one task.
 func (m *Module) Delete(c *avero.Ctx, in DeleteInput) (avero.NoBody, error) {
-	if err := m.store.Delete(c.Context(), in.ID); err != nil {
+	if err := m.store.Delete(c, in.ID); err != nil {
 		return avero.NoBody{}, err
 	}
 	return avero.NoBody{}, nil

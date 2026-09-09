@@ -9,7 +9,7 @@ Return the problem. The router writes it.
 
 ```go
 func (m *Module) Show(c *avero.Ctx, in ShowInput) (View, error) {
-	post, found, err := m.store.Get(c.Context(), in.ID)
+	post, found, err := m.store.Get(c, in.ID)
 	if err != nil {
 		return View{}, err
 	}

@@ -22,7 +22,7 @@ type ViewList struct {
 
 // List answers every [[.Singular]].
 func (m *Module) List(c *avero.Ctx, in ListInput) (ViewList, error) {
-	rows, err := m.store.List(c.Context(), in.Search)
+	rows, err := m.store.List(c, in.Search)
 	if err != nil {
 		return ViewList{}, err
 	}
@@ -35,7 +35,7 @@ func (m *Module) List(c *avero.Ctx, in ListInput) (ViewList, error) {
 
 // Create writes one [[.Singular]].
 func (m *Module) Create(c *avero.Ctx, in CreateInput) (View, error) {
-	row, err := m.store.Create(c.Context(), in.Title)
+	row, err := m.store.Create(c, in.Title)
 	if err != nil {
 		return View{}, err
 	}
@@ -44,7 +44,7 @@ func (m *Module) Create(c *avero.Ctx, in CreateInput) (View, error) {
 
 // Show answers one [[.Singular]].
 func (m *Module) Show(c *avero.Ctx, in ShowInput) (View, error) {
-	row, found, err := m.store.Get(c.Context(), in.ID)
+	row, found, err := m.store.Get(c, in.ID)
 	if err != nil {
 		return View{}, err
 	}
@@ -57,7 +57,7 @@ func (m *Module) Show(c *avero.Ctx, in ShowInput) (View, error) {
 
 // Delete removes one [[.Singular]].
 func (m *Module) Delete(c *avero.Ctx, in DeleteInput) (avero.NoBody, error) {
-	if err := m.store.Delete(c.Context(), in.ID); err != nil {
+	if err := m.store.Delete(c, in.ID); err != nil {
 		return avero.NoBody{}, err
 	}
 	return avero.NoBody{}, nil
