@@ -152,14 +152,25 @@ func TestPinPackageFailsOnAHashMismatch(t *testing.T) {
 func TestPinPackageRefusesAPathThatLeavesTheDirectory(t *testing.T) {
 	dir := t.TempDir()
 	f := &fetcher{bodies: map[string]string{packageURL: tarball(t, map[string]string{
+		"package/dist/basecoat.css":     "@import \"./basecoat-vega.css\";\n",
 		"package/dist/../../escape.css": "body{}\n",
 	})}}
 
-	err := assets.PinPackage(context.Background(), assets.PinConfig{Dir: dir, Fetch: f}, "basecoat", packageURL)
-	if err == nil {
-		t.Fatal("PinPackage returned nil for a path that leaves the directory")
+	if err := assets.PinPackage(context.Background(), assets.PinConfig{Dir: dir, Fetch: f}, "basecoat", packageURL); err != nil {
+		t.Fatalf("PinPackage returned %v, want nil for a tarball with one valid file", err)
 	}
-	if _, statErr := os.Stat(filepath.Join(dir, "escape.css")); statErr == nil {
-		t.Fatal("the pin wrote a file outside the vendor directory")
+	if _, err := os.Stat(filepath.Join(dir, "assets", "vendor", "basecoat", "basecoat.css")); err != nil {
+		t.Fatalf("the pin did not write the valid file: %v", err)
+	}
+	if err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && filepath.Base(path) == "escape.css" {
+			t.Fatalf("the pin wrote the escaping file at %s", path)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("Walk returned %v", err)
 	}
 }

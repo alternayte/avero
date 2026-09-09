@@ -28,6 +28,17 @@ const PackageDir = "assets/vendor"
 // npm writes every member under a directory that it names package.
 const distPrefix = "package/dist/"
 
+// maxPackageFiles bounds the count of members that a pin writes. Basecoat
+// 1.0.2 holds 133 members, of which 106 stand under dist, so this bound gives
+// room for a larger library and still stops a tarball that never ends.
+const maxPackageFiles = 10000
+
+// maxPackageBytes bounds the total of the bytes that a pin writes for one
+// package. The uncompressed dist of Basecoat 1.0.2 is under 3 MB, so this
+// bound gives room for a larger library and still stops a tarball that
+// expands to an unbounded size.
+const maxPackageBytes = 64 << 20
+
 // PinPackage fetches the released package of a library, writes its dist
 // directory into the vendor directory, and records the address, the hash and
 // the file list in the lock.
@@ -62,7 +73,7 @@ func PinPackage(ctx context.Context, cfg PinConfig, name, url string) error {
 	body, err := cfg.fetcher().Fetch(ctx, url)
 	if err != nil {
 		return fault(LockName, fmt.Sprintf("the package %q does not download from %s: %v", name, url, err),
-			"Prove the address in a browser, then run the command again")
+			"Prove the address in a browser. Run the command again.")
 	}
 	sum := sha256.Sum256(body)
 	hash := hex.EncodeToString(sum[:])
@@ -70,7 +81,7 @@ func PinPackage(ctx context.Context, cfg PinConfig, name, url string) error {
 		return fault(LockName,
 			fmt.Sprintf("the package %q does not match its hash: %s holds %s and %s records %s",
 				name, url, hash[:12], LockName, pin.SHA256[:12]),
-			fmt.Sprintf("Prove the change, then delete the entry of %q from %s and run the command again", name, LockName))
+			fmt.Sprintf("Prove the change. Delete the entry of %q from %s. Run the command again.", name, LockName))
 	}
 
 	files, err := extract(body, root, name)
@@ -110,6 +121,7 @@ func extract(body []byte, root, name string) ([]string, error) {
 	defer func() { _ = zip.Close() }()
 
 	var files []string
+	var total int64
 	in := tar.NewReader(zip)
 	for {
 		header, err := in.Next()
@@ -127,7 +139,18 @@ func extract(body []byte, root, name string) ([]string, error) {
 		if !ok {
 			continue
 		}
-		if err := writeMember(root, member, in); err != nil {
+		if len(files)+1 > maxPackageFiles {
+			return nil, fault(LockName,
+				fmt.Sprintf("the package %q holds more than %d files under %s", name, maxPackageFiles, distPrefix),
+				"Prove that the address names the released package of the library")
+		}
+		total += header.Size
+		if total > maxPackageBytes {
+			return nil, fault(LockName,
+				fmt.Sprintf("the package %q holds more than %d bytes of files under %s", name, maxPackageBytes, distPrefix),
+				"Prove that the address names the released package of the library")
+		}
+		if err := writeMember(root, member, in, header.Size); err != nil {
 			return nil, err
 		}
 		files = append(files, member)
@@ -152,8 +175,10 @@ func distMember(raw string) (string, bool) {
 	return member, true
 }
 
-// writeMember writes one file of the tarball under root.
-func writeMember(root, member string, in io.Reader) error {
+// writeMember writes one file of the tarball under root. It copies exactly
+// size bytes, so a tarball that ends before it declared its full size fails
+// with a fault instead of leaving a short file that the pin calls a success.
+func writeMember(root, member string, in io.Reader, size int64) error {
 	file := filepath.Join(root, filepath.FromSlash(member))
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 		return fault(path.Join(PackageDir, member), "the vendor directory does not open",
@@ -165,9 +190,9 @@ func writeMember(root, member string, in io.Reader) error {
 			"Give the process the right to write the assets directory")
 	}
 	defer func() { _ = out.Close() }()
-	if _, err := io.Copy(out, io.LimitReader(in, MaxDownload)); err != nil {
-		return fault(path.Join(PackageDir, member), "the file does not write",
-			"Give the process the right to write the assets directory")
+	if _, err := io.CopyN(out, in, size); err != nil {
+		return fault(path.Join(PackageDir, member), "the file ends before its declared size",
+			"Prove that the address names an entire tarball of npm")
 	}
 	return nil
 }
