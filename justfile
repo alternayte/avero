@@ -1,5 +1,8 @@
 # The verification gate. See SDD section 7.
 #
+# .github/workflows/verify.yml runs the same steps. A change to a step belongs
+# in both files.
+#
 # Steps 5, 6, 8, 9 and 10 need subsystems that do not exist yet. Each one
 # prints the subsystem that must land before the step can run. Add the real
 # command when that subsystem lands. Do not delete a step.

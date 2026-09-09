@@ -1,0 +1,112 @@
+# The gate of Avero.
+#
+# The justfile holds the same steps, and it is the source of truth. A change to
+# a step belongs in both files. See AGENTS.md, "Definition of done".
+name: verify
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # 1. gofmt reports no file.
+      - name: gofmt
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then
+            echo "these files need a format:"
+            echo "$out"
+            exit 1
+          fi
+
+      # 2. go vet passes.
+      - name: vet
+        run: go vet ./...
+
+      # 3. golangci-lint passes.
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+      # 4. Unit tests pass with the race detector.
+      - name: test
+        run: go test ./... -race -count=1
+
+      # 7. Every generated file is current.
+      - name: generate
+        run: |
+          go run ./internal/cmd/averogen -check .
+          go generate ./...
+          git diff --exit-code -- '*zz_generated*.go'
+
+      # 5, 6. Integration tests. The asset suite downloads the Tailwind binary
+      # and one module from a CDN.
+      - name: integration
+        run: |
+          go test ./assets/... -race -tags=integration -timeout 10m
+          go test ./internal/cli/... -tags=integration -run 'TestTheDoctor|TestTheRoutesAndThe|TestVerifyRuns' -timeout 20m
+          go test ./cmd/avero/dev/... -tags=integration -run TestTheProductionBuild -timeout 10m
+          go test ./mcp/... -tags=integration -timeout 20m
+
+      # 8, 9. The three reference applications.
+      - name: examples
+        run: |
+          go run ./internal/cmd/averoexamples -check
+          go test ./internal/cli/... -tags=integration -run TestEachShapeScaffolds -timeout 20m
+          cd examples/blog && go build ./... && go test ./... -count=1 && cd ../..
+          cd examples/board && go build ./... && go test ./... -count=1 && cd ../..
+          cd examples/orders && go build ./... && go test ./... -count=1
+
+  budgets:
+    name: budgets
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Section 3 of the SDD states the measurement: an Apple Silicon laptop with
+    # a warm build cache. A shared runner is slower, so this job records the
+    # numbers and never stops the gate. The laptop enforces the budgets.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: measure
+        run: |
+          go test ./internal/cli/... -tags=integration -run TestDX1 -timeout 15m -v
+          go test ./cmd/avero/dev/... -tags=integration -run 'TestDX2|TestDX3' -timeout 15m -v
+
+      - name: report
+        if: always()
+        run: cat artifacts/verification.md || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verification
+          path: artifacts/
+          if-no-files-found: ignore
