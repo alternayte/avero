@@ -19,18 +19,22 @@ renders no markup.
 
 ## The steps
 
-1. Fetch the released tarball of Basecoat. Write its `dist/` tree under
+1. Prove that `assets/css/app.css` holds the Tailwind import, and that
+   `assets/js/app.js` holds the Datastar import. The command fails before the
+   fetch when an anchor line is absent, so a failing run leaves no vendor
+   tree and no entry in the lock.
+2. Fetch the released tarball of Basecoat. Write its `dist/` tree under
    `assets/vendor/basecoat/`. `assets.PinPackage` carries this step. See [The
    package of a library](assets.md#the-package-of-a-library).
-2. Add the import of the chosen style to `assets/css/app.css`, after the
+3. Add the import of the chosen style to `assets/css/app.css`, after the
    Tailwind import, when the line is absent.
-3. Add the import of the script bundle to `assets/js/app.js`, when the line is
-   absent.
-4. Write `internal/ui/toaster.templ`, when the file is absent.
-5. Write `toaster_test.go`, when the file is absent.
-6. Patch `internal/ui/layout.templ`, under the rule that the next section
+4. Add the import of the script bundle to `assets/js/app.js`, after the
+   Datastar import, when the line is absent.
+5. Write `internal/ui/toaster.templ`, when the file is absent.
+6. Write `toaster_test.go`, when the file is absent.
+7. Patch `internal/ui/layout.templ`, under the rule that the next section
    states.
-7. Print what changed. Print the two lines to paste by hand when step 6
+8. Print what changed. Print the two lines to paste by hand when step 7
    changed nothing.
 
 Every step is idempotent. A second run of the command fetches nothing. It

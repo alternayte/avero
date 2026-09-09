@@ -84,7 +84,7 @@ templ Area(name string, label string) {
 // Error renders the validation message of one field.
 templ Error(name string) {
 	if view.HasError(ctx, name) {
-		<span class="text-destructive text-sm">{ view.Error(ctx, name) }</span>
+		<span class="error">{ view.Error(ctx, name) }</span>
 	}
 }
 

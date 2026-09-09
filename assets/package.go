@@ -93,8 +93,33 @@ func PinPackage(ctx context.Context, cfg PinConfig, name, url string) error {
 			"Prove that the address names the released package of the library")
 	}
 	sort.Strings(files)
+	if locked {
+		if err := removeStaleFiles(root, pin.Files, files); err != nil {
+			return err
+		}
+	}
 	lock.SetPackage(name, Pin{URL: url, SHA256: hash, Files: files})
 	return lock.Save()
+}
+
+// removeStaleFiles deletes each file of an older pin that the new file list
+// does not carry. The lock and the tree then name one list. See the SDD, S11.
+func removeStaleFiles(root string, old, current []string) error {
+	keep := make(map[string]bool, len(current))
+	for _, name := range current {
+		keep[name] = true
+	}
+	for _, name := range old {
+		if keep[name] {
+			continue
+		}
+		file := filepath.Join(root, filepath.FromSlash(name))
+		if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
+			return fault(path.Join(PackageDir, name), "the file of the older release does not delete",
+				"Give the process the right to write the assets directory")
+		}
+	}
+	return nil
 }
 
 // filesExist reports whether every file of a pin is present.

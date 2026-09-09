@@ -120,6 +120,7 @@ S7, S8 and S9. Every other shape works today.
 - [Views and forms](docs/views.md)
 - [Errors](docs/errors.md)
 - [Assets](docs/assets.md)
+- [The command that adds a component library](docs/ui.md)
 - [The single page shape](docs/spa.md)
 - [HTTP clients](docs/clients.md)
 - [The agent surface](docs/agents.md)

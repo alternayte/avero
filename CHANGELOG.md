@@ -8,9 +8,9 @@ The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - **`avero ui add basecoat`** adds the Basecoat component library to an
-  application of the ssr shape. It fetches the released tarball, writes its
-  `dist` tree to `assets/vendor/basecoat/`, imports the stylesheet and the
-  script into the two entry files, and writes `internal/ui/toaster.templ` and
+  application of the ssr shape. It fetches the released tarball. It writes the
+  `dist` tree to `assets/vendor/basecoat/`. It imports the stylesheet and the
+  script into the two entry files. It writes `internal/ui/toaster.templ` and
   `toaster_test.go`. When `internal/ui/layout.templ` still matches the
   scaffold, the command moves `@Toasts()` to the end of `<body>`. A changed
   layout receives no change, and the command prints the two lines to move by

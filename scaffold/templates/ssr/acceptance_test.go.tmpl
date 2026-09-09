@@ -138,7 +138,7 @@ func TestAnInvalidFormRendersTheOldInputAndTheFieldError(t *testing.T) {
 	if !strings.Contains(body, `value="no"`) {
 		t.Fatalf("the form holds no old input:\n%s", body)
 	}
-	if !strings.Contains(body, `class="text-destructive text-sm"`) {
+	if !strings.Contains(body, `class="error"`) {
 		t.Fatalf("the form holds no field error:\n%s", body)
 	}
 }
