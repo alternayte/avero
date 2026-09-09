@@ -36,6 +36,23 @@ package, so the bundler resolves it in the vendor directory. `avero.lock`
 records the hash of the file that the pin wrote and the hash of the bytes that
 the address answered.
 
+## The package of a library
+
+A library such as Basecoat ships its stylesheets and its scripts in one
+tarball. `avero ui add basecoat` fetches the tarball, and writes the tree of
+its `dist/` directory under `assets/vendor/basecoat/`:
+
+```
+avero ui add basecoat
+avero ui add basecoat --style rhea
+```
+
+`avero.lock` records the address, the SHA-256 of the tarball, and the sorted
+list of the files that the command wrote. A build reads the lock and the
+vendor tree, so a build needs no network. A second run of the command fetches
+nothing, because the lock and the files already match. See [The command that
+adds a component library](ui.md).
+
 ## The spa shape
 
 The spa shape uses tier 2. Vite builds its TypeScript front end, and
