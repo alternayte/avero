@@ -145,6 +145,72 @@ func TestUIAddBasecoatRunsTwoTimesWithOneResult(t *testing.T) {
 	}
 }
 
+// TestUIAddBasecoatKeepsTheComponentOfAPerson proves that a second run does
+// not overwrite the toaster component. A person owns the file after the first
+// run.
+func TestUIAddBasecoatKeepsTheComponentOfAPerson(t *testing.T) {
+	dir := uiProject(t)
+
+	if code, _, errOut := run(t, dir, "ui", "add", "basecoat"); code != 0 {
+		t.Fatalf("the first run gave %d and said %q", code, errOut)
+	}
+	mark := "// a person wrote this line\n"
+	writeFile(t, dir, "internal/ui/toaster.templ", mark)
+	if code, _, errOut := run(t, dir, "ui", "add", "basecoat"); code != 0 {
+		t.Fatalf("the second run gave %d and said %q", code, errOut)
+	}
+	if got := read(t, dir, "internal/ui/toaster.templ"); got != mark {
+		t.Fatalf("the second run changed the component to %q", got)
+	}
+}
+
+// TestUIAddBasecoatIsIdempotentAcrossReformatting proves that a line that a
+// person reformatted, with different spacing, does not gain a second copy.
+func TestUIAddBasecoatIsIdempotentAcrossReformatting(t *testing.T) {
+	dir := uiProject(t)
+	writeFile(t, dir, "assets/css/app.css",
+		"@import \"tailwindcss\";\n\n  @import \"../vendor/basecoat/basecoat-vega.css\";  \n")
+
+	code, _, errOut := run(t, dir, "ui", "add", "basecoat")
+	if code != 0 {
+		t.Fatalf("the command gave %d and said %q", code, errOut)
+	}
+	css := read(t, dir, "assets/css/app.css")
+	if strings.Count(css, "basecoat-vega.css") != 1 {
+		t.Fatalf("the stylesheet holds the import more than one time: %q", css)
+	}
+}
+
+// TestUIAddBasecoatFailsWithNoTailwindImport proves that the command states a
+// fault, and no repair with no word, when the anchor line is absent.
+func TestUIAddBasecoatFailsWithNoTailwindImport(t *testing.T) {
+	dir := uiProject(t)
+	writeFile(t, dir, "assets/css/app.css", "body {\n    margin: 0;\n}\n")
+
+	code, _, errOut := run(t, dir, "ui", "add", "basecoat")
+	if code != 1 {
+		t.Fatalf("the command gave %d, want 1", code)
+	}
+	if !strings.Contains(errOut, "assets/css/app.css") || !strings.Contains(errOut, "tailwindcss") {
+		t.Fatalf("the fault does not name the file and the missing line: %q", errOut)
+	}
+}
+
+// TestUIAddBasecoatRefusesAStyleFlagWithNoValue proves that a --style flag
+// with no value gives a fault that names the flag, not the flag itself as an
+// unknown argument.
+func TestUIAddBasecoatRefusesAStyleFlagWithNoValue(t *testing.T) {
+	dir := uiProject(t)
+
+	code, _, errOut := run(t, dir, "ui", "add", "basecoat", "--style")
+	if code != 1 {
+		t.Fatalf("the command gave %d, want 1", code)
+	}
+	if !strings.Contains(errOut, "--style") || !strings.Contains(errOut, "names no value") {
+		t.Fatalf("the fault does not name the absent value: %q", errOut)
+	}
+}
+
 func TestUIAddBasecoatTakesAStyle(t *testing.T) {
 	dir := uiProject(t)
 

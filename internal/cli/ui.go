@@ -12,7 +12,7 @@ import (
 )
 
 // BasecoatStyles names the eight styles that Basecoat publishes. The first one
-// is the default, and dist/basecoat.css imports it.
+// is the default. dist/basecoat.css imports the default style.
 var BasecoatStyles = []string{"vega", "nova", "maia", "lyra", "mira", "luma", "sera", "rhea"}
 
 // uiFetch reads the package of a library. A nil value reads over HTTP. A test
@@ -38,7 +38,10 @@ func runUI(ctx context.Context, s Streams, args []string) int {
 	style := BasecoatStyles[0]
 	rest := args[2:]
 	for i := 0; i < len(rest); i++ {
-		if rest[i] == "--style" && i+1 < len(rest) {
+		if rest[i] == "--style" {
+			if i+1 >= len(rest) {
+				return failf(s, "avero ui: the flag --style names no value\n  → Run `avero ui add basecoat --style %s`", BasecoatStyles[0])
+			}
 			style = rest[i+1]
 			i++
 			continue
@@ -91,32 +94,52 @@ func known(style string) bool {
 }
 
 // addLine puts one line into a file, after the line that follows names. An
-// empty follows puts the line first. A file that holds the line already does
-// not change, so a second run gives one result.
+// empty follows puts the line first.
+//
+// The command compares one line against one line, with the spaces of each end
+// removed. A file that holds the line already, in any spacing, does not
+// change, so a second run gives one result.
+//
+// The command keeps the line end of the file. It reads CRLF when the file
+// holds one CRLF pair, and LF otherwise.
+//
+// The command fails when follows names a line that the file does not hold,
+// because the command would then guess where the line belongs.
 func addLine(dir, name, line, follows string) error {
 	file := filepath.Join(dir, filepath.FromSlash(name))
 	body, err := os.ReadFile(file)
 	if err != nil {
 		return fmt.Errorf("avero ui: %s does not open: %w\n  → Run the command in the root of an application that `avero new` wrote", name, err)
 	}
-	text := string(body)
-	if strings.Contains(text, line) {
-		return nil
+	eol := "\n"
+	if strings.Contains(string(body), "\r\n") {
+		eol = "\r\n"
 	}
-	lines := strings.Split(text, "\n")
+	lines := strings.Split(string(body), eol)
+	want := strings.TrimSpace(line)
+	for _, one := range lines {
+		if strings.TrimSpace(one) == want {
+			return nil
+		}
+	}
 	at := 0
 	if follows != "" {
+		found := false
 		for i, one := range lines {
-			if strings.TrimSpace(one) == follows {
+			if strings.TrimSpace(one) == strings.TrimSpace(follows) {
 				at = i + 1
+				found = true
 				break
 			}
+		}
+		if !found {
+			return fmt.Errorf("avero ui: %s states no %q line\n  → Add the line by hand, or restore the entry point that `avero new` wrote", name, follows)
 		}
 	}
 	out := append([]string{}, lines[:at]...)
 	out = append(out, line)
 	out = append(out, lines[at:]...)
-	if err := os.WriteFile(file, []byte(strings.Join(out, "\n")), 0o644); err != nil {
+	if err := os.WriteFile(file, []byte(strings.Join(out, eol)), 0o644); err != nil {
 		return fmt.Errorf("avero ui: %s does not write: %w\n  → Give the process the right to write the application directory", name, err)
 	}
 	return nil
