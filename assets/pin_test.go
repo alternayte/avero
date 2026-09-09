@@ -245,6 +245,56 @@ func TestResolveTakesTheAnswerWhenItHoldsTheModule(t *testing.T) {
 	}
 }
 
+func TestTheLockRecordsAPackage(t *testing.T) {
+	dir := t.TempDir()
+	lock, err := assets.LoadLock(dir)
+	if err != nil {
+		t.Fatalf("LoadLock returned %v, want nil", err)
+	}
+	lock.SetPackage("basecoat", assets.Pin{
+		URL:    "https://registry.example.com/basecoat-1.0.2.tgz",
+		SHA256: "abc",
+		Files:  []string{"basecoat.css", "js/all.min.js"},
+	})
+	if err := lock.Save(); err != nil {
+		t.Fatalf("Save returned %v, want nil", err)
+	}
+
+	again, err := assets.LoadLock(dir)
+	if err != nil {
+		t.Fatalf("LoadLock returned %v, want nil", err)
+	}
+	pin, ok := again.Package("basecoat")
+	if !ok {
+		t.Fatal("the lock holds no package")
+	}
+	if pin.URL != "https://registry.example.com/basecoat-1.0.2.tgz" || pin.SHA256 != "abc" {
+		t.Fatalf("the pin holds %+v", pin)
+	}
+	if len(pin.Files) != 2 || pin.Files[0] != "basecoat.css" {
+		t.Fatalf("the pin records the files %v", pin.Files)
+	}
+}
+
+func TestAnOlderLockWithNoPackageMemberReads(t *testing.T) {
+	dir := t.TempDir()
+	body := "{\n  \"js\": {\n    \"datastar\": {\n      \"url\": \"https://example.com/d.js\",\n      \"sha256\": \"aa\"\n    }\n  },\n  \"bin\": {}\n}\n"
+	if err := os.WriteFile(filepath.Join(dir, "avero.lock"), []byte(body), 0o644); err != nil {
+		t.Fatalf("WriteFile returned %v", err)
+	}
+
+	lock, err := assets.LoadLock(dir)
+	if err != nil {
+		t.Fatalf("LoadLock returned %v, want nil", err)
+	}
+	if _, ok := lock.JS("datastar"); !ok {
+		t.Fatal("the lock lost the module of an older file")
+	}
+	if _, ok := lock.Package("basecoat"); ok {
+		t.Fatal("the lock states a package that the file does not hold")
+	}
+}
+
 func TestPinResolvesAPackageWithNoAddress(t *testing.T) {
 	dir := t.TempDir()
 	f := &fetcher{bodies: map[string]string{

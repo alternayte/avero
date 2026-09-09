@@ -37,6 +37,10 @@ type Pin struct {
 	SourceSHA256 string `json:"source_sha256,omitempty"`
 	// Version is the version of a binary. A module leaves it empty.
 	Version string `json:"version,omitempty"`
+	// Files names each file that a package pin wrote, as a slash path under
+	// the vendor directory of the package. The list sorts, so two runs give
+	// one lock. A module pin and a binary pin leave it empty.
+	Files []string `json:"files,omitempty"`
 }
 
 // Lock is avero.lock. It records the URL and the hash of every file that a
@@ -45,19 +49,21 @@ type Lock struct {
 	path string
 	js   map[string]Pin
 	bin  map[string]Pin
+	pkg  map[string]Pin
 }
 
 // lockJSON is the wire shape of the lock.
 type lockJSON struct {
 	JS  map[string]Pin `json:"js"`
 	Bin map[string]Pin `json:"bin"`
+	Pkg map[string]Pin `json:"pkg,omitempty"`
 }
 
 // LoadLock reads the lock of this application. An absent file gives an empty
 // lock, so the first pin needs no file.
 func LoadLock(dir string) (*Lock, error) {
 	name := filepath.Join(dir, LockName)
-	l := &Lock{path: name, js: map[string]Pin{}, bin: map[string]Pin{}}
+	l := &Lock{path: name, js: map[string]Pin{}, bin: map[string]Pin{}, pkg: map[string]Pin{}}
 	body, err := os.ReadFile(name)
 	if errors.Is(err, os.ErrNotExist) {
 		return l, nil
@@ -76,6 +82,9 @@ func LoadLock(dir string) (*Lock, error) {
 	}
 	for name, pin := range doc.Bin {
 		l.bin[name] = pin
+	}
+	for name, pin := range doc.Pkg {
+		l.pkg[name] = pin
 	}
 	return l, nil
 }
@@ -108,10 +117,19 @@ func (l *Lock) SetJS(name string, pin Pin) { l.js[name] = pin }
 // SetBin records the pin of a binary.
 func (l *Lock) SetBin(name string, pin Pin) { l.bin[name] = pin }
 
+// Package returns the pin of a library that arrived as a package.
+func (l *Lock) Package(name string) (Pin, bool) {
+	pin, ok := l.pkg[name]
+	return pin, ok
+}
+
+// SetPackage records the pin of a library that arrived as a package.
+func (l *Lock) SetPackage(name string, pin Pin) { l.pkg[name] = pin }
+
 // Save writes the lock. The document sorts its keys, so two runs give the same
 // file. See AN-4.
 func (l *Lock) Save() error {
-	body, err := json.MarshalIndent(lockJSON{JS: l.js, Bin: l.bin}, "", "  ")
+	body, err := json.MarshalIndent(lockJSON{JS: l.js, Bin: l.bin, Pkg: l.pkg}, "", "  ")
 	if err != nil {
 		return fault(LockName, "the lock does not encode",
 			"Report the fault, because a lock always encodes")
