@@ -61,7 +61,7 @@ func (m *Module) Update(c *avero.Ctx, in UpdateInput) (avero.Response, error) {
 		return nil, err
 	}
 	if !found {
-		return avero.JSON(http.StatusNotFound, map[string]string{"error": "the task is absent"}), nil
+		return nil, avero.NotFound("task", in.ID)
 	}
 	return avero.JSON(http.StatusOK, view(task)), nil
 }

@@ -53,8 +53,12 @@ func New(opts ...Option) *Router {
 // Option configures a router.
 type Option func(*Router)
 
-// WithErrorResponse sets the response that a handler error produces. The
-// default answers 500 and never prints the message of the error.
+// WithErrorResponse sets the response that a handler error produces.
+//
+// The default reads the Problem that the error carries and writes it as
+// application/problem+json. See RFC 9457. An error that carries no Problem is
+// a fault of the service, so the answer is 500 and the message stays in the
+// log.
 func WithErrorResponse(fn func(c *Ctx, err error) Response) Option {
 	return func(r *Router) { r.reg.onErr = fn }
 }
@@ -69,8 +73,14 @@ func WithValidationResponse(fn func(c *Ctx, f *Fields) Response) Option {
 
 // defaultErrorResponse answers 500. It never writes the message of the error,
 // because a handler error can carry an internal detail.
-func defaultErrorResponse(_ *Ctx, _ error) Response {
-	return Status(http.StatusInternalServerError)
+func defaultErrorResponse(c *Ctx, err error) Response {
+	p := ProblemOf(err)
+	if p.Instance == "" && c != nil {
+		// The path of the request names this one answer. RFC 9457 asks for
+		// it, and a log line and a report of a person then agree.
+		p = p.at(c.Request().URL.Path)
+	}
+	return p
 }
 
 // Use adds middleware to this scope. It applies to every route that this scope

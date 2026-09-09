@@ -96,8 +96,10 @@ func In[T any, P interface {
 		var in T
 		p := P(&in)
 		if err := p.Bind(c); err != nil {
-			// The message can name an internal detail, so it stays in the log.
-			return Status(http.StatusBadRequest), nil
+			// The message can name an internal detail, so it stays in the
+			// log. The client reads the standard document of a 400.
+			return BadRequest("the request does not read").
+				Wrap(err).at(c.Request().URL.Path), nil
 		}
 		var fields Fields
 		p.Validate(c, &fields)
@@ -111,12 +113,17 @@ func In[T any, P interface {
 	}
 }
 
-// validationResponse builds the answer to a validation fault. The default
-// answers 422 with a map of field name to message. WithValidationResponse
-// replaces it, so the SSR shape renders the form again.
+// validationResponse builds the answer to a validation fault.
+//
+// The default answers 422 as a problem document, and the field messages ride
+// in the errors member beside the members of RFC 9457. One error shape covers
+// the whole API. WithValidationResponse replaces it, so the SSR shape renders
+// the form again.
 func (c *Ctx) validationResponse(f *Fields) Response {
 	if c.onInvalid != nil {
 		return c.onInvalid(c, f)
 	}
-	return JSON(http.StatusUnprocessableEntity, map[string]any{"errors": f.Map()})
+	return NewProblem(http.StatusUnprocessableEntity, "one field or more failed validation").
+		With("errors", f.Map()).
+		at(c.Request().URL.Path)
 }

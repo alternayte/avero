@@ -66,7 +66,7 @@ func (m *Module) Show(c *avero.Ctx, in ShowInput) (avero.Response, error) {
 		return nil, err
 	}
 	if !found {
-		return avero.JSON(http.StatusNotFound, map[string]string{"error": "the post is absent"}), nil
+		return nil, avero.NotFound("post", in.ID)
 	}
 	return avero.JSON(http.StatusOK, view(post)), nil
 }

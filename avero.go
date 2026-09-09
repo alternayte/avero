@@ -195,6 +195,53 @@ func JSON(code int, body any) Response { return router.JSON(code, body) }
 // Redirect returns a redirect.
 func Redirect(code int, to string) Response { return router.Redirect(code, to) }
 
+// Problem is one error of an API, in the shape that RFC 9457 states. See
+// router.Problem.
+type Problem = router.Problem
+
+// ProblemContentType is the media type of a problem document.
+const ProblemContentType = router.ProblemContentType
+
+// The problems that a service answers most. Compare with errors.Is.
+var (
+	// ErrNotFound states that the path names no thing. 404.
+	ErrNotFound = router.ErrNotFound
+	// ErrUnauthorized states that the request carries no identity. 401.
+	ErrUnauthorized = router.ErrUnauthorized
+	// ErrForbidden states that the identity may not do this. 403.
+	ErrForbidden = router.ErrForbidden
+	// ErrConflict states that the state of the thing refuses the change. 409.
+	ErrConflict = router.ErrConflict
+	// ErrBadRequest states that the request does not read. 400.
+	ErrBadRequest = router.ErrBadRequest
+	// ErrInternal states a fault of the service. 500.
+	ErrInternal = router.ErrInternal
+)
+
+// NewProblem returns a problem with the standard title of the status. See
+// router.NewProblem.
+func NewProblem(code int, detail string) *Problem { return router.NewProblem(code, detail) }
+
+// NotFound returns the problem of a thing that the table does not hold.
+//
+//	return nil, avero.NotFound("post", in.ID)
+func NotFound(thing, id string) *Problem { return router.NotFound(thing, id) }
+
+// Conflict returns the problem of a state that refuses the change.
+func Conflict(detail string) *Problem { return router.Conflict(detail) }
+
+// Unauthorized returns the problem of a request with no identity.
+func Unauthorized(detail string) *Problem { return router.Unauthorized(detail) }
+
+// Forbidden returns the problem of an identity that may not do this.
+func Forbidden(detail string) *Problem { return router.Forbidden(detail) }
+
+// BadRequest returns the problem of a request that does not read.
+func BadRequest(detail string) *Problem { return router.BadRequest(detail) }
+
+// ProblemOf returns the problem that an error carries. See router.ProblemOf.
+func ProblemOf(err error) *Problem { return router.ProblemOf(err) }
+
 // NoContent returns 204 with no body.
 func NoContent() Response { return router.NoContent() }
 

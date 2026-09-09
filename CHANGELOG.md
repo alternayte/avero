@@ -3,6 +3,29 @@
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- **Typed errors and Problem Details, RFC 9457.** `avero.Problem` is an error
+  and a response. A handler returns `avero.NotFound("post", id)`, and the
+  router writes `application/problem+json` with the status, the title, the
+  detail and the path of the request. `avero.Conflict`, `avero.Unauthorized`,
+  `avero.Forbidden` and `avero.BadRequest` cover the other common answers.
+  `errors.Is(err, avero.ErrNotFound)` answers for every 404, and a problem
+  wraps a cause, so a store keeps its own error and the client never reads it.
+
+### Changed
+
+- A handler error answers the problem that it carries. An error that carries
+  no problem stays a 500, and its message stays in the log.
+- The validation fault and the bind fault answer problem documents. The field
+  messages ride in the `errors` member beside the members of RFC 9457, so the
+  member that a client reads does not move. The ssr shape keeps its own
+  answer, so a form renders again.
+- The scaffolded handlers return `avero.NotFound` in place of a map of one
+  string. One error shape covers the whole API.
+
 ## v0.2.3
 
 ### Changed
