@@ -56,6 +56,7 @@ func Generate(opts Options) (*Document, error) {
 		doc.Servers = []Server{{URL: opts.Server}}
 	}
 
+	schemas := map[string]Schema{}
 	for _, p := range packages {
 		module := p.name
 		if module == "main" {
@@ -67,11 +68,17 @@ func Generate(opts Options) (*Document, error) {
 			if !ok {
 				// A route that names no typed handler carries no input, so
 				// the description holds the route and no parameter.
-				add(doc, module, route, method{}, structType{})
+				add(doc, module, route, method{}, structType{}, p)
 				continue
 			}
-			add(doc, module, route, handler, p.structs[handler.Input])
+			add(doc, module, route, handler, p.structs[handler.Input], p)
+			for _, a := range handler.Answers {
+				collect(schemas, p, a.Type)
+			}
 		}
+	}
+	if len(schemas) > 0 {
+		doc.Components = &Components{Schemas: schemas}
 	}
 	if len(doc.Paths) == 0 {
 		return nil, fmt.Errorf("avero routes: this application states no route\n  → Register a module with routes in wire.go, then run the command again")
@@ -79,8 +86,63 @@ func Generate(opts Options) (*Document, error) {
 	return doc, nil
 }
 
+// collect records the schema of one type and of every type that it names.
+func collect(schemas map[string]Schema, p pkg, name string) {
+	if name == "" {
+		return
+	}
+	if _, ok := schemas[name]; ok {
+		return
+	}
+	st, ok := p.structs[name]
+	if !ok {
+		return
+	}
+	// The entry stands before the walk, so a type that names itself ends.
+	schemas[name] = Schema{Type: "object"}
+
+	closed := false
+	schema := Schema{Type: "object", Properties: map[string]Schema{}, AdditionalProperties: &closed}
+	for _, f := range st.fields {
+		member := f.JSON
+		if member == "" {
+			continue
+		}
+		schema.Properties[member] = bodySchema(f)
+		if !f.Optional {
+			// Go writes every field of a struct, so the answer carries it.
+			// A tag with omitempty states the one case that it does not.
+			schema.Required = append(schema.Required, member)
+		}
+		if f.Named != "" {
+			collect(schemas, p, f.Named)
+		}
+	}
+	sort.Strings(schema.Required)
+	schemas[name] = schema
+}
+
+// bodySchema returns the schema of one field of an answer.
+func bodySchema(f field) Schema {
+	if f.Named != "" {
+		item := Schema{Ref: "#/components/schemas/" + f.Named}
+		if f.JSONType == "array" {
+			return Schema{Type: "array", Items: &item}
+		}
+		return item
+	}
+	if f.JSONType == "array" {
+		item := Schema{Type: f.ItemType}
+		if item.Type == "" {
+			item.Type = "string"
+		}
+		return Schema{Type: "array", Items: &item}
+	}
+	return schemaOf(f)
+}
+
 // add records one route in the document.
-func add(doc *Document, module string, r route, h method, in structType) {
+func add(doc *Document, module string, r route, h method, in structType, _ pkg) {
 	item, ok := doc.Paths[r.Path]
 	if !ok {
 		item = PathItem{}
@@ -91,7 +153,7 @@ func add(doc *Document, module string, r route, h method, in structType) {
 		OperationID: operationID(module, r),
 		Summary:     h.Summary,
 		Tags:        []string{module},
-		Responses:   responses(r.Method, in),
+		Responses:   responses(r.Method, in, h.Answers),
 	}
 	op.Parameters, op.RequestBody = shape(r.Method, in)
 	item[strings.ToLower(r.Method)] = op
@@ -176,12 +238,18 @@ func carriesBody(httpMethod string) bool {
 // responses returns the answers of one route. Avero states the answer of a
 // fault, because the router writes it. The answer of the handler carries no
 // schema, because Go states it and no tag does.
-func responses(httpMethod string, in structType) map[string]Response {
-	out := map[string]Response{
-		"200": {Description: "the answer of the handler"},
+func responses(httpMethod string, in structType, answers []answer) map[string]Response {
+	// A directive states the answer of the handler. The faults that the
+	// router writes stand beside it. See the rules of the answers below.
+	out := map[string]Response{}
+	for _, a := range answers {
+		out[a.Code] = stated(a)
 	}
-	if strings.EqualFold(httpMethod, "POST") {
-		out["201"] = Response{Description: "the answer of a handler that wrote a row"}
+	if len(out) == 0 {
+		out["200"] = Response{Description: "the answer of the handler"}
+		if strings.EqualFold(httpMethod, "POST") {
+			out["201"] = Response{Description: "the answer of a handler that wrote a row"}
+		}
 	}
 	if len(in.fields) > 0 {
 		out["400"] = Response{Description: "the request does not bind"}
@@ -197,6 +265,22 @@ func responses(httpMethod string, in structType) map[string]Response {
 	}
 	out["500"] = Response{Description: "the handler returned an error"}
 	return out
+}
+
+// stated returns the answer that a directive states.
+func stated(a answer) Response {
+	if a.Type == "" {
+		return Response{Description: "the answer of the handler"}
+	}
+	schema := Schema{Ref: "#/components/schemas/" + a.Type}
+	if a.List {
+		item := schema
+		schema = Schema{Type: "array", Items: &item}
+	}
+	return Response{
+		Description: "the answer of the handler",
+		Content:     map[string]MediaType{"application/json": {Schema: schema}},
+	}
 }
 
 // schemaOf returns the schema of one field.

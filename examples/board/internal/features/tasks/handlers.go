@@ -6,8 +6,10 @@ import (
 	"github.com/alternayte/avero"
 )
 
-// View is one task as the API returns it.
-type View struct {
+// Task is one task as the API returns it. The description of the API names
+// this type, and the front end reads the same shape. See `avero routes
+// --openapi`.
+type Task struct {
 	// ID identifies the task.
 	ID string `json:"id"`
 	// Title is the text that a person reads.
@@ -16,29 +18,41 @@ type View struct {
 	Done bool `json:"done"`
 }
 
+// TaskList is the answer of the list call.
+type TaskList struct {
+	// Tasks holds every task, newest first.
+	Tasks []Task `json:"tasks"`
+}
+
 // List answers every task.
+//
+//avero:response 200 TaskList
 func (m *Module) List(c *avero.Ctx, in ListInput) (avero.Response, error) {
 	tasks, err := m.store.List(c.Context(), in.Search)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]View, 0, len(tasks))
+	out := TaskList{Tasks: make([]Task, 0, len(tasks))}
 	for _, t := range tasks {
-		out = append(out, View{ID: t.ID, Title: t.Title, Done: t.Done})
+		out.Tasks = append(out.Tasks, Task{ID: t.ID, Title: t.Title, Done: t.Done})
 	}
-	return avero.JSON(http.StatusOK, map[string]any{"tasks": out}), nil
+	return avero.JSON(http.StatusOK, out), nil
 }
 
 // Create writes one task.
+//
+//avero:response 201 Task
 func (m *Module) Create(c *avero.Ctx, in CreateInput) (avero.Response, error) {
 	id, err := m.store.Create(c.Context(), in.Title)
 	if err != nil {
 		return nil, err
 	}
-	return avero.JSON(http.StatusCreated, View{ID: id, Title: in.Title}), nil
+	return avero.JSON(http.StatusCreated, Task{ID: id, Title: in.Title}), nil
 }
 
 // Update marks one task complete, or open again.
+//
+//avero:response 200 Task
 func (m *Module) Update(c *avero.Ctx, in UpdateInput) (avero.Response, error) {
 	task, found, err := m.store.SetDone(c.Context(), in.ID, in.Done)
 	if err != nil {
@@ -47,10 +61,12 @@ func (m *Module) Update(c *avero.Ctx, in UpdateInput) (avero.Response, error) {
 	if !found {
 		return avero.JSON(http.StatusNotFound, map[string]string{"error": "the task is absent"}), nil
 	}
-	return avero.JSON(http.StatusOK, View{ID: task.ID, Title: task.Title, Done: task.Done}), nil
+	return avero.JSON(http.StatusOK, Task{ID: task.ID, Title: task.Title, Done: task.Done}), nil
 }
 
 // Delete removes one task.
+//
+//avero:response 204
 func (m *Module) Delete(c *avero.Ctx, in DeleteInput) (avero.Response, error) {
 	if err := m.store.Delete(c.Context(), in.ID); err != nil {
 		return nil, err

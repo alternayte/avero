@@ -5,14 +5,17 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "api": "openapi-ts"
   },
   "dependencies": {
+    "@hey-api/client-fetch": "0.13.1",
     "@tanstack/react-query": "^5.90.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@hey-api/openapi-ts": "0.99.0",
     "@tailwindcss/vite": "^4.1.11",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

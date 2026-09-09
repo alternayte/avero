@@ -297,6 +297,29 @@ func TestTheSpaBinaryCarriesItsFrontEnd(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("avero build returned %d:\n%s\n%s", code, out, errOut)
 	}
+	// The build writes the description of the API and the client of the front
+	// end from it, so a change of a handler reaches the types of the front
+	// end.
+	description, err := os.ReadFile(filepath.Join(app, "openapi.json"))
+	if err != nil {
+		t.Fatalf("the build wrote no description: %v", err)
+	}
+	if !strings.Contains(string(description), `"#/components/schemas/TaskList"`) {
+		t.Fatalf("the description holds no answer schema:\n%s", description)
+	}
+	types, err := os.ReadFile(filepath.Join(app, "web", "src", "client", "types.gen.ts"))
+	if err != nil {
+		t.Fatalf("the build wrote no client: %v", err)
+	}
+	for _, want := range []string{"export type Task", "done: boolean", "title: string"} {
+		if !strings.Contains(string(types), want) {
+			t.Fatalf("the generated client holds no %q:\n%s", want, types)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(app, "web", "src", "client", "@tanstack", "react-query.gen.ts")); err != nil {
+		t.Fatalf("the build wrote no query options: %v", err)
+	}
+
 	index, err := os.ReadFile(filepath.Join(app, "assets", "dist", "index.html"))
 	if err != nil {
 		t.Fatalf("the build wrote no index document: %v", err)

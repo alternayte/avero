@@ -44,7 +44,8 @@ You need Go, and a database when you leave SQLite. You need no Node.js.
   after a rebuild.
 - An MCP server, so an agent reads the routes, the modules and the models, and
   writes a new slice.
-- An OpenAPI 3.1 description that `avero routes --openapi` reads from the code.
+- An OpenAPI 3.1 description that `avero routes --openapi` reads from the code,
+  and a typed front end client that the spa shape generates from it.
 - `AGENTS.md` and four skills in the Agent Skills format, which a coding agent
   reads with no setting.
 

@@ -40,8 +40,8 @@ func TestEachShapeWritesItsFiles(t *testing.T) {
 			"main.go", "wire.go", "avero.json",
 			"internal/features/tasks/handlers.go",
 			"web/package.json", "web/vite.config.ts", "web/tsconfig.json",
-			"web/index.html", "web/src/main.tsx", "web/src/Board.tsx",
-			"web/src/api.ts", "web/src/styles.css",
+			"web/openapi-ts.config.ts", "web/index.html",
+			"web/src/main.tsx", "web/src/Board.tsx", "web/src/styles.css",
 			"assets/dist/index.html",
 		}},
 		{scaffold.ShapeAPI, []string{
@@ -152,6 +152,29 @@ func TestTheSpaShapeCarriesAViteProject(t *testing.T) {
 	}
 	if strings.Contains(board, ": any") {
 		t.Fatalf("Board.tsx holds an any type, and the project is strict")
+	}
+	// The page reads the generated client, so no shape is written two times.
+	for _, want := range []string{"./client", "tasksListOptions", "tasksCreateMutation"} {
+		if !strings.Contains(board, want) {
+			t.Fatalf("Board.tsx holds no %q", want)
+		}
+	}
+	if strings.Contains(board, "fetch(\"/api") {
+		t.Fatal("Board.tsx calls the API by hand, and the generated client holds the calls")
+	}
+	config := readFile(t, filepath.Join(dir, "web", "openapi-ts.config.ts"))
+	for _, want := range []string{"../openapi.json", "@tanstack/react-query", "queryOptions", "mutationOptions"} {
+		if !strings.Contains(config, want) {
+			t.Fatalf("openapi-ts.config.ts holds no %q", want)
+		}
+	}
+	// The handlers state the answer of each route, so the description carries
+	// the shape that the front end reads.
+	handlers := readFile(t, filepath.Join(dir, "internal", "features", "tasks", "handlers.go"))
+	for _, want := range []string{"//avero:response 200 TaskList", "//avero:response 201 Task", "//avero:response 204"} {
+		if !strings.Contains(handlers, want) {
+			t.Fatalf("handlers.go states no %q", want)
+		}
 	}
 	// The index document of the front end stands until Vite writes its own,
 	// so the application builds and runs at once.

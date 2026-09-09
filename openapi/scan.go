@@ -36,6 +36,23 @@ type method struct {
 	Input string
 	// Summary is the first sentence of the comment of the method.
 	Summary string
+	// Answers holds the answers that the directives of the method state.
+	Answers []answer
+}
+
+// answer is one //avero:response directive of a handler.
+//
+//	//avero:response 200 TaskList
+//	//avero:response 201 Task
+//	//avero:response 200 []Task
+type answer struct {
+	// Code is the status of the answer.
+	Code string
+	// Type is the name of the Go type of the body. An empty name states an
+	// answer with no body.
+	Type string
+	// List states an answer that carries an array of the type.
+	List bool
 }
 
 // structType is one input type.
@@ -55,10 +72,18 @@ type field struct {
 	Path, Query, Header, Form, JSON string
 	// JSONType is the type of the value in a JSON document.
 	JSONType string
+	// Named is the Go type of a field that names a type of the package, or
+	// the member of such an array.
+	Named string
+	// ItemType is the type of the member of an array of plain values.
+	ItemType string
 	// Format states the shape of a string, such as date-time.
 	Format string
 	// Required states a field that the request must carry.
 	Required bool
+	// Optional states a field of an answer that the JSON tag marks with
+	// omitempty, so the answer can leave it out.
+	Optional bool
 	// Rules holds the validation rules of the field.
 	Rules []rule
 }
@@ -216,7 +241,12 @@ func handlerOf(fn *ast.FuncDecl) (method, bool) {
 	if !ok {
 		return method{}, false
 	}
-	return method{Name: fn.Name.Name, Input: input.Name, Summary: summaryOf(fn)}, true
+	return method{
+		Name:    fn.Name.Name,
+		Input:   input.Name,
+		Summary: summaryOf(fn),
+		Answers: answersOf(fn),
+	}, true
 }
 
 // isPointerTo reports a *pkg.Name expression.
@@ -232,6 +262,37 @@ func isSelectorNamed(expr ast.Expr, name string) bool {
 	return ok && selector.Sel.Name == name
 }
 
+// ResponseDirective states the answer of a handler.
+const ResponseDirective = "//avero:response"
+
+// answersOf reads the response directives of a handler.
+func answersOf(fn *ast.FuncDecl) []answer {
+	if fn.Doc == nil {
+		return nil
+	}
+	var out []answer
+	for _, line := range fn.Doc.List {
+		text := strings.TrimSpace(line.Text)
+		if !strings.HasPrefix(text, ResponseDirective) {
+			continue
+		}
+		fields := strings.Fields(strings.TrimPrefix(text, ResponseDirective))
+		if len(fields) == 0 {
+			continue
+		}
+		a := answer{Code: fields[0]}
+		if len(fields) > 1 {
+			name := fields[1]
+			if after, found := strings.CutPrefix(name, "[]"); found {
+				a.List, name = true, after
+			}
+			a.Type = name
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
 // summaryOf returns the first sentence of the comment of a function.
 func summaryOf(fn *ast.FuncDecl) string {
 	if fn.Doc == nil {
@@ -242,6 +303,9 @@ func summaryOf(fn *ast.FuncDecl) string {
 		text := strings.TrimSpace(strings.TrimPrefix(line.Text, "//"))
 		if text == "" {
 			break
+		}
+		if strings.HasPrefix(strings.TrimSpace(line.Text), "//avero:") {
+			continue
 		}
 		lines = append(lines, text)
 	}
@@ -279,6 +343,11 @@ func fieldsOf(st *ast.StructType) structType {
 			continue
 		}
 		entry.JSONType, entry.Format = jsonType(f.Type)
+		entry.Named, entry.ItemType = namedType(f.Type)
+		if value, found := lookupTag(tag, "json"); found {
+			_, options, _ := strings.Cut(value, ",")
+			entry.Optional = strings.Contains(options, "omitempty")
+		}
 		if rules, found := lookupTag(tag, "validate"); found {
 			entry.Rules = readRules(rules)
 			out.validated = true
@@ -307,6 +376,42 @@ func memberName(value, goName string) string {
 		return goName
 	}
 	return name
+}
+
+// namedType returns the name of the type that a field states, when the package
+// holds it, and the type of the member of an array of plain values.
+func namedType(expr ast.Expr) (named, item string) {
+	switch e := expr.(type) {
+	case *ast.Ident:
+		if plain(e.Name) {
+			return "", ""
+		}
+		return e.Name, ""
+	case *ast.StarExpr:
+		return namedType(e.X)
+	case *ast.ArrayType:
+		inner, _ := namedType(e.Elt)
+		if inner != "" {
+			return inner, ""
+		}
+		kind, _ := jsonType(e.Elt)
+		return "", kind
+	default:
+		return "", ""
+	}
+}
+
+// plain reports a type of the language, which needs no schema of its own.
+func plain(name string) bool {
+	switch name {
+	case "string", "bool", "byte", "rune", "error", "any",
+		"float32", "float64",
+		"int", "int8", "int16", "int32", "int64",
+		"uint", "uint8", "uint16", "uint32", "uint64":
+		return true
+	default:
+		return false
+	}
 }
 
 // jsonType returns the type of a value in a JSON document, and its format.

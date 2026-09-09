@@ -66,6 +66,11 @@ func runDev(ctx context.Context, s Streams, args []string) int {
 		if err := Install(ctx, dir, project, s); err != nil {
 			return fail(s, err)
 		}
+		// The client of the front end follows the handlers of Go, so the loop
+		// writes it before it starts.
+		if err := Describe(ctx, dir, project, s); err != nil {
+			return fail(s, err)
+		}
 		front = []string{"npm", "run", "dev"}
 	}
 

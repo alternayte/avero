@@ -51,7 +51,10 @@ internal/features/          one directory for each feature
 internal/ui/                the views. They import no feature package.[[if .SSR]]
                             A page is a .templ file. Run `avero generate`
                             after a change.[[end]][[if .SPA]]
-assets/js/app.jsx           the React front end. TanStack Query reads the API.[[end]]
+web/                        the front end. TypeScript, React and Vite.
+web/src/client/             the generated client. Never edit it. State the
+                            answer of a handler with //avero:response, then
+                            run `avero build`.[[end]]
 migrations/                 the SQL files
 assets/                     the source of the stylesheet and of the script
 avero.json                  the shape and the asset pipeline

@@ -290,3 +290,125 @@ func TestGenerateStatesTheRepairForADirectoryWithNoRoute(t *testing.T) {
 		t.Fatalf("the fault states no repair: %v", err)
 	}
 }
+
+func TestTheDirectiveStatesTheAnswerAndItsSchema(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "go.mod", "module blog\n\ngo 1.26.2\n")
+	write(t, filepath.Join(dir, "internal", "features", "tasks"), "module.go", `package tasks
+
+import "github.com/alternayte/avero"
+
+type Module struct{}
+
+func (m *Module) Routes(r *avero.Router) {
+	r.Get("/api/tasks", avero.In(m.List))
+	r.Post("/api/tasks", avero.In(m.Create))
+	r.Delete("/api/tasks/{id}", avero.In(m.Delete))
+}
+`)
+	write(t, filepath.Join(dir, "internal", "features", "tasks"), "handlers.go", `package tasks
+
+import "github.com/alternayte/avero"
+
+type Task struct {
+	ID    string `+"`json:\"id\"`"+`
+	Title string `+"`json:\"title\"`"+`
+	Note  string `+"`json:\"note,omitempty\"`"+`
+}
+
+type TaskList struct {
+	Tasks []Task `+"`json:\"tasks\"`"+`
+	Total int    `+"`json:\"total\"`"+`
+}
+
+type ListInput struct{}
+
+type CreateInput struct {
+	Title string `+"`json:\"title\" validate:\"required\"`"+`
+}
+
+type DeleteInput struct {
+	ID string `+"`path:\"id\" validate:\"required\"`"+`
+}
+
+// List answers every task.
+//
+//avero:response 200 TaskList
+func (m *Module) List(c *avero.Ctx, in ListInput) (avero.Response, error) {
+	return avero.NoContent(), nil
+}
+
+// Create writes one task.
+//
+//avero:response 201 Task
+func (m *Module) Create(c *avero.Ctx, in CreateInput) (avero.Response, error) {
+	return avero.NoContent(), nil
+}
+
+// Delete removes one task.
+//
+//avero:response 204
+func (m *Module) Delete(c *avero.Ctx, in DeleteInput) (avero.Response, error) {
+	return avero.NoContent(), nil
+}
+`)
+
+	doc, err := openapi.Generate(openapi.Options{Dir: dir})
+	if err != nil {
+		t.Fatalf("Generate returned %v, want nil", err)
+	}
+
+	list, _ := doc.Operation("GET", "/api/tasks")
+	answer, ok := list.Responses["200"]
+	if !ok || answer.Content["application/json"].Schema.Ref != "#/components/schemas/TaskList" {
+		t.Fatalf("the answer of the list is %+v", list.Responses)
+	}
+	// A directive states the answer of the handler. The faults that the
+	// router writes stand beside it, because the router writes them whatever
+	// the handler states.
+	if _, ok := list.Responses["500"]; !ok {
+		t.Fatalf("the answers hold no fault of the router: %v", list.Responses)
+	}
+
+	create, _ := doc.Operation("POST", "/api/tasks")
+	if create.Responses["201"].Content["application/json"].Schema.Ref != "#/components/schemas/Task" {
+		t.Fatalf("the answer of the create is %+v", create.Responses)
+	}
+
+	remove, _ := doc.Operation("DELETE", "/api/tasks/{id}")
+	if answer, ok := remove.Responses["204"]; !ok || len(answer.Content) != 0 {
+		t.Fatalf("the answer of the delete is %+v", remove.Responses)
+	}
+
+	if doc.Components == nil {
+		t.Fatal("the document holds no components")
+	}
+	task, ok := doc.Components.Schemas["Task"]
+	if !ok {
+		t.Fatalf("the components hold %v", doc.Components.Schemas)
+	}
+	if task.Properties["id"].Type != "string" || task.Properties["title"].Type != "string" {
+		t.Fatalf("the schema of Task is %+v", task)
+	}
+	// Go writes every field, so each one is required. A tag with omitempty
+	// states the one case that it does not.
+	if strings.Join(task.Required, ",") != "id,title" {
+		t.Fatalf("the required fields of Task are %v", task.Required)
+	}
+
+	taskList, ok := doc.Components.Schemas["TaskList"]
+	if !ok {
+		t.Fatal("the components hold no TaskList")
+	}
+	tasks := taskList.Properties["tasks"]
+	if tasks.Type != "array" || tasks.Items == nil || tasks.Items.Ref != "#/components/schemas/Task" {
+		t.Fatalf("the field tasks is %+v", tasks)
+	}
+	if taskList.Properties["total"].Type != "integer" {
+		t.Fatalf("the field total is %+v", taskList.Properties["total"])
+	}
+	// The summary holds no directive.
+	if strings.Contains(list.Summary, "avero:") {
+		t.Fatalf("the summary holds a directive: %q", list.Summary)
+	}
+}

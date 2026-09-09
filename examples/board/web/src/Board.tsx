@@ -1,45 +1,45 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api, RequestFault, type Task } from "./api";
+import {
+    tasksCreateMutation,
+    tasksDeleteMutation,
+    tasksListOptions,
+    tasksListQueryKey,
+    tasksUpdateMutation,
+} from "./client/@tanstack/react-query.gen";
+import type { Task } from "./client";
 
 // Board reads the tasks of the API and writes them.
+//
+// Every call comes from src/client, which `avero build` writes from the
+// description of the API. A change to a Go handler therefore reaches this file
+// as a type fault, and no shape is written two times.
 export function Board() {
     const queries = useQueryClient();
     const [title, setTitle] = useState("");
     const [fault, setFault] = useState("");
 
-    const tasks = useQuery({ queryKey: ["tasks"], queryFn: api.listTasks });
-    const invalidate = {
-        onSuccess: () => {
-            void queries.invalidateQueries({ queryKey: ["tasks"] });
-        },
+    const tasks = useQuery(tasksListOptions());
+    const invalidate = () => {
+        void queries.invalidateQueries({ queryKey: tasksListQueryKey() });
     };
 
     const create = useMutation({
-        mutationFn: api.createTask,
-        onError: (error: unknown) => {
-            // The Go handler answers 422 with one message for each field.
-            setFault(error instanceof RequestFault ? (error.fields.title ?? error.message) : "the task does not save");
-        },
+        ...tasksCreateMutation(),
+        onError: () => setFault("The task does not save. Write a title."),
         onSuccess: () => {
             setFault("");
             setTitle("");
-            void queries.invalidateQueries({ queryKey: ["tasks"] });
+            invalidate();
         },
     });
-    const toggle = useMutation({
-        mutationFn: (task: Task) => api.setDone(task.id, !task.done),
-        ...invalidate,
-    });
-    const remove = useMutation({
-        mutationFn: (task: Task) => api.deleteTask(task.id),
-        ...invalidate,
-    });
+    const toggle = useMutation({ ...tasksUpdateMutation(), onSuccess: invalidate });
+    const remove = useMutation({ ...tasksDeleteMutation(), onSuccess: invalidate });
 
     const submit = (event: FormEvent) => {
         event.preventDefault();
-        create.mutate(title);
+        create.mutate({ body: { title } });
     };
 
     if (tasks.isPending) {
@@ -48,6 +48,8 @@ export function Board() {
     if (tasks.isError) {
         return <p className="error">The board does not load: {tasks.error.message}</p>;
     }
+
+    const rows: Task[] = tasks.data?.tasks ?? [];
 
     return (
         <>
@@ -66,20 +68,22 @@ export function Board() {
                 {fault !== "" && <span className="error">{fault}</span>}
             </form>
 
-            {tasks.data.tasks.length === 0 && <p className="empty">No task exists yet.</p>}
+            {rows.length === 0 && <p className="empty">No task exists yet.</p>}
 
             <ul className="tasks">
-                {tasks.data.tasks.map((task) => (
+                {rows.map((task) => (
                     <li key={task.id} className={task.done ? "done" : ""}>
                         <label>
                             <input
                                 type="checkbox"
                                 checked={task.done}
-                                onChange={() => toggle.mutate(task)}
+                                onChange={() =>
+                                    toggle.mutate({ path: { id: task.id }, body: { done: !task.done } })
+                                }
                             />
                             {task.title}
                         </label>
-                        <button type="button" onClick={() => remove.mutate(task)}>
+                        <button type="button" onClick={() => remove.mutate({ path: { id: task.id } })}>
                             Delete
                         </button>
                     </li>

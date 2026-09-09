@@ -31,6 +31,14 @@ type Document struct {
 	Servers []Server `json:"servers,omitempty"`
 	// Paths holds one item for each path, in path order. See AN-4.
 	Paths map[string]PathItem `json:"paths"`
+	// Components holds the schemas that the operations name.
+	Components *Components `json:"components,omitempty"`
+}
+
+// Components holds the schemas of the description.
+type Components struct {
+	// Schemas maps the name of a type to its schema.
+	Schemas map[string]Schema `json:"schemas"`
 }
 
 // Info states the name and the version of the application.
@@ -127,6 +135,9 @@ type Schema struct {
 	Required []string `json:"required,omitempty"`
 	// AdditionalProperties states an object that carries other members.
 	AdditionalProperties *bool `json:"additionalProperties,omitempty"`
+	// Ref names a schema of the components, such as
+	// #/components/schemas/Task.
+	Ref string `json:"$ref,omitempty"`
 }
 
 // MarshalJSON writes the document with its paths in order. See AN-4.

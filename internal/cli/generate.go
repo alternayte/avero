@@ -12,6 +12,7 @@ import (
 	"github.com/alternayte/avero/assets"
 	"github.com/alternayte/avero/codegen"
 	"github.com/alternayte/avero/codegen/client"
+	"github.com/alternayte/avero/openapi"
 )
 
 // runGenerate writes the generated files of the application. The check flag
@@ -135,6 +136,9 @@ func BuildAssets(ctx context.Context, dir string, project *Project, minify bool,
 	if err := Install(ctx, dir, project, s); err != nil {
 		return err
 	}
+	if err := Describe(ctx, dir, project, s); err != nil {
+		return err
+	}
 	m, err := assets.Build(ctx, project.assetConfig(dir, minify))
 	if err != nil {
 		return err
@@ -146,6 +150,49 @@ func BuildAssets(ctx context.Context, dir string, project *Project, minify bool,
 	_, _ = fmt.Fprintf(s.Out, "assets: %d files\n", m.Len())
 	return nil
 }
+
+// Describe writes the description of the API and the client of the front end.
+//
+// The Go handlers state the routes, the input types and the answers. The
+// description states the same, and the generator of the front end reads it, so
+// one change of a handler reaches the types of the front end.
+func Describe(ctx context.Context, dir string, project *Project, s Streams) error {
+	if project.Assets.Tier != "external" || project.Assets.Dir == "" {
+		return nil
+	}
+	front := filepath.Join(dir, filepath.FromSlash(project.Assets.Dir))
+	if _, err := os.Stat(filepath.Join(front, OpenAPIConfig)); err != nil {
+		// The front end reads no description.
+		return nil
+	}
+
+	doc, err := openapi.Generate(openapi.Options{Dir: dir, Title: project.Name})
+	if err != nil {
+		return err
+	}
+	name := filepath.Join(dir, OpenAPIFile)
+	if err := os.WriteFile(name, []byte(doc.String()+"\n"), 0o644); err != nil {
+		return fmt.Errorf("avero build: %s does not write\n  → Give the process the right to write the application directory", OpenAPIFile)
+	}
+	_, _ = fmt.Fprintf(s.Out, "api: %s, %d paths\n", OpenAPIFile, len(doc.Paths))
+
+	cmd := exec.CommandContext(ctx, "npm", "run", "api")
+	cmd.Dir = front
+	cmd.Env = os.Environ()
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("avero build: the client of the front end does not generate\n%s\n  → Repair the fault that the message names, then run the command again",
+			strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// The names that the description of the API carries.
+const (
+	// OpenAPIFile is the description that `avero build` writes.
+	OpenAPIFile = "openapi.json"
+	// OpenAPIConfig is the configuration of the generator of the front end.
+	OpenAPIConfig = "openapi-ts.config.ts"
+)
 
 // Install reads the dependencies of an external bundler.
 //

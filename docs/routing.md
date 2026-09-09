@@ -122,8 +122,22 @@ handler, and it writes an OpenAPI 3.1 document:
   422 for a request that fails validation, and 500 for a handler that returns
   an error.
 
-The description carries no schema for the answer of a handler, because Go
-states that answer and no tag does.
+A handler states its answer with a directive, and the description then carries
+the schema of the type:
+
+```go
+// List answers every task.
+//
+//avero:response 200 TaskList
+func (m *Module) List(c *avero.Ctx, in ListInput) (avero.Response, error)
+```
+
+The description holds one schema for each type that a directive names, and for
+each type that such a type holds. A field is required, because Go writes every
+field of a struct, unless its JSON tag carries omitempty.
+
+A handler with no directive states the status of its answers and no schema,
+because Go states the shape and no tag does.
 
 ## The modules
 

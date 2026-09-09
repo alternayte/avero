@@ -10,8 +10,10 @@ import (
 	"github.com/alternayte/drel"
 )
 
-// Task is one row of the tasks table.
-type Task struct {
+// Row is one row of the tasks table. The API answers a Task, which
+// handlers.go states, so the shape of the table and the shape of the answer
+// change apart.
+type Row struct {
 	// ID identifies the task.
 	ID string
 	// Title is the name that a person reads.
@@ -32,7 +34,7 @@ type Store struct {
 func NewStore(engine *drel.Engine) *Store { return &Store{engine: engine} }
 
 // List returns the tasks, newest first. An empty search returns every task.
-func (s *Store) List(ctx context.Context, search string) ([]Task, error) {
+func (s *Store) List(ctx context.Context, search string) ([]Row, error) {
 	sql := "SELECT id, title, done FROM tasks ORDER BY created_at DESC"
 	args := []any{}
 	if search != "" {
@@ -46,40 +48,40 @@ func (s *Store) List(ctx context.Context, search string) ([]Task, error) {
 	}
 	defer rows.Close()
 
-	var out []Task
+	var out []Row
 	for rows.Next() {
-		var t Task
-		if err := rows.Scan(&t.ID, &t.Title, &t.Done); err != nil {
+		var row Row
+		if err := rows.Scan(&row.ID, &row.Title, &row.Done); err != nil {
 			return nil, fmt.Errorf("a task does not read: %w", err)
 		}
-		out = append(out, t)
+		out = append(out, row)
 	}
 	return out, rows.Err()
 }
 
 // Get returns one task and reports whether the table holds it.
-func (s *Store) Get(ctx context.Context, id string) (Task, bool, error) {
+func (s *Store) Get(ctx context.Context, id string) (Row, bool, error) {
 	rows, err := s.query(ctx, "SELECT id, title, done FROM tasks WHERE id = "+s.mark(1), id)
 	if err != nil {
-		return Task{}, false, fmt.Errorf("the task does not read: %w", err)
+		return Row{}, false, fmt.Errorf("the task does not read: %w", err)
 	}
 	defer rows.Close()
 	if !rows.Next() {
-		return Task{}, false, rows.Err()
+		return Row{}, false, rows.Err()
 	}
-	var t Task
-	if err := rows.Scan(&t.ID, &t.Title, &t.Done); err != nil {
-		return Task{}, false, fmt.Errorf("the task does not read: %w", err)
+	var row Row
+	if err := rows.Scan(&row.ID, &row.Title, &row.Done); err != nil {
+		return Row{}, false, fmt.Errorf("the task does not read: %w", err)
 	}
-	return t, true, nil
+	return row, true, nil
 }
 
 // SetDone marks one task complete, or open again. It returns the task and
 // reports whether the table holds it.
-func (s *Store) SetDone(ctx context.Context, id string, done bool) (Task, bool, error) {
+func (s *Store) SetDone(ctx context.Context, id string, done bool) (Row, bool, error) {
 	sql := fmt.Sprintf("UPDATE tasks SET done = %s WHERE id = %s", s.mark(1), s.mark(2))
 	if err := s.exec(ctx, sql, done, id); err != nil {
-		return Task{}, false, fmt.Errorf("the task does not write: %w", err)
+		return Row{}, false, fmt.Errorf("the task does not write: %w", err)
 	}
 	return s.Get(ctx, id)
 }
@@ -122,7 +124,7 @@ func (s *Store) exec(ctx context.Context, sql string, args ...any) error {
 	return err
 }
 
-// mark returns the parameter mark of the dialect. TaskgreSQL counts its
+// mark returns the parameter mark of the dialect. PostgreSQL counts its
 // parameters and SQLite does not.
 func (s *Store) mark(n int) string {
 	if s.engine != nil && s.engine.DialectName() == "taskgres" {

@@ -49,7 +49,10 @@ config.go                   every variable that the application reads
 wire.go                     the router, the middleware and the modules
 internal/features/          one directory for each feature
 internal/ui/                the views. They import no feature package.
-assets/js/app.jsx           the React front end. TanStack Query reads the API.
+web/                        the front end. TypeScript, React and Vite.
+web/src/client/             the generated client. Never edit it. State the
+                            answer of a handler with //avero:response, then
+                            run `avero build`.
 migrations/                 the SQL files
 assets/                     the source of the stylesheet and of the script
 avero.json                  the shape and the asset pipeline

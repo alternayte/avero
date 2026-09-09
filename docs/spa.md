@@ -12,12 +12,14 @@ board/
 │   ├── package.json               the dependencies of the front end
 │   ├── vite.config.ts             the build and the proxy of the API
 │   ├── tsconfig.json              strict TypeScript
+│   ├── openapi-ts.config.ts       the generator of the client
 │   ├── index.html                 the document that Vite writes again
 │   └── src/
 │       ├── main.tsx               the root of the front end
 │       ├── Board.tsx              the page
-│       ├── api.ts                 the client of the JSON API
+│       ├── client/                the generated client. Never edit it.
 │       └── styles.css             Tailwind
+├── openapi.json                   the description that `avero build` writes
 ├── assets/dist/                   the build. `avero build` writes it.
 ├── migrations/                    the SQL files
 └── avero.json                     the shape and the bundler
@@ -73,36 +75,84 @@ states.
 
 ## Call the API
 
-`web/src/api.ts` holds the types of the answers and one function for each call.
-`Board.tsx` reads them with TanStack Query:
+No shape is written two times. The Go handlers state the routes, the input
+types and the answers. `avero build` and `avero dev` write the description of
+the API, and the generator writes the client of the front end from it:
 
-```tsx
-const tasks = useQuery({ queryKey: ["tasks"], queryFn: api.listTasks });
-
-const create = useMutation({
-    mutationFn: api.createTask,
-    onError: (error: unknown) => {
-        // The Go handler answers 422 with one message for each field.
-        setFault(error instanceof RequestFault ? error.fields.title : "the task does not save");
-    },
-});
+```
+Go handler  →  openapi.json  →  web/src/client/  →  Board.tsx
 ```
 
-The Go side states the same shape:
+The handler states its answer with a directive:
 
 ```go
-type CreateInput struct {
-	Title string `json:"title" validate:"required,min=1,max=200"`
+// List answers every task.
+//
+//avero:response 200 TaskList
+func (m *Module) List(c *avero.Ctx, in ListInput) (avero.Response, error) {
+	return avero.JSON(http.StatusOK, out), nil
 }
 ```
 
-`avero routes --openapi` writes the description of the API, which a generator
-reads for a larger service. See [Routing and handlers](routing.md).
+The generator writes the types, the calls and the TanStack Query options:
+
+```tsx
+import { tasksListOptions, tasksCreateMutation } from "./client/@tanstack/react-query.gen";
+import type { Task } from "./client";
+
+const tasks = useQuery(tasksListOptions());
+const create = useMutation({ ...tasksCreateMutation() });
+
+create.mutate({ body: { title } });
+```
+
+`tasks.data` holds `TaskList`, and `task.title` is a `string`, because the Go
+struct states it. A change to a handler that a component does not follow is a
+type fault of the build, not a fault of a person reading a page.
+
+Never edit `web/src/client/`. Change the Go handler and run `avero build`, or
+`npm run api` inside `web/`.
+
+### The generator
+
+The shape uses [Hey API](https://heyapi.dev) with its TanStack Query plugin:
+
+```ts
+export default defineConfig({
+    input: "../openapi.json",
+    output: { path: "src/client", format: "prettier" },
+    plugins: [
+        "@hey-api/client-fetch",
+        { name: "@tanstack/react-query", queryOptions: true, mutationOptions: true },
+    ],
+});
+```
+
+Hey API stands beside Orval, which does the same work. Hey API writes a compact
+client with one call shape, `{ path, query, body }`, and it gives query options
+and mutation options that a person composes with `useQuery` and `useMutation`.
+Orval writes a whole hook for each route, and it writes mocks and validation
+schemas as well. Avero states that a person reads, changes and deletes
+generated code, and that explicit beats short, so the compact and composable
+output fits. Read the trade-off in the sources at the end of this page.
+
+The description also carries the faults that the router writes, so the client
+types the 422 answer with its field messages.
+
+## The description of the API
+
+```
+avero routes --openapi                    write it to the output
+avero routes --openapi --out openapi.json write it to a file
+```
+
+`avero build` writes it before the front end build. See [Routing and
+handlers](routing.md).
 
 ## One binary
 
-`avero build` runs `npm install`, then `tsc --noEmit && vite build`, which
-writes `assets/dist`. `wire.go` embeds that directory:
+`avero build` runs `npm install`, writes `openapi.json`, generates the client,
+then runs `tsc --noEmit && vite build`, which writes `assets/dist`. `wire.go` embeds that directory:
 
 ```go
 //go:embed all:assets/dist
@@ -148,3 +198,9 @@ cd web && npm install @tanstack/react-router
 
 The server already answers the index document for every path that no route
 holds, so a reload of a deep link reaches the front end.
+
+## Sources
+
+- [Hey API, the TanStack Query plugin](https://heyapi.dev/docs/openapi/typescript/plugins/tanstack-query)
+- [Orval](https://orval.dev/)
+- [Which OpenAPI codegen should you choose?](https://dev.to/nyaomaru/which-openapi-codegen-should-you-choose-openapi-typescript-vs-hey-api-vs-orval-vs-kubb-100p)
