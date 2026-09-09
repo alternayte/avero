@@ -27,9 +27,10 @@ JSON and renders no markup.
 3. Add the import of the script bundle to `assets/js/app.js`, when the line is
    absent.
 4. Write `internal/ui/toaster.templ`, when the file is absent.
-5. Patch `internal/ui/layout.templ`, under the rule that the next section
+5. Write `toaster_test.go`, when the file is absent.
+6. Patch `internal/ui/layout.templ`, under the rule that the next section
    states.
-6. Print what changed, and print the two lines to paste by hand when step 5
+7. Print what changed, and print the two lines to paste by hand when step 6
    changed nothing.
 
 Every step is idempotent. A second run of the command fetches nothing and
@@ -100,3 +101,10 @@ of the application. Every toast carries a dismiss button, because the click
 handler of the toaster closes a toast for a button of a footer only, and a
 toast with no button never hides while the pointer rests on it. See [The
 toaster](views.md#the-toaster).
+
+The command writes `toaster_test.go` to the root of the application, one time,
+beside `internal/ui/toaster.templ`. The test uses the helpers of
+`acceptance_test.go`, which the ssr shape of `avero new` writes: `app`, `get`,
+`post` and `token`. An application that deleted `acceptance_test.go`, or
+renamed one of those helpers, must repair `toaster_test.go` itself, because
+the command does not carry its own copy of them.

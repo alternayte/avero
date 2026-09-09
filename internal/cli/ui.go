@@ -80,6 +80,9 @@ func runUI(ctx context.Context, s Streams, args []string) int {
 	if err := writeToaster(dir, s); err != nil {
 		return fail(s, err)
 	}
+	if err := writeToasterTest(dir, s); err != nil {
+		return fail(s, err)
+	}
 	if err := patchLayout(dir, s, project.Name); err != nil {
 		return fail(s, err)
 	}
@@ -164,6 +167,21 @@ func writeToaster(dir string, s Streams) error {
 		return fmt.Errorf("avero ui: internal/ui/toaster.templ does not write: %w\n  → Give the process the right to write the application directory", err)
 	}
 	_, _ = fmt.Fprintln(s.Out, "wrote internal/ui/toaster.templ")
+	return nil
+}
+
+// writeToasterTest writes the proof of the toaster component. A file that
+// exists does not change, because a person owns it after the first run.
+func writeToasterTest(dir string, s Streams) error {
+	file := filepath.Join(dir, "toaster_test.go")
+	if _, err := os.Stat(file); err == nil {
+		_, _ = fmt.Fprintln(s.Out, "toaster_test.go exists and does not change")
+		return nil
+	}
+	if err := os.WriteFile(file, uifiles.ToasterTest(), 0o644); err != nil {
+		return fmt.Errorf("avero ui: toaster_test.go does not write: %w\n  → Give the process the right to write the application directory", err)
+	}
+	_, _ = fmt.Fprintln(s.Out, "wrote toaster_test.go")
 	return nil
 }
 
