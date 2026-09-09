@@ -10,13 +10,13 @@ The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`avero ui add basecoat`** adds the Basecoat component library to an
   application of the ssr shape. It fetches the released tarball, writes its
   `dist` tree to `assets/vendor/basecoat/`, imports the stylesheet and the
-  script into the two entry files, and writes `internal/ui/toaster.templ`.
-  When `internal/ui/layout.templ` still matches the scaffold, the command
-  moves `@Toasts()` to the end of `<body>`. A changed layout receives no
-  change, and the command prints the two lines to move by hand. The command
-  is idempotent: a second run changes nothing. `assets.PinPackage` carries the
-  fetch, and it records the address, the hash and the file list in
-  `avero.lock`, so a build needs no network.
+  script into the two entry files, and writes `internal/ui/toaster.templ` and
+  `toaster_test.go`. When `internal/ui/layout.templ` still matches the
+  scaffold, the command moves `@Toasts()` to the end of `<body>`. A changed
+  layout receives no change, and the command prints the two lines to move by
+  hand. The command is idempotent: a second run changes nothing.
+  `assets.PinPackage` carries the fetch, and it records the address, the hash
+  and the file list in `avero.lock`, so a build needs no network.
 - **`avero.Ctx` is a `context.Context`.** A handler passes `c` where a context
   belongs, and it no longer writes `c.Context()`. The four methods read the
   context of the current request, so a value that a middleware adds after the

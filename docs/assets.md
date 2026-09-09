@@ -39,7 +39,7 @@ the address answered.
 ## The package of a library
 
 A library such as Basecoat ships its stylesheets and its scripts in one
-tarball. `avero ui add basecoat` fetches the tarball, and writes the tree of
+tarball. `avero ui add basecoat` fetches the tarball. It writes the tree of
 its `dist/` directory under `assets/vendor/basecoat/`:
 
 ```
@@ -52,6 +52,11 @@ list of the files that the command wrote. A build reads the lock and the
 vendor tree, so a build needs no network. A second run of the command fetches
 nothing, because the lock and the files already match. See [The command that
 adds a component library](ui.md).
+
+The pin accepts at most 10,000 files under `dist/`, and at most 64 MB of
+extracted bytes. Each bound stops a tarball that never ends. The pin refuses a
+member whose path leaves `assets/vendor/<name>/`, so a tarball cannot write a
+file outside the vendor directory.
 
 ## The spa shape
 
