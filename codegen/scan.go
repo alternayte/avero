@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // The generator reads the struct tags at generation time. reflect.StructTag
@@ -54,6 +55,12 @@ type rule struct {
 type pkg struct {
 	Name   string
 	Inputs []input
+	// Receiver is the type that carries the handlers, such as Module. An
+	// empty value states a package with no handler.
+	Receiver string
+	// Summaries holds the first sentence of the comment of each handler, by
+	// the name of its method.
+	Summaries map[string]string
 }
 
 // scan reads the files of one package and returns the input types that its
@@ -62,6 +69,8 @@ func scan(fset *token.FileSet, name string, files []*ast.File, c *collector) pkg
 	wanted := map[string]bool{}
 	checks := map[string]bool{}
 	structs := map[string]*ast.StructType{}
+	summaries := map[string]string{}
+	receiver := ""
 
 	for _, file := range files {
 		for _, decl := range file.Decls {
@@ -69,6 +78,14 @@ func scan(fset *token.FileSet, name string, files []*ast.File, c *collector) pkg
 			case *ast.FuncDecl:
 				if in, ok := handlerInput(d); ok {
 					wanted[in] = true
+					// The comment of a handler states its summary, so a
+					// person writes the sentence one time. See S13.
+					if text := summaryOf(d); text != "" {
+						summaries[d.Name.Name] = text
+					}
+					if name, ok := receiverName(d); ok && receiver == "" {
+						receiver = name
+					}
 				}
 				if recv, ok := checkReceiver(d); ok {
 					checks[recv] = true
@@ -95,7 +112,7 @@ func scan(fset *token.FileSet, name string, files []*ast.File, c *collector) pkg
 	}
 	sort.Strings(names)
 
-	out := pkg{Name: name}
+	out := pkg{Name: name, Receiver: receiver, Summaries: summaries}
 	for _, n := range names {
 		out.Inputs = append(out.Inputs, input{
 			Name:     n,
@@ -320,4 +337,61 @@ func snake(name string) string {
 		b.WriteRune(r)
 	}
 	return b.String()
+}
+
+// receiverName returns the type of the receiver of a method, without its
+// pointer.
+func receiverName(d *ast.FuncDecl) (string, bool) {
+	if d.Recv == nil || len(d.Recv.List) != 1 {
+		return "", false
+	}
+	switch r := d.Recv.List[0].Type.(type) {
+	case *ast.StarExpr:
+		if id, ok := r.X.(*ast.Ident); ok {
+			return id.Name, true
+		}
+	case *ast.Ident:
+		return r.Name, true
+	}
+	return "", false
+}
+
+// summaryOf returns the first sentence of the comment of a handler.
+//
+// The sentence loses the name of the method and the full stop, because a
+// description of an API reads "List every post" and not "List returns every
+// post.".
+func summaryOf(d *ast.FuncDecl) string {
+	if d.Doc == nil {
+		return ""
+	}
+	var lines []string
+	for _, line := range d.Doc.List {
+		text := strings.TrimSpace(strings.TrimPrefix(line.Text, "//"))
+		if text == "" {
+			break
+		}
+		if strings.HasPrefix(text, "avero:") || strings.HasPrefix(text, "go:") {
+			continue
+		}
+		lines = append(lines, text)
+	}
+	summary := strings.Join(lines, " ")
+	if i := strings.Index(summary, ". "); i > 0 {
+		summary = summary[:i+1]
+	}
+	summary = strings.TrimSuffix(summary, ".")
+	rest, cut := strings.CutPrefix(summary, d.Name.Name+" ")
+	if !cut {
+		return strings.TrimSpace(summary)
+	}
+	// "List answers every post." states "Answers every post", because a
+	// description of an API names the operation beside its summary.
+	rest = strings.TrimSpace(rest)
+	if rest == "" {
+		return ""
+	}
+	runes := []rune(rest)
+	runes[0] = unicode.ToUpper(runes[0])
+	return string(runes)
 }

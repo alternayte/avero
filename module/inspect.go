@@ -96,6 +96,13 @@ func (s *Set) inspect(i int, m Module, names map[string]bool) {
 
 	if h, ok := m.(HTTPModule); ok {
 		row.Interfaces = append(row.Interfaces, "HTTPModule")
+		// The comment of each handler states its summary. `avero generate`
+		// writes the map, so the description of the API carries the sentence
+		// that a person already wrote.
+		if d, ok := m.(SummaryModule); ok {
+			row.Interfaces = append(row.Interfaces, "SummaryModule")
+			probe.SetSummaries(d.Summaries())
+		}
 		h.Routes(probe)
 		s.readRoutes(name, probe, &row)
 	}

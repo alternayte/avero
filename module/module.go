@@ -101,3 +101,14 @@ func (s *Scheduler) Jobs() []Job {
 	copy(out, s.jobs)
 	return out
 }
+
+// SummaryModule states the summary of each handler, by the name of its method.
+//
+// `avero generate` writes the method from the comment of each handler, so a
+// person writes the sentence one time. The set passes the map to the router
+// before the module registers its routes.
+type SummaryModule interface {
+	Module
+	// Summaries returns the summary of each handler.
+	Summaries() map[string]string
+}

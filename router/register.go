@@ -180,9 +180,11 @@ func Register[T any, P Input[T], V any](
 	var body V
 	// The name of the handler names the operation. The wrapper below is a
 	// closure, so the name comes from the function that a person wrote.
+	name := handlerName(fn)
 	op := Operation{
 		Method: method, Pattern: pattern,
-		Handler: handlerName(fn),
+		Handler: name,
+		Summary: r.summaryOf(name),
 		input:   reflect.TypeOf(&in).Elem(),
 	}
 	if _, empty := any(body).(NoBody); !empty {

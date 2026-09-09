@@ -112,3 +112,16 @@ func (in *UpdateInput) Validate(c *router.Ctx, f *router.Fields) {
 		f.Add("id", "is required")
 	}
 }
+
+// Summaries returns the summary of each handler of Module.
+//
+// The comment of a handler states it. Change the comment and run
+// `avero generate`.
+func (m *Module) Summaries() map[string]string {
+	return map[string]string{
+		"Create": "Writes one task",
+		"Delete": "Removes one task",
+		"List":   "Answers every task",
+		"Update": "Marks one task complete, or open again",
+	}
+}

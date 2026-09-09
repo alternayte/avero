@@ -1,5 +1,7 @@
 package router
 
+import "strings"
+
 // API states the facts of the whole description of an API.
 //
 // A route states its own operation. This states what stands above every route:
@@ -118,3 +120,32 @@ func WithAPI(api API) Option {
 
 // API returns the facts that WithAPI stated.
 func (r *Router) API() API { return r.reg.api }
+
+// WithSummaries states the summary of each handler, by the name of its method.
+//
+// `avero generate` writes the map from the comment of each handler, so the
+// description of the API carries the sentence that a person already wrote. The
+// module set passes it before it registers the routes of a module. An option
+// of a route wins over the map.
+func WithSummaries(docs map[string]string) Option {
+	return func(r *Router) { r.reg.docs = docs }
+}
+
+// SetSummaries states the summary of each handler of the next routes. The
+// module set calls it, so a person calls WithSummaries instead.
+func (r *Router) SetSummaries(docs map[string]string) { r.reg.docs = docs }
+
+// summaryOf returns the summary of one handler, or the empty string.
+//
+// The name of a handler reads posts.(*Module).List, and the map holds List,
+// because the generator reads one package.
+func (r *Router) summaryOf(handler string) string {
+	if len(r.reg.docs) == 0 {
+		return ""
+	}
+	name := handler
+	if i := strings.LastIndex(name, "."); i >= 0 && i+1 < len(name) {
+		name = name[i+1:]
+	}
+	return r.reg.docs[name]
+}

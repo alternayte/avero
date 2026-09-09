@@ -236,3 +236,52 @@ func (m *Module) Show(c *router.Ctx, in EmptyInput) (router.Response, error) {
 		t.Fatalf("the generated Bind reads the request of an input with no field:\n%s", body)
 	}
 }
+
+// The comment of a handler states its summary, so a person writes the sentence
+// one time and the description of the API carries it.
+func TestTheCommentOfAHandlerReachesTheGeneratedSummaries(t *testing.T) {
+	dir := write(t, `package posts
+
+import "github.com/alternayte/avero"
+
+type Module struct{}
+
+type ListInput struct {
+	Search string `+"`query:\"q\"`"+`
+}
+
+type View struct {
+	ID string `+"`json:\"id\"`"+`
+}
+
+// List answers every post, newest first. A second sentence does not reach the
+// summary.
+func (m *Module) List(c *avero.Ctx, in ListInput) (View, error) {
+	return View{}, nil
+}
+
+// Create writes one post.
+func (m *Module) Create(c *avero.Ctx, in ListInput) (View, error) {
+	return View{}, nil
+}
+`)
+	if _, err := codegen.Generate(dir); err != nil {
+		t.Fatalf("Generate returned %v, want nil", err)
+	}
+	out, err := os.ReadFile(filepath.Join(dir, "zz_generated.go"))
+	if err != nil {
+		t.Fatalf("ReadFile returned %v", err)
+	}
+	body := string(out)
+	// The name of the method leaves the sentence, and the rest starts with a
+	// capital, so the summary reads as a description of an API.
+	if !strings.Contains(body, `"List":   "Answers every post, newest first"`) {
+		t.Fatalf("the generated summaries hold:\n%s", body)
+	}
+	if !strings.Contains(body, `"Create": "Writes one post"`) {
+		t.Fatalf("the generated summaries hold:\n%s", body)
+	}
+	if !strings.Contains(body, "func (m *Module) Summaries() map[string]string") {
+		t.Fatalf("the generated file states no Summaries method:\n%s", body)
+	}
+}

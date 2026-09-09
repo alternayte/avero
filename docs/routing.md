@@ -159,9 +159,21 @@ field of a struct, unless its JSON tag carries omitempty.
 
 An option states what a signature cannot carry:
 
+The comment of a handler states its summary. `avero generate` writes the
+sentence into the generated file, so a person writes it one time:
+
+```go
+// List answers every post, newest first.
+func (m *Module) List(c *avero.Ctx, in ListInput) (PostList, error)
+```
+
+The description then reads "Answers every post, newest first". The name of the
+method leaves the sentence, because the description names the operation beside
+its summary. An option of a route wins over the comment.
+
 | Option | Meaning |
 |---|---|
-| `avero.Summary("List every post")` | the line that a person reads |
+| `avero.Summary("List every post")` | the line that a person reads, over the comment |
 | `avero.Describe("...")` | the paragraph, where a summary is one line |
 | `avero.Tags("posts")` | the group of the operation |
 | `avero.Deprecated()` | the operation that a caller must leave |

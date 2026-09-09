@@ -36,6 +36,7 @@ type registry struct {
 	seen      map[string]Route
 	onErr     func(c *Ctx, err error) Response
 	api       API
+	docs      map[string]string
 	onInvalid func(c *Ctx, f *Fields) Response
 }
 

@@ -166,3 +166,28 @@ func TestAnEmptyAnswerWritesNoBody(t *testing.T) {
 		t.Fatalf("status = %d and the body holds %q", rec.Code, rec.Body.String())
 	}
 }
+
+// The generated map states the summary of a handler, and an option of a route
+// wins over it.
+func TestASummaryComesFromTheGeneratedMap(t *testing.T) {
+	r := router.New(router.WithSummaries(map[string]string{
+		"show":   "Answers one post",
+		"remove": "Removes one post",
+	}))
+	router.Get(r, "/posts/{id}", show)
+	router.Delete(r, "/posts/{id}", remove, router.Summary("Delete a post for good"))
+
+	rep, err := r.Report()
+	if err != nil {
+		t.Fatalf("the router holds a fault: %v", err)
+	}
+	got, _ := rep.Route(http.MethodGet, "/posts/{id}")
+	if got.Op.Summary != "Answers one post" {
+		t.Fatalf("the summary is %q", got.Op.Summary)
+	}
+	// The option of the route wins, because a person wrote it at the route.
+	removed, _ := rep.Route(http.MethodDelete, "/posts/{id}")
+	if removed.Op.Summary != "Delete a post for good" {
+		t.Fatalf("the summary is %q", removed.Op.Summary)
+	}
+}

@@ -3,6 +3,16 @@
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- The comment of a handler states its summary again. `avero generate` writes
+  the first sentence into a Summaries method of the module, and the module set
+  passes the map to the router before it registers the routes. A person
+  therefore writes the sentence one time, and no comment names a type. An
+  option of a route wins over the comment.
+
 ## v0.3.0
 
 This release changes the shape of every handler and of every route table. See
@@ -91,7 +101,8 @@ This release changes the shape of every handler and of every route table. See
 - The description states the error answers of every route against one Problem
   schema. A route that binds a value states 400 and 422.
 - A summary comes from `avero.Summary` now. The generator read the comment of
-  a handler before, and the description carries what the code states.
+  a handler before, and the description carries what the code states. The
+  release after this one reads the comment again, through the generator.
 - A handler error answers the problem that it carries. An error that carries
   no problem stays a 500, and its message stays in the log.
 - The validation fault and the bind fault answer problem documents. The field

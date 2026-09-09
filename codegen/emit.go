@@ -23,6 +23,7 @@ func emit(p pkg) ([]byte, error) {
 		emitBind(&body, in, imports)
 		emitValidate(&body, in, imports)
 	}
+	emitSummaries(&body, p)
 
 	var head strings.Builder
 	head.WriteString(generatedHeader + "\n//\n")
@@ -50,6 +51,33 @@ func emit(p pkg) ([]byte, error) {
 	head.WriteString(")\n\n")
 
 	return format.Source([]byte(head.String() + body.String()))
+}
+
+// emitSummaries writes the Summaries method of the module of a package.
+//
+// The comment of each handler states its summary, so a person writes the
+// sentence one time and the description of the API carries it. The module set
+// passes the map to the router. See module.SummaryModule.
+func emitSummaries(b *strings.Builder, p pkg) {
+	if p.Receiver == "" || len(p.Summaries) == 0 {
+		return
+	}
+	names := make([]string, 0, len(p.Summaries))
+	for name := range p.Summaries {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	fmt.Fprintf(b, "// Summaries returns the summary of each handler of %s.\n", p.Receiver)
+	b.WriteString("//\n")
+	b.WriteString("// The comment of a handler states it. Change the comment and run\n")
+	b.WriteString("// `avero generate`.\n")
+	fmt.Fprintf(b, "func (m *%s) Summaries() map[string]string {\n", p.Receiver)
+	b.WriteString("\treturn map[string]string{\n")
+	for _, name := range names {
+		fmt.Fprintf(b, "\t\t%s: %s,\n", strconv.Quote(name), strconv.Quote(p.Summaries[name]))
+	}
+	b.WriteString("\t}\n}\n\n")
 }
 
 // emitBind writes the Bind method of one input type.

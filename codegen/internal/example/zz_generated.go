@@ -185,3 +185,14 @@ func (in *ListInput) Validate(c *router.Ctx, f *router.Fields) {
 		f.Add("q", "must hold at most 64 characters")
 	}
 }
+
+// Summaries returns the summary of each handler of Module.
+//
+// The comment of a handler states it. Change the comment and run
+// `avero generate`.
+func (m *Module) Summaries() map[string]string {
+	return map[string]string{
+		"Create": "Is a handler",
+		"List":   "Is a second handler",
+	}
+}

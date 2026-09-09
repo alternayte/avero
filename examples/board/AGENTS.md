@@ -76,8 +76,9 @@ avero.json                  the shape and the asset pipeline
   run `avero generate`.
 - A handler returns the thing that it answers, such as `(View, error)`.
   Register a route with `avero.Get(r, "/things", m.List)`, which reads the
-  types of the handler. The description of the API needs no comment. A POST
-  answers 201 and every other method answers 200.
+  types of the handler. A POST answers 201 and every other method answers 200.
+- The comment of a handler states its summary. `avero generate` writes it into
+  the generated file, so write the comment and run the command.
 - A failure returns a problem, such as `avero.NotFound("thing", id)`. The
   router writes the document that RFC 9457 states. Do not write a map of one
   string.

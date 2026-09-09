@@ -26,14 +26,14 @@ func (m *Module) Name() string { return "tasks" }
 // Routes registers the JSON routes that the front end calls.
 //
 // The registration reads the type of the input and the type of the answer from
-// the handler, so the description of the API needs no comment.
+// the handler. The comment of each handler states its summary, which
+// `avero generate` writes into the generated file.
 func (m *Module) Routes(r *avero.Router) {
-	avero.Get(r, "/api/tasks", m.List, avero.Summary("List every task"))
-	avero.Post(r, "/api/tasks", m.Create, avero.Summary("Write one task"))
+	avero.Get(r, "/api/tasks", m.List)
+	avero.Post(r, "/api/tasks", m.Create)
 	avero.Patch(r, "/api/tasks/{id}", m.Update,
-		avero.Summary("Mark one task complete, or open again"),
 		avero.Answers[avero.Problem](http.StatusNotFound, "the task does not exist"))
-	avero.Delete(r, "/api/tasks/{id}", m.Delete, avero.Summary("Delete one task"))
+	avero.Delete(r, "/api/tasks/{id}", m.Delete)
 }
 
 // Describe states what the feature contributes. `avero schema` reads it.
