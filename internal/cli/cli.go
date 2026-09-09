@@ -69,6 +69,8 @@ func init() {
 			Summary: "fetch a bundled module into the vendor directory", Run: runJS},
 		{Name: "assets", Usage: "avero assets init",
 			Summary: "write the package.json of tier 1", Run: runAssets},
+		{Name: "ui", Usage: "avero ui add <library> [--style <name>]",
+			Summary: "add a component library to this application", Run: runUI},
 		{Name: "mcp", Usage: "avero mcp",
 			Summary: "serve the agent surface over stdio", Run: runMCP},
 		{Name: "version", Usage: "avero version", Summary: "print the version", Run: runVersion},
