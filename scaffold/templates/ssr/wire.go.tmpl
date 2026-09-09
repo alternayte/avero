@@ -3,7 +3,6 @@ package main
 import (
 	"embed"
 	"io/fs"
-	"net/http"
 	"strings"
 
 	"github.com/alternayte/avero"
@@ -56,7 +55,8 @@ func wire(engine *drel.Engine, cfg Config) (*avero.Router, *avero.ModuleSet, err
 	if err != nil {
 		return nil, nil, err
 	}
-	r.Mount("/assets/", http.StripPrefix("/assets/", assets.Handler(files, manifest)))
+	// Mount strips the prefix, so the handler reads the path of the asset.
+	r.Mount("/assets/", assets.Handler(files, manifest))
 
 	modules := avero.Modules(posts.New(engine))
 	if err := modules.Attach(r); err != nil {

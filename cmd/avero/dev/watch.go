@@ -199,7 +199,7 @@ func source(path string) bool {
 		return false
 	}
 	switch strings.ToLower(filepath.Ext(path)) {
-	case ".go", ".templ", ".css", ".js", ".sql", ".json":
+	case ".go", ".templ", ".css", ".js", ".jsx", ".ts", ".tsx", ".sql", ".json":
 		return true
 	}
 	return false

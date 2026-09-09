@@ -72,6 +72,10 @@ func runDev(ctx context.Context, s Streams, args []string) int {
 			}
 			return m.Asset("app.css"), nil
 		},
+		BuildScript: func(ctx context.Context) error {
+			_, err := assets.Build(ctx, project.assetConfig(dir, false))
+			return err
+		},
 		BuildGo: func(ctx context.Context) error { return buildBinary(ctx, dir, project) },
 		Start: func(ctx context.Context, port int) (dev.Process, error) {
 			return startBinary(ctx, dir, project, port, environment, s)

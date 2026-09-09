@@ -276,3 +276,32 @@ func TestSliceNeedsAName(t *testing.T) {
 		t.Fatalf("the code is %d and the fault is %q", code, errOut)
 	}
 }
+
+func TestNewVendorsTheModulesOfTheShape(t *testing.T) {
+	// The shape decides the modules of the front end. The command must know
+	// the shape after the scaffolder filled the default, or it vendors
+	// nothing and the first build fails.
+	for shape, want := range map[string]string{
+		"":    "datastar",
+		"ssr": "datastar",
+		"spa": "react",
+	} {
+		found := false
+		for _, module := range cli.FrontEnd[shapeOr(shape)] {
+			if strings.HasPrefix(module.Name, want) {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("the shape %q vendors no %s", shape, want)
+		}
+	}
+}
+
+// shapeOr returns the shape, or the default of the scaffolder.
+func shapeOr(shape string) string {
+	if shape == "" {
+		return "ssr"
+	}
+	return shape
+}

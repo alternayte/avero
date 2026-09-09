@@ -111,6 +111,11 @@
         source.addEventListener("reload", () => {
             reload().catch((fault) => console.error("avero dev:", fault));
         });
+        source.addEventListener("script", () => {
+            // A module that already runs cannot be replaced, so the page
+            // loads again. Every other change morphs the document.
+            window.location.reload();
+        });
         source.addEventListener("fault", (message) => {
             console.error("avero dev:", JSON.parse(message.data).message);
         });

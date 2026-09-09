@@ -32,7 +32,7 @@ func (m *Module) Routes(r *avero.Router) {
 	r.Get("/posts/new", avero.In(m.New))
 	r.Post("/posts", avero.In(m.Create))
 	r.Get("/posts/{id}", avero.In(m.Show))
-	r.Post("/posts/{id}/delete", avero.In(m.Delete))
+	r.Delete("/posts/{id}", avero.In(m.Delete))
 }
 
 // Describe states what the feature contributes. `avero schema` and the agent

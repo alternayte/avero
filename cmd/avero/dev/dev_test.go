@@ -60,6 +60,10 @@ func loop(t *testing.T, dir string) (*dev.Server, *atomic.Pointer[string], *atom
 			builds.Add(1)
 			return "/assets/css/app.beef.css", nil
 		},
+		BuildScript: func(context.Context) error {
+			builds.Add(1)
+			return nil
+		},
 		BuildGo: func(context.Context) error {
 			builds.Add(1)
 			return nil
@@ -229,10 +233,43 @@ func TestTheReloadClientFetchesAndMorphs(t *testing.T) {
 			t.Fatalf("the client holds no %q", want)
 		}
 	}
+	// The reload of a Go change or of a templ change morphs the document. A
+	// script change is the one case that loads the page again, because a
+	// module that already runs cannot be replaced.
+	reload := script[strings.Index(script, `addEventListener("reload"`):strings.Index(script, `addEventListener("script"`)]
 	for _, absent := range []string{"location.reload", "window.location =", "location.href ="} {
-		if strings.Contains(script, absent) {
-			t.Fatalf("the client navigates with %q, which loses the scroll position", absent)
+		if strings.Contains(reload, absent) {
+			t.Fatalf("the reload of the client navigates with %q, which loses the scroll position", absent)
 		}
+	}
+	if !strings.Contains(script, `addEventListener("script"`) {
+		t.Fatal("the client answers no script event")
+	}
+}
+
+func TestAScriptChangeRebuildsTheBundleAndReloadsThePage(t *testing.T) {
+	dir := t.TempDir()
+	server, _, builds, stops := loop(t, dir)
+	events, cancel := listen(t, server.Handler())
+	defer cancel()
+	waitForClient(t, server)
+
+	if err := server.Changed(context.Background(), []string{filepath.Join(dir, "assets", "js", "app.jsx")}); err != nil {
+		t.Fatalf("Changed returned %v, want nil", err)
+	}
+	select {
+	case e := <-events:
+		if e["type"] != "script" {
+			t.Fatalf("the event is %v, want a script event", e)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("no script event arrived")
+	}
+	if stops.Load() != 0 {
+		t.Fatalf("the loop restarted the application %d times, want 0", stops.Load())
+	}
+	if builds.Load() == 0 {
+		t.Fatal("the loop built no bundle")
 	}
 }
 

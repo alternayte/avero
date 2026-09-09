@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/alternayte/avero"
+	"github.com/alternayte/avero/ds"
 
 	"[[.Module]]/internal/ui"
 )
@@ -50,10 +51,25 @@ func (m *Module) Show(c *avero.Ctx, in ShowInput) (avero.Response, error) {
 }
 
 // Delete removes one post.
+//
+// Datastar sends the request, so the answer is a patch and not a page. The
+// browser removes the row and keeps everything else. See S12.
 func (m *Module) Delete(c *avero.Ctx, in DeleteInput) (avero.Response, error) {
 	if err := m.store.Delete(c.Context(), in.ID); err != nil {
 		return nil, err
 	}
-	c.Info("The post is deleted")
-	return avero.Redirect(http.StatusSeeOther, "/"), nil
+	posts, err := m.store.List(c.Context(), "")
+	if err != nil {
+		return nil, err
+	}
+	return ds.Open(func(s *ds.Stream) error {
+		if err := s.RemoveElements("#post-" + in.ID); err != nil {
+			return err
+		}
+		if len(posts) > 0 {
+			return nil
+		}
+		// The list is empty again, so the page states it.
+		return s.PatchHTML(`<p id="posts-empty" class="empty">No post exists yet.</p>`)
+	}), nil
 }

@@ -82,7 +82,7 @@ file therefore gets a new name, and the browser holds the old one no more.
 var dist embed.FS
 
 m, err := avero.LoadManifest(dist, "assets/dist/manifest.json")
-r.Mount("/assets/", http.StripPrefix("/assets/", avero.AssetHandler(files, m)))
+r.Mount("/assets/", avero.AssetHandler(files, m))
 ```
 
 `ui.Asset("app.css")` answers the hashed path. The handler serves the files that
@@ -106,8 +106,29 @@ the manifest names and nothing else, with a cache of one year.
 A project that names no Tailwind input runs no Tailwind. The binary lands in
 `.avero/bin/`, pinned by version and by hash in `avero.lock`.
 
+## One binary
+
+The application embeds the output directory:
+
+```go
+//go:embed all:assets/dist
+var dist embed.FS
+```
+
+`avero build` writes the bundle and the stylesheet, and the compiler puts them
+in the binary. The binary therefore holds the server and the front end, and it
+runs in a directory that holds nothing else. A container needs one file.
+
 ## The development loop
 
 `avero dev` serves the assets from the disk, because the binary carries the
-copy of its last build. A change to a CSS file rebuilds the stylesheet and swaps
-the link element with no reload.
+copy of its last build.
+
+| Change | Answer | Time |
+|---|---|---|
+| a `.css` file | rebuild the stylesheet, swap the link element | about 40 ms |
+| a `.js`, `.jsx`, `.ts` or `.tsx` file | rebuild the bundle, load the page again | about 60 ms |
+| a `.go` or `.templ` file | rebuild the binary, start it again, morph the page | about 1.7 s |
+
+A script change loads the page again, because a module that already runs cannot
+be replaced. Every other change keeps the page.

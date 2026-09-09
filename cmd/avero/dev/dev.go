@@ -62,6 +62,9 @@ type Config struct {
 	// BuildCSS rebuilds the stylesheet and returns its address. A nil value
 	// builds with the asset pipeline of the project.
 	BuildCSS func(ctx context.Context) (string, error)
+	// BuildScript rebuilds the bundle of the front end. A nil value builds
+	// with the asset pipeline of the project.
+	BuildScript func(ctx context.Context) error
 	// BuildGo rebuilds the binary of the application. A nil value runs the
 	// Go tool.
 	BuildGo func(ctx context.Context) error
@@ -239,6 +242,18 @@ func (s *Server) Changed(ctx context.Context, files []string) error {
 		}
 		s.hub.send(event{Type: "css", Href: href})
 		return nil
+	case changeScript:
+		start := time.Now()
+		if err := s.buildScript(ctx); err != nil {
+			s.hub.send(event{Type: "fault", Message: err.Error()})
+			return err
+		}
+		// A module that already runs cannot be replaced, so the page loads
+		// again. It is the one change that reloads. The build is the whole
+		// cost, and esbuild takes tens of milliseconds.
+		s.hub.send(event{Type: "script"})
+		_, _ = fmt.Fprintf(s.cfg.Out, "avero dev: script %s\n", time.Since(start).Round(time.Millisecond))
+		return nil
 	case changeGo:
 		start := time.Now()
 		s.proxy.hold()
@@ -269,6 +284,14 @@ func (s *Server) buildCSS(ctx context.Context) (string, error) {
 		return "", errors.New("avero dev: the loop holds no CSS build\n  → Write the entry of the stylesheet in avero.json")
 	}
 	return s.cfg.BuildCSS(ctx)
+}
+
+// buildScript rebuilds the bundle of the front end.
+func (s *Server) buildScript(ctx context.Context) error {
+	if s.cfg.BuildScript == nil {
+		return errors.New("avero dev: the loop holds no script build\n  → Name the entry of the script in avero.json")
+	}
+	return s.cfg.BuildScript(ctx)
 }
 
 // build rebuilds the binary of the application.
@@ -381,21 +404,27 @@ type changeKind int
 const (
 	changeNone changeKind = iota
 	changeCSS
+	changeScript
 	changeGo
 )
 
-// classify returns the kind of one change. A Go change wins, because it needs
-// a rebuild and the stylesheet follows it.
+// classify returns the kind of one change.
+//
+// A Go change wins, because it rebuilds the binary and every other output
+// follows it. A script change rebuilds the bundle only, and a stylesheet
+// change rebuilds the stylesheet only.
 func classify(files []string) changeKind {
 	kind := changeNone
 	for _, name := range files {
 		switch strings.ToLower(filepath.Ext(name)) {
 		case ".go", ".templ", ".sql", ".json":
 			return changeGo
+		case ".js", ".jsx", ".ts", ".tsx":
+			kind = changeScript
 		case ".css":
-			kind = changeCSS
-		case ".js":
-			kind = changeGo
+			if kind == changeNone {
+				kind = changeCSS
+			}
 		}
 	}
 	return kind

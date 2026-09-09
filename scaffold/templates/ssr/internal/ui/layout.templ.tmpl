@@ -13,7 +13,9 @@ templ Page(title string, body templ.Component) {
 			<link rel="stylesheet" href={ Asset("app.css") }/>
 			<script type="module" src={ Asset("app.js") }></script>
 		</head>
-		<body>
+		// The signal carries the CSRF token, so a Datastar action sends it in
+		// the header that the middleware reads.
+		<body data-signals-csrf={ "'" + view.CSRFToken(ctx) + "'" }>
 			<header><a href="/">[[.Title]]</a></header>
 			<main>
 				@Toasts()

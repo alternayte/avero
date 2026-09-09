@@ -109,3 +109,43 @@ func TestAnInvalidBodyAnswersTheFieldErrors(t *testing.T) {
 		t.Fatalf("the answer holds %v", answer.Errors)
 	}
 }
+
+func TestTheApplicationServesItsAssets(t *testing.T) {
+	// The binary carries the bundle of the front end, so a request for a
+	// hashed name reads the embedded file system and no directory beside the
+	// binary. One binary holds the server and the front end.
+	h := app(t)
+	shell := call(t, h, http.MethodGet, "/", "")
+	src := srcOf(t, shell.Body.String())
+
+	rec := call(t, h, http.MethodGet, src, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("the bundle %s answered %d, want 200", src, rec.Code)
+	}
+	if rec.Body.Len() == 0 {
+		t.Fatal("the bundle holds no byte")
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/javascript") &&
+		!strings.HasPrefix(got, "application/javascript") {
+		t.Fatalf("Content-Type = %q, want a script", got)
+	}
+	if absent := call(t, h, http.MethodGet, "/assets/absent.js", ""); absent.Code != http.StatusNotFound {
+		t.Fatalf("an absent asset answered %d, want 404", absent.Code)
+	}
+}
+
+// srcOf returns the address of the script of the shell.
+func srcOf(t *testing.T, body string) string {
+	t.Helper()
+	mark := `<script type="module" src="`
+	i := strings.Index(body, mark)
+	if i < 0 {
+		t.Fatalf("the shell holds no script:\n%s", body)
+	}
+	rest := body[i+len(mark):]
+	end := strings.Index(rest, `"`)
+	if end < 0 {
+		t.Fatalf("the address does not close:\n%s", body)
+	}
+	return rest[:end]
+}

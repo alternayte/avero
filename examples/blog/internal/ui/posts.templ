@@ -3,17 +3,33 @@ package ui
 import "github.com/alternayte/avero/view"
 
 // PostList renders every post.
+//
+// The delete button carries a Datastar action. The server answers with a patch
+// that removes the row, so the page changes with no reload. See S12.
 templ PostList(rows []PostRow) {
 	<h1>Posts</h1>
 	<p><a href="/posts/new">Write a post</a></p>
-	if len(rows) == 0 {
-		<p class="empty">No post exists yet.</p>
-	}
+	<p id="posts-empty" class="empty">
+		if len(rows) == 0 {
+			No post exists yet.
+		}
+	</p>
 	<ul class="posts">
 		for _, row := range rows {
-			<li><a href={ templ.URL("/posts/" + row.ID) }>{ row.Title }</a></li>
+			@PostRowItem(row)
 		}
 	</ul>
+}
+
+// PostRowItem renders one row of the list.
+templ PostRowItem(row PostRow) {
+	<li id={ "post-" + row.ID }>
+		<a href={ templ.URL("/posts/" + row.ID) }>{ row.Title }</a>
+		<button
+			type="button"
+			data-on-click={ "@delete('/posts/" + row.ID + "', {headers: {'X-CSRF-Token': $csrf}})" }
+		>Delete</button>
+	</li>
 }
 
 // PostDetail renders one post and the button that deletes it.
@@ -22,10 +38,13 @@ templ PostDetail(row PostRow) {
 		<h1>{ row.Title }</h1>
 		<p>{ row.Body }</p>
 	</article>
-	<form method="post" action={ templ.URL("/posts/" + row.ID + "/delete") }>
-		@view.CSRF()
-		<button type="submit">Delete</button>
-	</form>
+	<p>
+		<a href="/">Back to the posts</a>
+		<button
+			type="button"
+			data-on-click={ "@delete('/posts/" + row.ID + "', {headers: {'X-CSRF-Token': $csrf}})" }
+		>Delete</button>
+	</p>
 }
 
 // NewPostForm renders the form of a new post. It renders again after a
