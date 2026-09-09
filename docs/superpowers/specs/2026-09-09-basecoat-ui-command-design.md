@@ -17,7 +17,8 @@ changed.
 
 In scope:
 
-- A pin path for a stylesheet, beside the pin path for a module.
+- A pin path for the released package of a library, beside the pin path for a
+  single module.
 - The command `avero ui add basecoat [--style <name>]`.
 - A toaster component that renders the toasts of Avero in the Basecoat markup.
 - The ssr example, which uses the command and proves it in the gate.
@@ -49,26 +50,70 @@ measurement that supports this.
 **D4. The default style is `vega`, and `--style` names another.** Basecoat
 ships eight. The lock records the one that the application uses.
 
-## 4. The pin of a stylesheet
+## 4. The pin of a package
 
-`assets/lock.go` holds `PinJS`, which fetches a bundled ES module, rewrites the
-imports of the CDN, writes `assets/js/vendor/<name>.js`, and records the URL and
-the two hashes in `avero.lock`.
+### 4.1 The measurement that decides it
 
-A stylesheet needs the same work without the rewrite. Add:
+The npm package of Basecoat holds two different things.
+`dist/basecoat.cdn.min.css` is a build that carries its own copy of Tailwind.
+`dist/basecoat.css` is Tailwind source: a tree of 84 files that use `@apply`
+inside `@layer components`, joined by relative `@import` lines.
 
-```go
-func PinCSS(ctx context.Context, cfg PinConfig, name, url string) error
+A scaffolded `assets/css/app.css` already states `@import "tailwindcss"`. The
+CDN build therefore puts a second preflight and a second theme into one page,
+and the theme of the application cannot reach the Basecoat components.
+
+The source tree compiles with the pinned Tailwind 4.1.11 standalone binary and
+needs no Node.js:
+
+```
+@import "tailwindcss";
+@import "./vendor/basecoat/basecoat.css";
+→ 287988 bytes minified, 468 ms
 ```
 
-It writes `assets/css/vendor/<name>.css` and records the pin under a third map
-of the lock, `css`. `Lock` gains `CSS(name)` and `SetCSS(name, pin)`, and
-`lockJSON` gains a `css` member. An older lock that holds no `css` member reads
-without a fault.
+Tailwind removes no unused component class, so `.accordion` survives a build of
+a page that uses none. Basecoat therefore costs about 220 KB of stylesheet in
+either path. The size does not decide the question. The single preflight and
+the reachable theme decide it.
 
-`PinCSS` states no address of its own. The caller names the URL, because a
-stylesheet has no package resolution of the kind that `Resolve` performs for a
-module.
+### 4.2 PinPackage
+
+`assets/lock.go` holds `PinJS`, which fetches one bundled ES module. A library
+needs a tree, so add:
+
+```go
+func PinPackage(ctx context.Context, cfg PinConfig, name, url string) error
+```
+
+It fetches the tarball that `url` names, reads it with `compress/gzip` and
+`archive/tar`, and writes each member of `package/dist/` under
+`assets/vendor/<name>/`. Both packages are in the standard library, so this
+adds no dependency.
+
+The lock gains a third map, `pkg`. One entry records the URL, the SHA-256 of
+the tarball, and the sorted list of the files that the pin wrote:
+
+```go
+type Pin struct {
+    URL          string   `json:"url"`
+    SHA256       string   `json:"sha256"`
+    SourceSHA256 string   `json:"source_sha256,omitempty"`
+    Version      string   `json:"version,omitempty"`
+    Files        []string `json:"files,omitempty"`   // new
+}
+```
+
+`Lock` gains `Package(name)` and `SetPackage(name, pin)`, and `lockJSON` gains
+a `pkg` member. An older lock that holds no `pkg` member reads without a fault.
+
+The pin is idempotent. A name that the lock holds, whose files all exist and
+whose tarball hash matches, fetches nothing.
+
+The pin refuses a member whose path leaves the target directory, so a tarball
+cannot write outside `assets/vendor/<name>/`.
+
+One tarball carries the stylesheets and the scripts, so one pin covers both.
 
 ## 5. The toaster
 
@@ -165,14 +210,19 @@ library today, and an unknown name fails with the list of the known ones.
 The steps, in order:
 
 1. Read `avero.json`. A shape that is not `ssr` fails with a repair sentence.
-2. `PinCSS` fetches
-   `https://cdn.jsdelivr.net/npm/basecoat-css@<version>/dist/basecoat.<style>.cdn.min.css`
-   into `assets/css/vendor/basecoat.css`.
-3. `PinJS` fetches `.../dist/js/all.min.js` into
-   `assets/js/vendor/basecoat.js`.
-4. Add `@import "vendor/basecoat.css";` to `assets/css/app.css` after the
-   Tailwind import, when the line is absent.
-5. Add `import "basecoat";` to `assets/js/app.js`, when the line is absent.
+2. `PinPackage` fetches
+   `https://registry.npmjs.org/basecoat-css/-/basecoat-css-<version>.tgz` and
+   writes `dist/` under `assets/vendor/basecoat/`.
+3. Add `@import "vendor/basecoat/basecoat-<style>.css";` to
+   `assets/css/app.css` after the Tailwind import, when the line is absent.
+   The stylesheet reads the relative imports of the tree, so no other line
+   changes.
+4. Add `import "./vendor/basecoat/js/all.min.js";` to `assets/js/app.js`, when
+   the line is absent. esbuild takes the file as a relative path, so the
+   application needs no bare specifier and no rewrite.
+5. The eight styles are `vega`, `nova`, `maia`, `lyra`, `mira`, `luma`, `sera`
+   and `rhea`. An unknown name fails with the list. `vega` is the default, and
+   `dist/basecoat.css` imports it.
 6. Patch `internal/ui/layout.templ` under the rule of D2.
 7. Write `internal/ui/basecoat.templ`, when the file is absent.
 8. Print what changed, and print the lines to paste when step 6 patched
@@ -181,7 +231,7 @@ The steps, in order:
 Every step is idempotent. A second run fetches nothing and writes nothing.
 
 The version of Basecoat is a constant of the `assets` package, beside
-`TailwindVersion`.
+`TailwindVersion`. It is `1.0.2`.
 
 ### 6.1 The patch of the layout
 
@@ -210,10 +260,12 @@ clone holds no vendor file. `averoexamples -assets` fetches them.
 
 | Test | Proves |
 |---|---|
-| `PinCSS` writes the vendor file and the lock | section 4 |
-| `PinCSS` fetches nothing on a second run | the idempotence |
-| `PinCSS` fails on a hash that does not match | the supply chain |
-| An older lock with no `css` member reads | the compatibility |
+| `PinPackage` writes every file of `dist/` and the lock | section 4.2 |
+| `PinPackage` fetches nothing on a second run | the idempotence |
+| `PinPackage` fetches again when a file of the tree is absent | the repair |
+| `PinPackage` fails on a hash that does not match | the supply chain |
+| `PinPackage` refuses a member whose path leaves the directory | the safety |
+| An older lock with no `pkg` member reads | the compatibility |
 | The command on a scaffolded application patches the layout | D2 |
 | The command on a changed layout writes nothing and prints the lines | D2 |
 | The command runs two times and gives one result | the idempotence |
@@ -238,7 +290,7 @@ The command fetches over HTTP, so each test passes a `Fetcher` of the test, as
 
 The SDD names no `avero ui` command. S11 owns the asset pipeline and S14 owns
 the CLI, and this design adds one command to each. The SDD needs one line in
-S11 for `PinCSS` and one line in S14 for the command. The change adds no
+S11 for `PinPackage` and one line in S14 for the command. The change adds no
 third-party Go dependency and no database table.
 
 ## 11. The risks
@@ -249,9 +301,14 @@ belongs to the application after the command wrote it, so a person owns the
 repair. State this in `docs/ui.md`.
 
 **R2. `all.min.js` is not an ES module.** The bundle is an IIFE. esbuild takes
-an IIFE as an entry of a bundle and gives the same bytes, and the import of
-`app.js` runs it for its side effect. The first task of the plan must prove
-this with a build, because a fault here changes step 5.
+an IIFE as an import of a bundle and keeps its side effect, and the import of
+`app.js` runs it. The first task of the plan must prove this with a build,
+because a fault here changes step 4.
+
+**R4. The vendor tree holds 84 stylesheets and 22 scripts.** A person reads a
+larger diff on the day of the first pin, and on the day of a version change.
+The lock records the list, so a review reads one entry and not 106 files. The
+application ignores no vendor file, because the build must run with no network.
 
 **R3. A person changes the layout later.** The command runs one time, so a
 later change to the scaffold layout does not reach an application that already
