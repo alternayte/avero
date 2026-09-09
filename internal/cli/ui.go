@@ -9,6 +9,7 @@ import (
 
 	"github.com/alternayte/avero/assets"
 	"github.com/alternayte/avero/internal/cli/uifiles"
+	"github.com/alternayte/avero/scaffold"
 )
 
 // BasecoatStyles names the eight styles that Basecoat publishes. The first one
@@ -79,7 +80,7 @@ func runUI(ctx context.Context, s Streams, args []string) int {
 	if err := writeToaster(dir, s); err != nil {
 		return fail(s, err)
 	}
-	if err := patchLayout(dir, s); err != nil {
+	if err := patchLayout(dir, s, project.Name); err != nil {
 		return fail(s, err)
 	}
 	_, _ = fmt.Fprintf(s.Out, "\nRun `avero dev` and read the page.\n")
@@ -173,51 +174,79 @@ const scaffoldToasts = "// Toasts renders the messages of this response."
 // patchLayout moves the call of Toasts to the end of the body and removes the
 // definition that the scaffold wrote.
 //
-// The command patches a layout that still matches the scaffold. A person who
-// changed the layout owns it, so the command changes nothing and prints the
-// two lines. See the design, D2.
-func patchLayout(dir string, s Streams) error {
+// The command compares the file on disk with the layout that the scaffold
+// renders for this application. It patches an exact match. It changes
+// nothing, and prints nothing, when the file already carries the patch,
+// because a second run must give one result. It changes nothing, and prints
+// the two lines, when the file matches neither state, because a person who
+// changed the layout owns it. See the design, D2.
+func patchLayout(dir string, s Streams, name string) error {
 	file := filepath.Join(dir, "internal", "ui", "layout.templ")
-	body, err := os.ReadFile(file)
+	got, err := os.ReadFile(file)
 	if err != nil {
 		return nil
 	}
-	text := string(body)
-	if !strings.Contains(text, "@Toasts()") || !strings.Contains(text, scaffoldToasts) {
-		printLayoutLines(s)
-		return nil
+
+	want, err := scaffold.Layout(name)
+	if err != nil {
+		return err
 	}
+	done := patchOf(want)
+
+	switch {
+	case string(got) == string(want):
+		if err := os.WriteFile(file, done, 0o644); err != nil {
+			return fmt.Errorf("avero ui: internal/ui/layout.templ does not write: %w\n  → Give the process the right to write the application directory", err)
+		}
+		_, _ = fmt.Fprintln(s.Out, "patched internal/ui/layout.templ")
+	case string(got) == string(done):
+		// The layout already carries the patch, so the command changes
+		// nothing and prints nothing.
+	default:
+		printLayoutLines(s)
+	}
+	return nil
+}
+
+// patchOf renders the patch that patchLayout applies to the layout that the
+// scaffold writes. It moves the call of Toasts to the end of the body, with
+// the indentation of the other children of the body element, and it removes
+// the definition of Toasts, because the toaster component defines that name.
+//
+// The function reads the exact body of the scaffold layout, so it never
+// removes a call that a person put in another place.
+func patchOf(scaffoldLayout []byte) []byte {
+	lines := strings.Split(string(scaffoldLayout), "\n")
 
 	// Remove the call from its place inside main.
-	out := []string{}
-	for _, line := range strings.Split(text, "\n") {
-		if strings.TrimSpace(line) == "@Toasts()" {
+	kept := lines[:0]
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "@Toasts()" {
+			kept = append(kept, line)
+		}
+	}
+	lines = kept
+
+	// Put the call before the end of the body, with the indentation of the
+	// other children of the body element, because the toaster is a fixed
+	// element of the page and not of the content.
+	for i, line := range lines {
+		if !strings.Contains(line, "</body>") {
 			continue
 		}
-		out = append(out, line)
+		indent := line[:len(line)-len(strings.TrimLeft(line, "\t"))]
+		call := indent + "\t@Toasts()"
+		lines = append(lines[:i:i], append([]string{call}, lines[i:]...)...)
+		break
 	}
-	text = strings.Join(out, "\n")
-
-	// Put the call before the end of the body, because the toaster is a fixed
-	// element of the page and not of the content.
-	at := strings.Index(text, "</body>")
-	if at < 0 {
-		printLayoutLines(s)
-		return nil
-	}
-	text = text[:at] + "\t\t\t@Toasts()\n\t\t" + text[at:]
+	text := strings.Join(lines, "\n")
 
 	// Remove the definition of the scaffold, which reaches to the end of the
 	// file.
 	if cut := strings.Index(text, scaffoldToasts); cut >= 0 {
 		text = strings.TrimRight(text[:cut], "\n") + "\n"
 	}
-
-	if err := os.WriteFile(file, []byte(text), 0o644); err != nil {
-		return fmt.Errorf("avero ui: internal/ui/layout.templ does not write: %w\n  → Give the process the right to write the application directory", err)
-	}
-	_, _ = fmt.Fprintln(s.Out, "patched internal/ui/layout.templ")
-	return nil
+	return []byte(text)
 }
 
 // printLayoutLines states the change that a person makes by hand.

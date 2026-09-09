@@ -383,3 +383,19 @@ func TestGoModCarriesNoEmptyVersionOfAvero(t *testing.T) {
 		t.Fatalf("go.mod carries no named version:\n%s", got)
 	}
 }
+
+// TestLayoutRendersTheTitleAndNoTemplateMark proves that Layout renders the
+// template mark of the title, and that it renders no mark at all.
+func TestLayoutRendersTheTitleAndNoTemplateMark(t *testing.T) {
+	body, err := scaffold.Layout("blog")
+	if err != nil {
+		t.Fatalf("Layout returned %v, want nil", err)
+	}
+	text := string(body)
+	if !strings.Contains(text, "Blog") {
+		t.Fatalf("the layout carries no title:\n%s", text)
+	}
+	if strings.Contains(text, "[[") || strings.Contains(text, "]]") {
+		t.Fatalf("the layout still carries a template mark:\n%s", text)
+	}
+}
