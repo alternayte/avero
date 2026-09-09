@@ -36,21 +36,25 @@ package, so the bundler resolves it in the vendor directory. `avero.lock`
 records the hash of the file that the pin wrote and the hash of the bytes that
 the address answered.
 
-## React and TanStack Query
+## The spa shape
 
-The spa shape carries React 19 and TanStack Query, and it needs no Node.js.
-`avero new --shape spa` pins four modules:
+The spa shape uses tier 2. Vite builds its TypeScript front end, and
+`avero build` runs it:
 
+```json
+{
+  "assets": {
+    "tier": "external",
+    "command": ["npm", "run", "build"],
+    "dir": "web",
+    "manifest": false
+  }
+}
 ```
-react
-react/jsx-runtime
-react-dom/client
-@tanstack/react-query
-```
 
-esbuild transforms the JSX with the automatic runtime, so a component file
-needs no import of React, and it bundles the application and the vendored
-modules into one file of about 230 kilobytes.
+Vite writes its own index document, so it writes no manifest of Avero, and the
+application serves the build with `assets.SPA`. See [The single page
+shape](spa.md).
 
 ## Tier 1
 

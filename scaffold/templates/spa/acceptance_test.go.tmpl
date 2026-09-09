@@ -52,16 +52,6 @@ func call(t *testing.T, h http.Handler, method, path, body string) *httptest.Res
 	return rec
 }
 
-func TestTheShellAnswersTheRootPath(t *testing.T) {
-	rec := call(t, app(t), http.MethodGet, "/", "")
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), `<div id="app">`) {
-		t.Fatalf("the shell holds %q", rec.Body.String())
-	}
-}
-
 func TestTheAPIWritesReadsAndCompletesATask(t *testing.T) {
 	h := app(t)
 	created := call(t, h, http.MethodPost, "/api/tasks", `{"title":"A title"}`)
@@ -110,42 +100,23 @@ func TestAnInvalidBodyAnswersTheFieldErrors(t *testing.T) {
 	}
 }
 
-func TestTheApplicationServesItsAssets(t *testing.T) {
-	// The binary carries the bundle of the front end, so a request for a
-	// hashed name reads the embedded file system and no directory beside the
-	// binary. One binary holds the server and the front end.
+func TestTheApplicationServesTheFrontEnd(t *testing.T) {
+	// The binary carries the build of the front end, so a request for a path
+	// of the front end answers the index document from the embedded file
+	// system. One binary holds the server and the front end.
 	h := app(t)
-	shell := call(t, h, http.MethodGet, "/", "")
-	src := srcOf(t, shell.Body.String())
-
-	rec := call(t, h, http.MethodGet, src, "")
-	if rec.Code != http.StatusOK {
-		t.Fatalf("the bundle %s answered %d, want 200", src, rec.Code)
+	for _, path := range []string{"/", "/tasks/7"} {
+		rec := call(t, h, http.MethodGet, path, "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s answered %d, want 200", path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), `id="root"`) {
+			t.Fatalf("%s holds no document of the front end:\n%s", path, rec.Body.String())
+		}
 	}
-	if rec.Body.Len() == 0 {
-		t.Fatal("the bundle holds no byte")
+	// A path of the API stays with the API.
+	if rec := call(t, h, http.MethodGet, "/api/tasks", ""); rec.Code != http.StatusOK ||
+		!strings.Contains(rec.Body.String(), "tasks") {
+		t.Fatalf("the API answered %d:\n%s", rec.Code, rec.Body.String())
 	}
-	if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/javascript") &&
-		!strings.HasPrefix(got, "application/javascript") {
-		t.Fatalf("Content-Type = %q, want a script", got)
-	}
-	if absent := call(t, h, http.MethodGet, "/assets/absent.js", ""); absent.Code != http.StatusNotFound {
-		t.Fatalf("an absent asset answered %d, want 404", absent.Code)
-	}
-}
-
-// srcOf returns the address of the script of the shell.
-func srcOf(t *testing.T, body string) string {
-	t.Helper()
-	mark := `<script type="module" src="`
-	i := strings.Index(body, mark)
-	if i < 0 {
-		t.Fatalf("the shell holds no script:\n%s", body)
-	}
-	rest := body[i+len(mark):]
-	end := strings.Index(rest, `"`)
-	if end < 0 {
-		t.Fatalf("the address does not close:\n%s", body)
-	}
-	return rest[:end]
 }

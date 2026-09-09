@@ -41,7 +41,7 @@ type example struct {
 // examples holds the three reference applications of the SDD, section 8.
 var examples = []example{
 	{Name: "blog", Shape: "ssr", Exercises: "the router, the handler codegen, the views and the assets"},
-	{Name: "board", Shape: "spa", Exercises: "the JSON routes and the embedded front end"},
+	{Name: "board", Shape: "spa", Exercises: "the JSON routes and the front end that Vite builds"},
 	{Name: "orders", Shape: "api", Exercises: "the JSON service and the generated client"},
 }
 
@@ -110,7 +110,7 @@ func starters() error {
 			continue
 		}
 		dir := filepath.Join(Dir, e.Name)
-		if _, err := scaffold.WriteStarterAssets(dir); err != nil {
+		if _, err := scaffold.WriteStarterAssets(dir, e.Shape); err != nil {
 			return err
 		}
 		fmt.Println(filepath.Join(dir, "assets", "dist"))
@@ -145,7 +145,8 @@ func write(e example, dir, replace string) error {
 	if err := cli.Templ(ctx, dir); err != nil {
 		return err
 	}
-	// The spa shape vendors React and TanStack Query.
+	// The ssr shape vendors Datastar. The spa shape vendors nothing, because
+	// npm and Vite own its front end.
 	if err := cli.Vendor(ctx, dir, e.Shape, cli.Streams{Out: io.Discard, Err: os.Stderr}); err != nil {
 		return err
 	}

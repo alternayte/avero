@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"net/url"
 	"sort"
@@ -172,6 +173,21 @@ func migrationsPending(ctx context.Context, e *drel.Engine, dir string) error {
 	}
 	sort.Strings(names)
 	return fmt.Errorf("%d migrations are pending: %s", len(pending), strings.Join(names, ", "))
+}
+
+// UnpackMigrations writes the migrations of an embedded file system into a
+// temporary directory and returns it with the function that removes it.
+//
+// An application that embeds its migrations therefore applies them from its
+// own binary, and one artifact holds the server, the front end and the schema.
+//
+//	//go:embed all:migrations
+//	var migrations embed.FS
+//
+//	dir, clean, err := avero.UnpackMigrations(migrations, "migrations")
+//	defer clean()
+func UnpackMigrations(fsys fs.FS, root string) (string, func(), error) {
+	return migrations.Unpack(fsys, root)
 }
 
 // DatabaseCheck proves that the database answers. It opens its own connection,

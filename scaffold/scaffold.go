@@ -127,7 +127,7 @@ func Write(opts Options) ([]string, error) {
 		written = append(written, files...)
 	}
 	if opts.Shape != ShapeAPI {
-		files, err := writeStarterAssets(dir)
+		files, err := writeStarterAssets(dir, opts.Shape)
 		if err != nil {
 			return nil, err
 		}

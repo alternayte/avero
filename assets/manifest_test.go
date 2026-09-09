@@ -125,3 +125,57 @@ func TestTheHandlerAnswersOnlyASafeMethod(t *testing.T) {
 		t.Fatalf("status = %d, want 405", rec.Code)
 	}
 }
+
+func TestTheSPAHandlerServesTheBuildAndTheIndex(t *testing.T) {
+	fsys := fstest.MapFS{
+		"index.html":                &fstest.MapFile{Data: []byte("<!doctype html><div id=root></div>")},
+		"assets/index-Ab12Cd34.js":  &fstest.MapFile{Data: []byte("console.log(1)")},
+		"assets/index-Ef56Gh78.css": &fstest.MapFile{Data: []byte("body{}")},
+		"favicon.svg":               &fstest.MapFile{Data: []byte("<svg/>")},
+	}
+	h := assets.SPA(fsys)
+
+	for _, tc := range []struct {
+		path, want, cache string
+		code              int
+	}{
+		{path: "/", want: "id=root", cache: "no-cache", code: 200},
+		{path: "/assets/index-Ab12Cd34.js", want: "console.log", cache: assets.CacheControl, code: 200},
+		{path: "/favicon.svg", want: "<svg/>", cache: "no-cache", code: 200},
+		// The front end owns the path, so the index answers and the router of
+		// the front end reads it.
+		{path: "/tasks/7", want: "id=root", cache: "no-cache", code: 200},
+	} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tc.path, nil))
+		if rec.Code != tc.code {
+			t.Fatalf("%s answered %d, want %d", tc.path, rec.Code, tc.code)
+		}
+		if !strings.Contains(rec.Body.String(), tc.want) {
+			t.Fatalf("%s holds %q, want %q", tc.path, rec.Body.String(), tc.want)
+		}
+		if got := rec.Header().Get("Cache-Control"); got != tc.cache {
+			t.Fatalf("%s carries %q, want %q", tc.path, got, tc.cache)
+		}
+	}
+}
+
+func TestTheSPAHandlerStatesTheRepairWithNoBuild(t *testing.T) {
+	rec := httptest.NewRecorder()
+	assets.SPA(fstest.MapFS{}).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "avero build") {
+		t.Fatalf("the answer states no repair: %q", rec.Body.String())
+	}
+}
+
+func TestTheSPAHandlerAnswersOnlyASafeMethod(t *testing.T) {
+	rec := httptest.NewRecorder()
+	fsys := fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("x")}}
+	assets.SPA(fsys).ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/", nil))
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want 405", rec.Code)
+	}
+}

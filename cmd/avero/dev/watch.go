@@ -28,6 +28,7 @@ const Debounce = 20 * time.Millisecond
 // collects the changes, and the loop reads them when it is free again.
 type watcher struct {
 	dir     string
+	skip    string
 	inner   *fsnotify.Watcher
 	changes chan struct{}
 
@@ -37,13 +38,14 @@ type watcher struct {
 
 // newWatcher opens a watcher on the tree of the application. It adds each
 // directory, because fsnotify reports one directory and not a whole tree.
-func newWatcher(dir string) (*watcher, error) {
+func newWatcher(dir, skip string) (*watcher, error) {
 	inner, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, fmt.Errorf("avero dev: the watcher does not open: %w\n  → Raise the file limit of the shell, then run the command again", err)
 	}
 	w := &watcher{
 		dir:     dir,
+		skip:    skip,
 		inner:   inner,
 		changes: make(chan struct{}, 1),
 		pending: map[string]bool{},
@@ -62,7 +64,7 @@ func (w *watcher) addTree() error {
 		if err != nil || !d.IsDir() {
 			return nil
 		}
-		if path != w.dir && skipDir(d.Name()) {
+		if path != w.dir && (skipDir(d.Name()) || w.skipped(path)) {
 			return filepath.SkipDir
 		}
 		if err := w.inner.Add(path); err != nil {
@@ -144,6 +146,15 @@ func (w *watcher) next(ctx context.Context) ([]string, error) {
 	return w.take(), nil
 }
 
+// skipped reports the directory of the front end. Its own development server
+// watches it, so the loop leaves it alone.
+func (w *watcher) skipped(path string) bool {
+	if w.skip == "" {
+		return false
+	}
+	return path == filepath.Join(w.dir, filepath.FromSlash(w.skip))
+}
+
 // sweep returns the source files that changed after a time.
 //
 // The loop calls it after each rebuild. A notification that arrives while the
@@ -157,7 +168,7 @@ func (w *watcher) sweep(since time.Time) []string {
 			return nil
 		}
 		if d.IsDir() {
-			if path != w.dir && skipDir(d.Name()) {
+			if path != w.dir && (skipDir(d.Name()) || w.skipped(path)) {
 				return filepath.SkipDir
 			}
 			return nil

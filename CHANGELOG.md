@@ -34,8 +34,9 @@ The first release. It carries every subsystem except the messaging ones.
   timeouts, retries, a circuit breaker, OTel spans and typed errors.
 - **CLI and scaffolder, S14.** `avero new`, `slice`, `generate`, `build`,
   `migrate`, `routes`, `modules`, `schema`, `doctor`, `verify`, `js pin`,
-  `assets init`. Three shapes: ssr with templ pages, spa with React 19 and
-  TanStack Query, and api with a generated client.
+  `assets init`. Three shapes: ssr with templ pages and Datastar, spa with
+  TypeScript, React 19, TanStack Query and Vite, and api with a generated
+  client.
 - **Dev loop, S15.** `avero dev` swaps a stylesheet with no reload, and it
   morphs the page after a rebuild, so the scroll position survives.
 - **OpenAPI.** `avero routes --openapi` reads the routes and the input types of

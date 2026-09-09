@@ -51,7 +51,8 @@ generate-check:
 reference-apps: examples-check
     go test ./internal/cli/... -tags=integration -run TestEachShapeScaffolds -timeout 20m
     # A clone holds no built asset, because an example ignores its output
-    # directory. The starter assets let each example build.
+    # directory. The starter assets let each example build. The spa example
+    # takes the index document that stands until Vite writes its own.
     go run ./internal/cmd/averoexamples -assets
     cd examples/blog && go build ./... && go test ./... -count=1
     cd examples/board && go build ./... && go test ./... -count=1

@@ -282,10 +282,12 @@ func TestNewVendorsTheModulesOfTheShape(t *testing.T) {
 	// The shape decides the modules of the front end. The command must know
 	// the shape after the scaffolder filled the default, or it vendors
 	// nothing and the first build fails.
+	//
+	// The ssr shape vendors Datastar. The spa shape vendors nothing, because
+	// npm and Vite own its front end.
 	for shape, want := range map[string]string{
 		"":    "datastar",
 		"ssr": "datastar",
-		"spa": "react",
 	} {
 		found := false
 		for _, module := range cli.FrontEnd[shapeOr(shape)] {
@@ -296,6 +298,9 @@ func TestNewVendorsTheModulesOfTheShape(t *testing.T) {
 		if !found {
 			t.Fatalf("the shape %q vendors no %s", shape, want)
 		}
+	}
+	if len(cli.FrontEnd["spa"]) != 0 {
+		t.Fatalf("the spa shape vendors %v, and npm owns its front end", cli.FrontEnd["spa"])
 	}
 }
 

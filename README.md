@@ -33,8 +33,10 @@ You need Go, and a database when you leave SQLite. You need no Node.js.
 - A module contract, so one directory holds one feature.
 - Server rendered pages with templ, and forms with CSRF, flash messages and
   validation.
-- An asset pipeline with esbuild and the Tailwind standalone binary. React and
-  TanStack Query ship vendored, so the spa shape needs no Node.js.
+- An asset pipeline with esbuild and the Tailwind standalone binary, and no
+  Node.js for the ssr shape.
+- A TypeScript front end for the spa shape, built by Vite and carried by the
+  binary, with the migrations beside it.
 - Datastar and htmx, as optional imports.
 - An HTTP client generator with timeouts, retries, a circuit breaker and OTel
   spans.
@@ -70,7 +72,7 @@ avero assets init     write the package.json of tier 1
 | Shape | Application | Exercises |
 |---|---|---|
 | `ssr` | a blog with posts | the router, the views, the forms and the assets |
-| `spa` | a task board in React with TanStack Query | the JSON routes and the embedded front end |
+| `spa` | a task board in TypeScript with React, TanStack Query and Vite | the JSON routes and the embedded front end |
 | `api` | an order service | the JSON service and the generated client |
 
 `examples/` holds one application of each shape. The gate writes them again and

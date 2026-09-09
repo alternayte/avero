@@ -22,6 +22,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -71,6 +72,13 @@ type Config struct {
 	// Start starts the application and returns the process. A nil value runs
 	// the binary that BuildGo wrote.
 	Start func(ctx context.Context, port int) (Process, error)
+	// FrontEnd runs the development server of the front end, such as Vite. A
+	// nil value runs none, and the loop then owns the assets itself.
+	FrontEnd []string
+	// FrontEndDir is the directory of that command, relative to Dir. The
+	// watcher skips it, because the development server of the front end
+	// watches it.
+	FrontEndDir string
 	// AssetDir holds the built assets. The proxy serves them from the disk,
 	// because the binary of the application carries the copy of the last
 	// build. A CSS change therefore reaches the browser with no restart.
@@ -132,7 +140,7 @@ func New(cfg Config) (*Server, error) {
 // Watch returns the source files of the first change of the tree. A test reads
 // it. The loop runs the same watcher.
 func (s *Server) Watch(ctx context.Context) ([]string, error) {
-	w, err := newWatcher(s.cfg.Dir)
+	w, err := newWatcher(s.cfg.Dir, s.cfg.FrontEndDir)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +151,7 @@ func (s *Server) Watch(ctx context.Context) ([]string, error) {
 // Sweep returns the source files of the tree that changed after a time. The
 // loop calls it after each rebuild, and a test reads it.
 func (s *Server) Sweep(since time.Time) []string {
-	w, err := newWatcher(s.cfg.Dir)
+	w, err := newWatcher(s.cfg.Dir, s.cfg.FrontEndDir)
 	if err != nil {
 		return nil
 	}
@@ -208,6 +216,16 @@ func (s *Server) Run(ctx context.Context) error {
 	if templ != nil {
 		_, _ = fmt.Fprintln(s.cfg.Out, "avero dev: templ generate --watch")
 		defer func() { _ = templ.Stop() }()
+	}
+
+	// The front end owns its own loop. Vite watches its files, replaces a
+	// module in the page and proxies the API to this application.
+	front, err := s.startFrontEnd(ctx)
+	if err != nil {
+		return err
+	}
+	if front != nil {
+		defer func() { _ = front.Stop() }()
 	}
 
 	server := &http.Server{
@@ -366,9 +384,35 @@ func (s *Server) waitForChild(ctx context.Context, child Process) error {
 		address)
 }
 
+// startFrontEnd runs the development server of the front end.
+func (s *Server) startFrontEnd(ctx context.Context) (Process, error) {
+	if len(s.cfg.FrontEnd) == 0 {
+		return nil, nil
+	}
+	dir := filepath.Join(s.cfg.Dir, filepath.FromSlash(s.cfg.FrontEndDir))
+	cmd := exec.CommandContext(ctx, s.cfg.FrontEnd[0], s.cfg.FrontEnd[1:]...)
+	cmd.Dir = dir
+	cmd.Stdout = s.cfg.Out
+	cmd.Stderr = s.cfg.Out
+	cmd.Env = append(os.Environ(),
+		fmt.Sprintf("AVERO_API_URL=http://127.0.0.1:%d", s.cfg.ChildPort))
+	Group(cmd)
+	cmd.WaitDelay = 2 * time.Second
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("avero dev: the front end does not start: %w\n  → Install Node.js, then run `avero dev` again", err)
+	}
+	_, _ = fmt.Fprintf(s.cfg.Out, "avero dev: %s in %s\n",
+		strings.Join(s.cfg.FrontEnd, " "), s.cfg.FrontEndDir)
+	return stopper{stop: func() error {
+		KillGroup(cmd)
+		_ = cmd.Wait()
+		return nil
+	}}, nil
+}
+
 // watch answers each change of the tree.
 func (s *Server) watch(ctx context.Context) {
-	w, err := newWatcher(s.cfg.Dir)
+	w, err := newWatcher(s.cfg.Dir, s.cfg.FrontEndDir)
 	if err != nil {
 		_, _ = fmt.Fprintf(s.cfg.Out, "%v\n", err)
 		return

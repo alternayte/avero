@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"embed"
 	"fmt"
 	"os"
 
@@ -12,6 +13,12 @@ import (
 
 // migrationsDir holds the SQL files of the application.
 const migrationsDir = "migrations"
+
+// migrations holds the same files inside the binary, so one artifact carries
+// the server and the schema. See MIGRATE_ON_BOOT.
+//
+//go:embed all:migrations
+var migrations embed.FS
 
 func main() { os.Exit(run()) }
 
@@ -86,7 +93,17 @@ type migrator struct {
 }
 
 // Migrate applies every migration that the database does not hold.
+//
+// The files come from the binary, so the application needs no directory beside
+// it. drel applies a migration from a directory, so the files reach a
+// temporary one for the moment of the boot.
 func (m migrator) Migrate(ctx context.Context) error {
-	_, err := m.engine.ApplyMigrations(ctx, migrationsDir)
+	dir, clean, err := avero.UnpackMigrations(migrations, migrationsDir)
+	if err != nil {
+		return err
+	}
+	defer clean()
+
+	_, err = m.engine.ApplyMigrations(ctx, dir)
 	return err
 }

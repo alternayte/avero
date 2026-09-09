@@ -37,8 +37,12 @@ func TestEachShapeWritesItsFiles(t *testing.T) {
 			"assets/dist/manifest.json", "acceptance_test.go",
 		}},
 		{scaffold.ShapeSPA, []string{
-			"main.go", "wire.go", "internal/ui/ui.go", "assets/js/app.jsx",
-			"internal/features/tasks/handlers.go", "assets/dist/manifest.json",
+			"main.go", "wire.go", "avero.json",
+			"internal/features/tasks/handlers.go",
+			"web/package.json", "web/vite.config.ts", "web/tsconfig.json",
+			"web/index.html", "web/src/main.tsx", "web/src/Board.tsx",
+			"web/src/api.ts", "web/src/styles.css",
+			"assets/dist/index.html",
 		}},
 		{scaffold.ShapeAPI, []string{
 			"main.go", "wire.go", "internal/features/posts/handlers.go",
@@ -127,6 +131,33 @@ func TestEachApplicationCarriesItsOwnSecret(t *testing.T) {
 	}
 	if !strings.Contains(a, "AVERO_SECRET=") {
 		t.Fatalf(".env.example holds %q", a)
+	}
+}
+
+func TestTheSpaShapeCarriesAViteProject(t *testing.T) {
+	dir, _ := write(t, scaffold.ShapeSPA)
+	pkg := readFile(t, filepath.Join(dir, "web", "package.json"))
+	for _, want := range []string{"\"vite\"", "\"typescript\"", "@tanstack/react-query", "\"react\""} {
+		if !strings.Contains(pkg, want) {
+			t.Fatalf("package.json holds no %s:\n%s", want, pkg)
+		}
+	}
+	project := readFile(t, filepath.Join(dir, "avero.json"))
+	if !strings.Contains(project, `"tier": "external"`) || !strings.Contains(project, `"dir": "web"`) {
+		t.Fatalf("avero.json holds %q", project)
+	}
+	board := readFile(t, filepath.Join(dir, "web", "src", "Board.tsx"))
+	if !strings.Contains(board, "useQuery") || !strings.Contains(board, "useMutation") {
+		t.Fatalf("Board.tsx holds no query and no mutation")
+	}
+	if strings.Contains(board, ": any") {
+		t.Fatalf("Board.tsx holds an any type, and the project is strict")
+	}
+	// The index document of the front end stands until Vite writes its own,
+	// so the application builds and runs at once.
+	index := readFile(t, filepath.Join(dir, "assets", "dist", "index.html"))
+	if !strings.Contains(index, `id="root"`) || !strings.Contains(index, "avero build") {
+		t.Fatalf("the starter document holds %q", index)
 	}
 }
 

@@ -6,7 +6,9 @@ package migrations
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -90,4 +92,39 @@ func Pending(ctx context.Context, e *drel.Engine, dir string) ([]Migration, erro
 // File returns the path of the up file or the down file of a migration.
 func File(dir string, m Migration, direction string) string {
 	return filepath.Join(dir, m.Version+"_"+m.Name+"."+direction+".sql")
+}
+
+// Unpack writes the migrations of an embedded file system into a temporary
+// directory and returns it with the function that removes it.
+//
+// drel applies migrations from a directory, so an application that carries its
+// migrations in its binary writes them out for the moment of the boot. One
+// artifact therefore holds the server, the front end and the schema.
+func Unpack(fsys fs.FS, root string) (string, func(), error) {
+	dir, err := os.MkdirTemp("", "avero-migrations-")
+	if err != nil {
+		return "", func() {}, fmt.Errorf("the temporary directory does not open: %w", err)
+	}
+	clean := func() { _ = os.RemoveAll(dir) }
+
+	entries, err := fs.ReadDir(fsys, root)
+	if err != nil {
+		clean()
+		return "", func() {}, fmt.Errorf("the embedded migrations do not read: %w", err)
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		body, readErr := fs.ReadFile(fsys, path.Join(root, e.Name()))
+		if readErr != nil {
+			clean()
+			return "", func() {}, fmt.Errorf("the migration %s does not read: %w", e.Name(), readErr)
+		}
+		if writeErr := os.WriteFile(filepath.Join(dir, e.Name()), body, 0o600); writeErr != nil {
+			clean()
+			return "", func() {}, fmt.Errorf("the migration %s does not write: %w", e.Name(), writeErr)
+		}
+	}
+	return dir, clean, nil
 }

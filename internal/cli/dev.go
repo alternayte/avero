@@ -59,12 +59,24 @@ func runDev(ctx context.Context, s Streams, args []string) int {
 		return failf(s, "avero dev: AVERO_SECRET is absent\n  → Copy .env.example to .env, which already holds a key for this application")
 	}
 
+	// A project with an external bundler runs its own development server,
+	// which watches the front end and proxies the API to this application.
+	var front []string
+	if project.Assets.Tier == "external" {
+		if err := Install(ctx, dir, project, s); err != nil {
+			return fail(s, err)
+		}
+		front = []string{"npm", "run", "dev"}
+	}
+
 	server, err := dev.New(dev.Config{
-		Dir:      dir,
-		Port:     port,
-		Env:      dev.EnvDevelopment,
-		Out:      s.Out,
-		AssetDir: filepath.Join(dir, filepath.FromSlash(assets.OutDir)),
+		Dir:         dir,
+		Port:        port,
+		Env:         dev.EnvDevelopment,
+		Out:         s.Out,
+		FrontEnd:    front,
+		FrontEndDir: project.Assets.Dir,
+		AssetDir:    filepath.Join(dir, filepath.FromSlash(assets.OutDir)),
 		BuildCSS: func(ctx context.Context) (string, error) {
 			m, err := assets.Build(ctx, project.assetConfig(dir, false))
 			if err != nil {
@@ -73,6 +85,10 @@ func runDev(ctx context.Context, s Streams, args []string) int {
 			return m.Asset("app.css"), nil
 		},
 		BuildScript: func(ctx context.Context) error {
+			if project.Assets.Tier == "external" {
+				// The development server of the front end owns its files.
+				return nil
+			}
 			_, err := assets.Build(ctx, project.assetConfig(dir, false))
 			return err
 		},

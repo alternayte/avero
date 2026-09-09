@@ -112,18 +112,13 @@ type Module struct {
 // FrontEnd holds the modules that each shape vendors. `avero js pin` fetches
 // each one as a bundled ES module and records its address and its hash in
 // avero.lock, so a later build needs no network and no Node.js. See DX-9.
+//
+// The spa shape vendors nothing, because Vite and npm own its front end.
 var FrontEnd = map[string][]Module{
 	// The ssr shape carries Datastar, which patches an element from the
 	// answer of the server. See S12.
 	scaffold.ShapeSSR: {
 		{"datastar", "https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.3/bundles/datastar.js"},
-	},
-	// The spa shape carries React and TanStack Query.
-	scaffold.ShapeSPA: {
-		{"react", "https://esm.sh/react@19.2.0/es2022/react.bundle.mjs"},
-		{"react/jsx-runtime", "https://esm.sh/react@19.2.0/es2022/jsx-runtime.bundle.mjs"},
-		{"react-dom/client", "https://esm.sh/react-dom@19.2.0/es2022/client.bundle.mjs"},
-		{"@tanstack/react-query", "https://esm.sh/@tanstack/react-query@5.90.2/es2022/react-query.bundle.mjs"},
 	},
 }
 

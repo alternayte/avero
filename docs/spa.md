@@ -1,26 +1,35 @@
 # The single page shape
 
-`avero new board --shape spa` writes a Go service with a React front end. One
-binary holds both.
+`avero new board --shape spa` writes a Go service and a TypeScript front end.
+Vite builds the front end, and the Go binary carries it.
 
 ```
 board/
 ├── main.go                        the composition root
-├── wire.go                        the router and the embedded assets
+├── wire.go                        the router and the embedded build
 ├── internal/features/tasks/       the JSON routes, the handlers and the store
-├── internal/ui/ui.go              the document that loads the front end
-├── assets/js/app.jsx              the front end
-├── assets/js/vendor/              the pinned modules
-├── assets/css/app.css             the stylesheet
-├── assets/dist/                   the output of `avero build`
-└── avero.json                     the entry points of the pipeline
+├── web/                           the front end
+│   ├── package.json               the dependencies of the front end
+│   ├── vite.config.ts             the build and the proxy of the API
+│   ├── tsconfig.json              strict TypeScript
+│   ├── index.html                 the document that Vite writes again
+│   └── src/
+│       ├── main.tsx               the root of the front end
+│       ├── Board.tsx              the page
+│       ├── api.ts                 the client of the JSON API
+│       └── styles.css             Tailwind
+├── assets/dist/                   the build. `avero build` writes it.
+├── migrations/                    the SQL files
+└── avero.json                     the shape and the bundler
 ```
 
 ## What ships
 
-React 19 and TanStack Query, vendored. The machine needs Go and no Node.js.
-esbuild transforms the JSX with the automatic runtime, so a component file
-needs no import of React, and it writes one bundle of about 230 kilobytes.
+React 19, TanStack Query, TypeScript, Tailwind and Vite. The shape needs
+Node.js, and it uses it where it earns its place: the dependency tree, the type
+check and the hot module replacement of the development server.
+
+The other shapes need no Node.js. See [Assets](assets.md).
 
 ## Run it
 
@@ -30,68 +39,56 @@ avero migrate up
 avero dev
 ```
 
-`avero dev` watches the tree:
+`avero dev` starts three things:
 
-| Change | Answer | Time |
-|---|---|---|
-| `assets/js/*.jsx` | rebuild the bundle, load the page again | about 60 ms |
-| `assets/css/*.css` | rebuild the stylesheet, swap the link element | about 40 ms |
-| a `.go` file | rebuild the binary, start it again, morph the page | under 2 s |
+- the Go application on a port of its own;
+- `npm run dev`, which is Vite, on http://localhost:5173;
+- the watcher, which rebuilds and restarts the Go application on a change to a
+  `.go` file.
+
+Open the address of Vite. It replaces a module in the page with no reload, and
+it proxies `/api` to the Go application, so one origin serves both in
+development. `avero dev` gives Vite the address of the application in
+`AVERO_API_URL`, so the port never has to match by hand.
+
+`avero dev` reads the dependencies with `npm install` when `web/node_modules`
+is absent, so one command starts a front end that a person just wrote.
 
 ## Add a JavaScript library
 
-One command. It names the package, and nothing else.
-
 ```
-avero js pin zustand
-```
-
-The command asks the CDN for the package, fetches the bundled module, writes it
-into `assets/js/vendor/`, and records the resolved address and the hash in
-`avero.lock`. Import it by its name:
-
-```jsx
-import { create } from "zustand";
+cd web
+npm install @tanstack/react-table
 ```
 
-Then run `avero build`, or leave `avero dev` running, which rebuilds the bundle
-on the next save.
+Import it by its name:
 
-More forms:
-
-```
-avero js pin zustand@5.0.15                 one version
-avero js pin @tanstack/react-table          a scoped package
-avero js pin react-dom/server               one subpath of a package
-avero js pin lodash-es https://…/lodash.js  one address that you choose
+```tsx
+import { useReactTable } from "@tanstack/react-table";
 ```
 
-A second run of the same pin changes nothing. A body that does not match the
-hash of the lock stops the command, so a change at the CDN never reaches a
-build without a person.
-
-The vendor directory belongs in the repository, so a build needs no network and
-a colleague reads the same bytes.
+Vite picks it up at once. `avero build` reads the same dependencies, so a
+colleague and the build machine get the versions that `package-lock.json`
+states.
 
 ## Call the API
 
-The front end reads the JSON routes of the application. TanStack Query holds
-the cache and the state of each request:
+`web/src/api.ts` holds the types of the answers and one function for each call.
+`Board.tsx` reads them with TanStack Query:
 
-```jsx
-const tasks = useQuery({
-    queryKey: ["tasks"],
-    queryFn: () => read("/api/tasks"),
-});
+```tsx
+const tasks = useQuery({ queryKey: ["tasks"], queryFn: api.listTasks });
 
 const create = useMutation({
-    mutationFn: (title) => read("/api/tasks", { method: "POST", body: JSON.stringify({ title }) }),
-    onSuccess: () => queries.invalidateQueries({ queryKey: ["tasks"] }),
+    mutationFn: api.createTask,
+    onError: (error: unknown) => {
+        // The Go handler answers 422 with one message for each field.
+        setFault(error instanceof RequestFault ? error.fields.title : "the task does not save");
+    },
 });
 ```
 
-The routes stand in `internal/features/tasks/module.go`, and the input types
-carry their validation:
+The Go side states the same shape:
 
 ```go
 type CreateInput struct {
@@ -99,47 +96,55 @@ type CreateInput struct {
 }
 ```
 
-An invalid body answers 422 with one message for each field, so the front end
-reads `errors.title` and shows it.
+`avero routes --openapi` writes the description of the API, which a generator
+reads for a larger service. See [Routing and handlers](routing.md).
 
 ## One binary
 
-`wire.go` embeds the output directory:
+`avero build` runs `npm install`, then `tsc --noEmit && vite build`, which
+writes `assets/dist`. `wire.go` embeds that directory:
 
 ```go
 //go:embed all:assets/dist
 var dist embed.FS
+
+files, _ := fs.Sub(dist, "assets/dist")
+r.Mount("/", assets.SPA(files))
 ```
 
-```
-avero build
-./bin/board
+The handler answers a file of the build, with a cache of one year for a hashed
+name, and it answers the index document for every path that the front end owns,
+so a deep link and a reload work.
+
+`main.go` embeds the migrations as well, so the binary carries the schema:
+
+```go
+//go:embed all:migrations
+var migrations embed.FS
 ```
 
-The binary serves the shell, the bundle and the stylesheet from its own file
-system. It runs in a directory that holds nothing else, so a container carries
-one file:
+One file therefore holds the server, the front end and the schema:
 
 ```dockerfile
 FROM gcr.io/distroless/static-debian12
 COPY bin/board /board
+ENV MIGRATE_ON_BOOT=true
 ENTRYPOINT ["/board"]
+```
+
+```
+avero build
+docker build -t board .
+docker run -e AVERO_SECRET=… -e DATABASE_URL=… -p 8080:8080 board
 ```
 
 ## Add a page
 
-The shape ships one page. For several, pin a router and read the path in the
-front end:
+The shape ships one page. For several, add a router:
 
 ```
-avero js pin @tanstack/react-router
+cd web && npm install @tanstack/react-router
 ```
 
-The server answers the shell for the root path. Add one route for each path
-that the front end owns, so a reload of a deep link reaches the same document:
-
-```go
-r.Get("/tasks/{id}", func(c *avero.Ctx) (avero.Response, error) {
-	return avero.View(ui.Shell()), nil
-})
-```
+The server already answers the index document for every path that no route
+holds, so a reload of a deep link reaches the front end.

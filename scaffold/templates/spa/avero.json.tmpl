@@ -2,11 +2,10 @@
   "name": "[[.Name]]",
   "shape": "[[.Shape]]",
   "assets": {
-    "entries": ["js/app.jsx"],
-    "tailwind": {
-      "input": "assets/css/app.css",
-      "asset": "css/app.css"
-    }
+    "tier": "external",
+    "command": ["npm", "run", "build"],
+    "dir": "web",
+    "manifest": false
   },
   "migrations": "migrations"
 }

@@ -16,8 +16,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alternayte/avero/assets"
-
 	"github.com/alternayte/avero/internal/budget"
 	"github.com/alternayte/avero/verify"
 )
@@ -278,10 +276,14 @@ func freePort(t *testing.T) string {
 // ctx keeps the context import for a future step of the gate.
 var _ = context.Background
 
-// TestTheSpaBinaryCarriesItsFrontEnd proves the single binary: `avero build`
-// bundles React and TanStack Query, the compiler embeds the output, and the
-// binary serves it from a directory that holds nothing else.
+// TestTheSpaBinaryCarriesItsFrontEnd proves the single binary: npm and Vite
+// build the TypeScript front end into the output directory, the compiler
+// embeds it, and the binary serves it and its own migrations from a directory
+// that holds nothing else.
 func TestTheSpaBinaryCarriesItsFrontEnd(t *testing.T) {
+	if _, err := exec.LookPath("npm"); err != nil {
+		t.Skip("npm is absent, and the spa shape needs it")
+	}
 	root := repoRoot(t)
 	dir := t.TempDir()
 	if code, _, errOut := run(t, dir, "new", "board", "--shape", "spa", "--replace", root); code != 0 {
@@ -289,32 +291,30 @@ func TestTheSpaBinaryCarriesItsFrontEnd(t *testing.T) {
 	}
 	app := filepath.Join(dir, "board")
 
-	// The stylesheet of the scaffold reads Tailwind, and the measurement must
-	// not wait for the download of the binary, so the build takes the script
-	// only.
-	m, err := assets.Build(context.Background(), assets.Config{
-		Dir: app, Entries: []string{"js/app.jsx"}, Minify: true,
-	})
+	// `avero build` reads the dependencies, checks the types and writes the
+	// bundle into assets/dist.
+	code, out, errOut := run(t, app, "build")
+	if code != 0 {
+		t.Fatalf("avero build returned %d:\n%s\n%s", code, out, errOut)
+	}
+	index, err := os.ReadFile(filepath.Join(app, "assets", "dist", "index.html"))
 	if err != nil {
-		t.Fatalf("the assets do not build: %v", err)
+		t.Fatalf("the build wrote no index document: %v", err)
 	}
-	entry, ok := m.Entry("app.js")
-	if !ok {
-		t.Fatalf("the manifest holds no bundle, it holds %v", m.Names())
-	}
-	if entry.Size < 100_000 {
-		t.Fatalf("the bundle holds %d bytes, want React and TanStack Query", entry.Size)
+	if !strings.Contains(string(index), "/assets/index-") {
+		t.Fatalf("the index document names no bundle:\n%s", index)
 	}
 
-	if out, err := goRun(t, app, "build", "-o", "board", "."); err != nil {
-		t.Fatalf("go build failed: %v\n%s", err, out)
+	binary := filepath.Join(app, "bin", "board")
+	if _, err := os.Stat(binary); err != nil {
+		t.Fatalf("the build wrote no binary: %v", err)
 	}
-	binary := filepath.Join(app, "board")
 	empty := t.TempDir()
 
 	port := freePort(t)
 	cmd := exec.Command(binary)
-	// The binary runs in a directory that holds no asset and no source.
+	// The binary runs in a directory that holds no asset, no migration and
+	// no source.
 	cmd.Dir = empty
 	cmd.Env = append(os.Environ(),
 		"PORT="+port,
@@ -331,14 +331,61 @@ func TestTheSpaBinaryCarriesItsFrontEnd(t *testing.T) {
 	address := "http://127.0.0.1:" + port
 	waitForHealth(t, address+"/healthz", log.String)
 
-	shell := body(t, address+"/")
-	if !strings.Contains(shell, `<div id="app">`) {
-		t.Fatalf("the shell holds %q", shell)
+	// The front end answers the root path and every path that it owns.
+	for _, path := range []string{"/", "/tasks/7"} {
+		page := body(t, address+path)
+		if !strings.Contains(page, `id="root"`) || !strings.Contains(page, "/assets/index-") {
+			t.Fatalf("%s holds no document of the front end:\n%s", path, page)
+		}
 	}
-	bundle := body(t, address+m.Asset("app.js"))
-	if len(bundle) < 100_000 || !strings.Contains(bundle, "react") && !strings.Contains(bundle, "useState") {
-		t.Fatalf("the binary serves %d bytes, and they hold no front end", len(bundle))
+
+	// The bundle answers from the binary.
+	name := bundleOf(t, string(index))
+	bundle := body(t, address+name)
+	if len(bundle) < 100_000 {
+		t.Fatalf("the bundle holds %d bytes, want React and TanStack Query", len(bundle))
 	}
+
+	// The migrations of the binary reached the database, so the API answers.
+	created := post(t, address+"/api/tasks", `{"title":"from the binary"}`)
+	if !strings.Contains(created, "from the binary") {
+		t.Fatalf("the API answered %q", created)
+	}
+	if list := body(t, address+"/api/tasks"); !strings.Contains(list, "from the binary") {
+		t.Fatalf("the list holds %q", list)
+	}
+}
+
+// bundleOf returns the address of the script of the index document.
+func bundleOf(t *testing.T, index string) string {
+	t.Helper()
+	mark := `src="`
+	i := strings.Index(index, "/assets/index-")
+	if i < 0 {
+		t.Fatalf("the index document names no bundle:\n%s", index)
+	}
+	_ = mark
+	rest := index[i:]
+	end := strings.IndexAny(rest, `"'`)
+	if end < 0 {
+		t.Fatalf("the address does not close:\n%s", index)
+	}
+	return rest[:end]
+}
+
+// post writes one JSON body and returns the answer.
+func post(t *testing.T, address, body string) string {
+	t.Helper()
+	res, err := http.Post(address, "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("Post returned %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	out, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("ReadAll returned %v", err)
+	}
+	return string(out)
 }
 
 // waitForHealth blocks until the application answers.

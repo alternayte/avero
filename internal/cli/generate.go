@@ -112,12 +112,8 @@ func runBuild(ctx context.Context, s Streams, args []string) int {
 	if code := runGenerate(ctx, s, nil); code != 0 {
 		return code
 	}
-	if len(project.Assets.Entries) > 0 || project.Assets.Tailwind.Input != "" {
-		m, buildErr := assets.Build(ctx, project.assetConfig(dir, minify))
-		if buildErr != nil {
-			return fail(s, buildErr)
-		}
-		_, _ = fmt.Fprintf(s.Out, "assets: %d files\n", m.Len())
+	if err := BuildAssets(ctx, dir, project, minify, s); err != nil {
+		return fail(s, err)
 	}
 	out, goErr := goCommand(ctx, dir, "build", "-o", "bin/"+project.Name, ".")
 	if goErr != nil {
@@ -125,6 +121,56 @@ func runBuild(ctx context.Context, s Streams, args []string) int {
 	}
 	_, _ = fmt.Fprintf(s.Out, "binary: bin/%s\n", project.Name)
 	return 0
+}
+
+// BuildAssets builds the front end of the application.
+//
+// A project with an external bundler reads its dependencies first, so one
+// command builds an application that a person just wrote.
+func BuildAssets(ctx context.Context, dir string, project *Project, minify bool, s Streams) error {
+	if project.Assets.Tier != "external" &&
+		len(project.Assets.Entries) == 0 && project.Assets.Tailwind.Input == "" {
+		return nil
+	}
+	if err := Install(ctx, dir, project, s); err != nil {
+		return err
+	}
+	m, err := assets.Build(ctx, project.assetConfig(dir, minify))
+	if err != nil {
+		return err
+	}
+	if project.Assets.Tier == "external" {
+		_, _ = fmt.Fprintf(s.Out, "assets: %s\n", strings.Join(project.Assets.Command, " "))
+		return nil
+	}
+	_, _ = fmt.Fprintf(s.Out, "assets: %d files\n", m.Len())
+	return nil
+}
+
+// Install reads the dependencies of an external bundler.
+//
+// It runs one time: a directory that already holds node_modules needs no
+// second read.
+func Install(ctx context.Context, dir string, project *Project, s Streams) error {
+	if project.Assets.Tier != "external" {
+		return nil
+	}
+	front := filepath.Join(dir, filepath.FromSlash(project.Assets.Dir))
+	if _, err := os.Stat(filepath.Join(front, "package.json")); err != nil {
+		return nil
+	}
+	if _, err := os.Stat(filepath.Join(front, "node_modules")); err == nil {
+		return nil
+	}
+	_, _ = fmt.Fprintln(s.Out, "front end: npm install")
+	cmd := exec.CommandContext(ctx, "npm", "install", "--no-audit", "--no-fund")
+	cmd.Dir = front
+	cmd.Env = os.Environ()
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("avero build: npm install failed in %s\n%s\n  → Install Node.js, which the spa shape needs, then run the command again",
+			project.Assets.Dir, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 // runJS fetches a bundled module into the vendor directory.

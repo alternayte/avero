@@ -36,6 +36,13 @@ type ProjectAssets struct {
 	Tier string `json:"tier,omitempty"`
 	// Command runs the external bundler of tier 2.
 	Command []string `json:"command,omitempty"`
+	// Dir is the directory of the external bundler, relative to the
+	// application. An empty value runs it in the application directory.
+	Dir string `json:"dir,omitempty"`
+	// Manifest states whether the bundler writes the manifest of Avero. A
+	// bundler that writes its own index document, such as Vite, writes none,
+	// and the application serves the build with assets.SPA.
+	Manifest *bool `json:"manifest,omitempty"`
 	// Tailwind states the stylesheet and the pinned version. An empty input
 	// runs no Tailwind.
 	Tailwind ProjectTailwind `json:"tailwind"`
@@ -108,10 +115,12 @@ func (p *Project) Save(dir string) error {
 // assetConfig returns the asset configuration of the project.
 func (p *Project) assetConfig(dir string, minify bool) assets.Config {
 	cfg := assets.Config{
-		Dir:     dir,
-		Entries: p.Assets.Entries,
-		Minify:  minify,
-		Command: p.Assets.Command,
+		Dir:        dir,
+		Entries:    p.Assets.Entries,
+		Minify:     minify,
+		Command:    p.Assets.Command,
+		CommandDir: p.Assets.Dir,
+		NoManifest: p.Assets.Manifest != nil && !*p.Assets.Manifest,
 	}
 	switch p.Assets.Tier {
 	case "node":

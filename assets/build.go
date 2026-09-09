@@ -55,8 +55,15 @@ type Config struct {
 	// Tier states how the pipeline resolves an import.
 	Tier Tier
 	// Command runs the build of TierExternal. The first element is the
-	// program and the rest are its arguments. It runs in Dir.
+	// program and the rest are its arguments.
 	Command []string
+	// CommandDir is the directory of the command, relative to Dir. An empty
+	// value runs it in Dir.
+	CommandDir string
+	// NoManifest states a command that writes its own index document and no
+	// manifest of Avero, such as Vite. The build then reads no manifest, and
+	// the application serves the output with SPA.
+	NoManifest bool
 	// Minify shrinks the output. A release build sets it.
 	Minify bool
 	// Tailwind compiles the stylesheet with the standalone binary. A nil
@@ -339,12 +346,17 @@ func buildExternal(ctx context.Context, cfg Config) (*Manifest, error) {
 			"Set the bundler command in the assets configuration, or use the default bundler")
 	}
 	cmd := exec.CommandContext(ctx, cfg.Command[0], cfg.Command[1:]...)
-	cmd.Dir = cfg.Dir
+	cmd.Dir = filepath.Join(cfg.Dir, filepath.FromSlash(cfg.CommandDir))
 	cmd.Env = os.Environ()
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fault("", fmt.Sprintf("the bundler command failed: %v\n%s", err, strings.TrimSpace(string(out))),
 			"Run the bundler command by hand and repair the fault that it prints")
+	}
+	if cfg.NoManifest {
+		// The command writes its own index document, so the application
+		// reads no manifest. See SPA.
+		return NewManifest(cfg.Base), nil
 	}
 	name := filepath.Join(cfg.Dir, filepath.FromSlash(cfg.out()), ManifestName)
 	body, err := os.ReadFile(name)
