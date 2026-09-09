@@ -51,20 +51,23 @@ type ProjectTailwind struct {
 	Asset string `json:"asset,omitempty"`
 }
 
-// LoadProject reads avero.json from dir. An absent file gives the defaults, so
-// a command works in a directory that a person wrote by hand.
+// LoadProject reads avero.json from dir.
+//
+// An absent file gives the defaults, so a command works in a directory that a
+// person wrote by hand. A file that exists states the whole asset pipeline: a
+// member that it does not name is empty, so a project that names no Tailwind
+// input runs no Tailwind.
 func LoadProject(dir string) (*Project, error) {
-	p := &Project{
-		Shape:      "ssr",
-		Migrations: "migrations",
-		Assets: ProjectAssets{
-			Entries:  []string{"js/app.js"},
-			Tailwind: ProjectTailwind{Input: "assets/css/app.css", Version: assets.TailwindVersion, Asset: "css/app.css"},
-		},
-	}
+	p := &Project{}
 	body, err := os.ReadFile(filepath.Join(dir, ProjectFile))
 	if errors.Is(err, os.ErrNotExist) {
 		p.Name = filepath.Base(mustAbs(dir))
+		p.Shape = "ssr"
+		p.Migrations = "migrations"
+		p.Assets = ProjectAssets{
+			Entries:  []string{"js/app.js"},
+			Tailwind: ProjectTailwind{Input: "assets/css/app.css", Version: assets.TailwindVersion, Asset: "css/app.css"},
+		}
 		return p, nil
 	}
 	if err != nil {
@@ -72,6 +75,23 @@ func LoadProject(dir string) (*Project, error) {
 	}
 	if err := json.Unmarshal(body, p); err != nil {
 		return nil, fmt.Errorf("avero: %s does not parse: %w\n  → Repair the file, or delete it and let the defaults apply", ProjectFile, err)
+	}
+	if p.Name == "" {
+		p.Name = filepath.Base(mustAbs(dir))
+	}
+	if p.Shape == "" {
+		p.Shape = "ssr"
+	}
+	if p.Migrations == "" {
+		p.Migrations = "migrations"
+	}
+	if p.Assets.Tailwind.Input != "" {
+		if p.Assets.Tailwind.Version == "" {
+			p.Assets.Tailwind.Version = assets.TailwindVersion
+		}
+		if p.Assets.Tailwind.Asset == "" {
+			p.Assets.Tailwind.Asset = "css/app.css"
+		}
 	}
 	return p, nil
 }

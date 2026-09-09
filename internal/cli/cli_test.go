@@ -178,3 +178,46 @@ func TestAFlagThatIsNotKnownStatesTheRepair(t *testing.T) {
 		t.Fatalf("the code is %d and the fault is %q", code, errOut)
 	}
 }
+
+func TestDevRefusesAnEnvironmentThatIsNotDevelopment(t *testing.T) {
+	t.Setenv("AVERO_ENV", "production")
+	code, _, errOut := run(t, t.TempDir(), "dev")
+	if code != 1 || !strings.Contains(errOut, "AVERO_ENV=development") {
+		t.Fatalf("the code is %d and the fault is %q", code, errOut)
+	}
+}
+
+func TestDevNamesTheAbsentSecret(t *testing.T) {
+	t.Setenv("AVERO_ENV", "development")
+	t.Setenv("AVERO_SECRET", "")
+	code, _, errOut := run(t, t.TempDir(), "dev")
+	if code != 1 || !strings.Contains(errOut, ".env.example") {
+		t.Fatalf("the code is %d and the fault is %q", code, errOut)
+	}
+}
+
+func TestDevRefusesAPortThatIsNotANumber(t *testing.T) {
+	code, _, errOut := run(t, t.TempDir(), "dev", "--port", "eight")
+	if code != 1 || !strings.Contains(errOut, "--port 8080") {
+		t.Fatalf("the code is %d and the fault is %q", code, errOut)
+	}
+}
+
+func TestTheEnvironmentFileReachesTheLoop(t *testing.T) {
+	dir := t.TempDir()
+	body := "# a comment\n\nexport AVERO_SECRET=\"abc\"\nPORT=9000\nbroken\n"
+	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte(body), 0o644); err != nil {
+		t.Fatalf("WriteFile returned %v", err)
+	}
+	t.Setenv("AVERO_ENV", "development")
+	t.Setenv("AVERO_SECRET", "")
+	// The loop reads .env, so the secret of the file is enough. The command
+	// stops at the build, because the directory holds no application.
+	code, _, errOut := run(t, dir, "dev")
+	if code != 1 {
+		t.Fatalf("the code is %d, want 1", code)
+	}
+	if strings.Contains(errOut, "AVERO_SECRET is absent") {
+		t.Fatalf("the loop did not read .env: %q", errOut)
+	}
+}

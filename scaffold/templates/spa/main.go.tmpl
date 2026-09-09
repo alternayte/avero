@@ -26,7 +26,7 @@ func run() int {
 			return avero.Exit(os.Stderr, err)
 		}
 		return avero.Inspect[Config](os.Args[1:], os.Stdout, os.Stderr, r, modules,
-			checks(os.Getenv("DATABASE_URL"), false)...)
+			checks(os.Getenv("DATABASE_URL"))...)
 	}
 
 	ctx := context.Background()
@@ -52,29 +52,32 @@ func run() int {
 	}
 	_ = modules
 
+	// The boot checks read the engine that the application already opened,
+	// so a start opens one connection pool and no more.
+	boot := []avero.Check{avero.SecretCheck(cfg.Secret), avero.DatabaseCheckOn(engine)}
+	if !cfg.MigrateOnBoot {
+		boot = append(boot, avero.MigrationCheckOn(engine, migrationsDir))
+	}
+
 	app := avero.New(cfg.BaseConfig,
 		avero.WithHandler(handler),
-		avero.WithChecks(append([]avero.Check{avero.SecretCheck(cfg.Secret)},
-			checks(cfg.DatabaseURL, cfg.MigrateOnBoot)...)...),
+		avero.WithChecks(boot...),
 		avero.WithMigrator(migrator{engine: engine}))
 
 	return avero.Exit(os.Stderr, app.Run(ctx))
 }
 
-// checks are the boot checks of this application. `avero doctor` runs the same
-// list, so a fault appears before the process serves. See DX-8.
-//
-// The pending migration check runs only when the application applies no
-// migration at boot, because the boot applies the migrations after the checks.
-func checks(dsn string, migrateOnBoot bool) []avero.Check {
+// checks are the boot checks that `avero doctor` runs. The doctor holds no
+// engine, so each check opens its own connection and closes it. The boot uses
+// the engine of the application instead. See DX-8.
+func checks(dsn string) []avero.Check {
 	if dsn == "" {
 		return nil
 	}
-	out := []avero.Check{avero.DatabaseCheck(dsn)}
-	if !migrateOnBoot {
-		out = append(out, avero.MigrationCheck(dsn, migrationsDir))
+	return []avero.Check{
+		avero.DatabaseCheck(dsn),
+		avero.MigrationCheck(dsn, migrationsDir),
 	}
-	return out
 }
 
 // migrator applies the pending migrations when MIGRATE_ON_BOOT is true.

@@ -44,6 +44,12 @@ require (
 // it.
 require github.com/evanw/esbuild v0.28.2
 
+// fsnotify carries the file notifications of the development loop. S15 states
+// "do not write a new watcher", so the loop reads the notifications of the
+// operating system through this library. `avero dev` uses it, and no
+// application imports it.
+require github.com/fsnotify/fsnotify v1.10.1
+
 require (
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
 	github.com/coder/websocket v1.8.12 // indirect

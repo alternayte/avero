@@ -123,36 +123,60 @@ type (
 func Schema(set *ModuleSet) *SchemaReport { return module.Schema(set) }
 
 // MigrationCheck proves that the database holds every migration of the
-// directory. Register it with WithChecks, so a pending migration stops the
-// process before it serves. See DX-8.
+// directory. It opens its own connection, so `avero doctor` runs it with no
+// application. An application that already holds an engine passes it to
+// MigrationCheckOn, which opens nothing.
+//
+// Register it with WithChecks, so a pending migration stops the process before
+// it serves. See DX-8.
 func MigrationCheck(dsn, dir string) Check {
+	check := MigrationCheckOn(nil, dir)
+	check.Run = func(ctx context.Context) error {
+		e, err := drel.NewEngine(dsn)
+		if err != nil {
+			return fmt.Errorf("the database does not open: %w", err)
+		}
+		defer e.Close()
+		return migrationsPending(ctx, e, dir)
+	}
+	return check
+}
+
+// MigrationCheckOn proves the migrations with an engine that the application
+// already opened.
+func MigrationCheckOn(e *drel.Engine, dir string) Check {
 	return Check{
 		Name:   "the pending migrations",
 		Repair: "Run `avero migrate up`, or set MIGRATE_ON_BOOT=true",
 		Run: func(ctx context.Context) error {
-			e, err := drel.NewEngine(dsn)
-			if err != nil {
-				return fmt.Errorf("the database does not open: %w", err)
+			if e == nil {
+				return fmt.Errorf("the check holds no database")
 			}
-			defer e.Close()
-			pending, err := migrations.Pending(ctx, e, dir)
-			if err != nil {
-				return err
-			}
-			if len(pending) == 0 {
-				return nil
-			}
-			names := make([]string, 0, len(pending))
-			for _, m := range pending {
-				names = append(names, m.Version+"_"+m.Name)
-			}
-			sort.Strings(names)
-			return fmt.Errorf("%d migrations are pending: %s", len(pending), strings.Join(names, ", "))
+			return migrationsPending(ctx, e, dir)
 		},
 	}
 }
 
-// DatabaseCheck proves that the database answers.
+// migrationsPending returns a fault that names each pending migration.
+func migrationsPending(ctx context.Context, e *drel.Engine, dir string) error {
+	pending, err := migrations.Pending(ctx, e, dir)
+	if err != nil {
+		return err
+	}
+	if len(pending) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(pending))
+	for _, m := range pending {
+		names = append(names, m.Version+"_"+m.Name)
+	}
+	sort.Strings(names)
+	return fmt.Errorf("%d migrations are pending: %s", len(pending), strings.Join(names, ", "))
+}
+
+// DatabaseCheck proves that the database answers. It opens its own connection,
+// so `avero doctor` runs it with no application. An application that already
+// holds an engine passes it to DatabaseCheckOn.
 func DatabaseCheck(dsn string) Check {
 	return Check{
 		Name:   "the database",
@@ -163,12 +187,32 @@ func DatabaseCheck(dsn string) Check {
 				return fmt.Errorf("the database does not open: %w", err)
 			}
 			defer e.Close()
-			if _, err := e.Exec(ctx, "SELECT 1"); err != nil {
-				return fmt.Errorf("the database does not answer: %w", err)
-			}
-			return nil
+			return answers(ctx, e)
 		},
 	}
+}
+
+// DatabaseCheckOn proves the database with an engine that the application
+// already opened.
+func DatabaseCheckOn(e *drel.Engine) Check {
+	return Check{
+		Name:   "the database",
+		Repair: "Start the database, and prove DATABASE_URL",
+		Run: func(ctx context.Context) error {
+			if e == nil {
+				return fmt.Errorf("the check holds no database")
+			}
+			return answers(ctx, e)
+		},
+	}
+}
+
+// answers proves that the database reads one row.
+func answers(ctx context.Context, e *drel.Engine) error {
+	if _, err := e.Exec(ctx, "SELECT 1"); err != nil {
+		return fmt.Errorf("the database does not answer: %w", err)
+	}
+	return nil
 }
 
 // BrokerCheck proves that the broker accepts a connection. It opens a TCP

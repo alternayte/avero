@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alternayte/avero/internal/budget"
 	"github.com/alternayte/avero/internal/cli"
 )
 
@@ -256,40 +257,11 @@ func TestDX1(t *testing.T) {
 	if elapsed > 60*time.Second {
 		t.Fatalf("DX-1 took %s, and the budget is 60s", elapsed.Round(time.Millisecond))
 	}
-	writeBudget(t, root, elapsed)
+	if err := budget.Record(root, "DX-1", "`avero new` to a running application",
+		elapsed, 60*time.Second); err != nil {
+		t.Fatalf("the measurement does not record: %v", err)
+	}
 	t.Logf("DX-1: %s", elapsed.Round(time.Millisecond))
-}
-
-// writeBudget records the measurement in the artifacts of the repository. See
-// the SDD, section 7, step 11.
-func writeBudget(t *testing.T, root string, elapsed time.Duration) {
-	t.Helper()
-	dir := filepath.Join(root, "artifacts")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatalf("MkdirAll returned %v", err)
-	}
-	seconds := elapsed.Seconds()
-	body := fmt.Sprintf("# Verification\n\n## Development experience budgets\n\n"+
-		"| ID | Requirement | Budget | Measurement | State |\n|---|---|---|---|---|\n"+
-		"| DX-1 | `avero new` to a running application | 60 s | %.1f s | pass |\n\n"+
-		"Measured on %s by `go test ./internal/cli/... -tags=integration`.\n",
-		seconds, time.Now().UTC().Format(time.RFC3339))
-	if err := os.WriteFile(filepath.Join(dir, "verification.md"), []byte(body), 0o644); err != nil {
-		t.Fatalf("WriteFile returned %v", err)
-	}
-	record := map[string]any{
-		"dx1_seconds": seconds,
-		"dx1_budget":  60,
-		"state":       "pass",
-		"measured_at": time.Now().UTC().Format(time.RFC3339),
-	}
-	out, err := json.MarshalIndent(record, "", "  ")
-	if err != nil {
-		t.Fatalf("Marshal returned %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "verification.json"), append(out, '\n'), 0o644); err != nil {
-		t.Fatalf("WriteFile returned %v", err)
-	}
 }
 
 // freePort returns a port that no process holds.

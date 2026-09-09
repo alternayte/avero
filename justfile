@@ -30,6 +30,7 @@ test:
 integration:
     go test ./assets/... -race -tags=integration -timeout 10m
     go test ./internal/cli/... -tags=integration -run 'TestTheDoctor|TestTheRoutesAndThe|TestVerifyRuns' -timeout 20m
+    go test ./cmd/avero/dev/... -tags=integration -run TestTheProductionBuild -timeout 10m
     @echo "integration: no broker test exists yet. S7 adds the first one."
 
 # 7. Every generated file is current.
@@ -49,4 +50,5 @@ reference-apps:
 # 10. Measure DX-1 to DX-5.
 budgets:
     go test ./internal/cli/... -tags=integration -run TestDX1 -timeout 15m -v
+    go test ./cmd/avero/dev/... -tags=integration -run 'TestDX2|TestDX3' -timeout 15m -v
     @cat artifacts/verification.md

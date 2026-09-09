@@ -44,6 +44,8 @@ func init() {
 			Summary: "write a new application", Run: runNew},
 		{Name: "generate", Usage: "avero generate [--check]",
 			Summary: "write the generated files of this application", Run: runGenerate},
+		{Name: "dev", Usage: "avero dev [--port 8080]",
+			Summary: "run the application and rebuild it on each change", Run: runDev},
 		{Name: "build", Usage: "avero build [--minify]",
 			Summary: "generate, build the assets and compile the binary", Run: runBuild},
 		{Name: "migrate", Usage: "avero migrate new <name>|up|down|status",

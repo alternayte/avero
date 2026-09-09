@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+
+	"github.com/alternayte/avero/codegen"
+	"github.com/alternayte/avero/codegen/client"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -116,7 +119,10 @@ func runVerify(ctx context.Context, s Streams, args []string) int {
 	steps := []step{
 		{Name: "gofmt", Args: []string{"gofmt", "-l", "."}},
 		{Name: "vet", Args: []string{"go", "vet", "./..."}},
-		{Name: "generate", Args: []string{"go", "run", "github.com/alternayte/avero/cmd/avero", "generate", "--check"}},
+		// The generate step runs in this process. The application therefore
+		// needs no dependency on the avero binary to prove its generated
+		// files.
+		{Name: "generate"},
 		{Name: "test", Args: []string{"go", "test", "./...", "-count=1"}},
 		{Name: "build", Args: []string{"go", "build", "./..."}},
 	}
@@ -124,20 +130,27 @@ func runVerify(ctx context.Context, s Streams, args []string) int {
 	rep := &VerifyReport{OK: true}
 	for _, st := range steps {
 		record := Record{Step: st.Name, State: statePass}
-		cmd := exec.CommandContext(ctx, st.Args[0], st.Args[1:]...)
-		cmd.Dir = dir
-		out, err := cmd.CombinedOutput()
-		text := strings.TrimSpace(string(out))
-		switch {
-		case err != nil:
-			record.State, record.Message = stateFail, text
-			if text == "" {
-				record.Message = err.Error()
+		switch st.Name {
+		case "generate":
+			if err := generateCheck(dir); err != nil {
+				record.State, record.Message = stateFail, err.Error()
 			}
-		case st.Name == "gofmt" && text != "":
-			// gofmt lists the files that need a format and exits 0.
-			record.State = stateFail
-			record.Message = "these files need a format:\n" + text
+		default:
+			cmd := exec.CommandContext(ctx, st.Args[0], st.Args[1:]...)
+			cmd.Dir = dir
+			out, err := cmd.CombinedOutput()
+			text := strings.TrimSpace(string(out))
+			switch {
+			case err != nil:
+				record.State, record.Message = stateFail, text
+				if text == "" {
+					record.Message = err.Error()
+				}
+			case st.Name == "gofmt" && text != "":
+				// gofmt lists the files that need a format and exits 0.
+				record.State = stateFail
+				record.Message = "these files need a format:\n" + text
+			}
 		}
 		if record.State == stateFail {
 			record.File, record.Line, record.Column = position(record.Message)
@@ -159,6 +172,15 @@ func runVerify(ctx context.Context, s Streams, args []string) int {
 		return 1
 	}
 	return 0
+}
+
+// generateCheck proves that every generated file of the application is
+// current.
+func generateCheck(dir string) error {
+	if err := codegen.Check(dir); err != nil {
+		return err
+	}
+	return client.Check(dir)
 }
 
 // positionPattern reads the file, the line and the column of a Go fault.
