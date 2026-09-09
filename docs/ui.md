@@ -14,12 +14,12 @@ list of the known ones. The command runs against the root of an application,
 in the shape that `avero new` wrote.
 
 The command reads `avero.json` first. A shape that is not `ssr` fails with a
-repair sentence, because a page of the spa shape and the api shape answers
-JSON and renders no markup.
+repair sentence. A page of the spa shape and the api shape answers JSON. It
+renders no markup.
 
 ## The steps
 
-1. Fetch the released tarball of Basecoat, and write its `dist/` tree under
+1. Fetch the released tarball of Basecoat. Write its `dist/` tree under
    `assets/vendor/basecoat/`. `assets.PinPackage` carries this step. See [The
    package of a library](assets.md#the-package-of-a-library).
 2. Add the import of the chosen style to `assets/css/app.css`, after the
@@ -30,10 +30,10 @@ JSON and renders no markup.
 5. Write `toaster_test.go`, when the file is absent.
 6. Patch `internal/ui/layout.templ`, under the rule that the next section
    states.
-7. Print what changed, and print the two lines to paste by hand when step 6
+7. Print what changed. Print the two lines to paste by hand when step 6
    changed nothing.
 
-Every step is idempotent. A second run of the command fetches nothing and
+Every step is idempotent. A second run of the command fetches nothing. It
 writes nothing.
 
 ## The eight styles
@@ -49,12 +49,12 @@ list.
 
 ## The rule of the patch
 
-The command reads `internal/ui/layout.templ`, and compares the whole file
+The command reads `internal/ui/layout.templ`. It compares the whole file
 against the layout that the scaffold writes for this application. Two
 outcomes follow.
 
 The file that matches the scaffold, letter for letter, receives one change.
-The command moves `@Toasts()` out of `<main>` and puts it at the end of
+The command moves `@Toasts()` out of `<main>`. It puts the call at the end of
 `<body>`, because the toaster is a fixed element of the page and not of the
 content. It also removes the `Toasts` block that the scaffold layout defines,
 because `internal/ui/toaster.templ` defines that name now.
@@ -79,8 +79,8 @@ leaves it alone.
 
 The command writes the whole `dist/` tree of the tarball, stylesheets and
 scripts together, under `assets/vendor/basecoat/`. `avero.lock` records the
-address, the SHA-256 of the tarball and the sorted file list, so a build reads
-the tree from disk and needs no network. See [The package of a
+address, the SHA-256 of the tarball, and the sorted file list. A build reads
+the tree from disk. It needs no network. See [The package of a
 library](assets.md#the-package-of-a-library).
 
 ## The toaster
@@ -88,23 +88,23 @@ library](assets.md#the-package-of-a-library).
 The command writes `internal/ui/toaster.templ` one time. The file belongs to
 the application from that point, in the same way that every file of `avero
 new` belongs to the application. A later version of Basecoat can change the
-markup that its documentation states for a toast, and the command does not
-reach back into an application to update the file that it already wrote. A
-person who upgrades `avero ui add basecoat` to a later version therefore owns
-the repair of `internal/ui/toaster.templ`, by hand, against the markup that
-the new version states.
+markup that its documentation states for a toast. The command does not reach
+back into an application to update the file that it already wrote. A person
+who upgrades `avero ui add basecoat` to a later version therefore owns the
+repair of `internal/ui/toaster.templ`. The repair is by hand, against the
+markup that the new version states.
 
 The server renders each toast, and Basecoat watches the document with a
 `MutationObserver`. A toast that a Datastar patch inserts into the page
 therefore gets its position, its timer and its pause on hover, with no script
 of the application. Every toast carries a dismiss button, because the click
-handler of the toaster closes a toast for a button of a footer only, and a
-toast with no button never hides while the pointer rests on it. See [The
+handler of the toaster closes a toast for a button of a footer only. A toast
+with no button never hides while the pointer rests on it. See [The
 toaster](views.md#the-toaster).
 
 The command writes `toaster_test.go` to the root of the application, one time,
 beside `internal/ui/toaster.templ`. The test uses the helpers of
 `acceptance_test.go`, which the ssr shape of `avero new` writes: `app`, `get`,
 `post` and `token`. An application that deleted `acceptance_test.go`, or
-renamed one of those helpers, must repair `toaster_test.go` itself, because
-the command does not carry its own copy of them.
+renamed one of those helpers, must repair `toaster_test.go` itself. The
+command does not carry its own copy of them.
