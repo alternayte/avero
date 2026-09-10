@@ -22,13 +22,13 @@ type serveConfig struct {
 	avero.BaseConfig
 }
 
-// serveWire builds a router with one route and no module.
-func serveWire(_ *drel.Engine, _ serveConfig) (*avero.Router, *avero.ModuleSet, error) {
+// serveWire builds a wiring with one route and no module.
+func serveWire(_ *drel.Engine, _ serveConfig) (*avero.Wiring, error) {
 	r := avero.NewRouter()
 	r.Get("/{$}", func(_ *avero.Ctx) (avero.Response, error) {
 		return avero.Text(http.StatusOK, "ready"), nil
 	})
-	return r, avero.Modules(), nil
+	return &avero.Wiring{Router: r, Modules: avero.Modules()}, nil
 }
 
 // An inspection command opens no database and reads no configuration, so
@@ -206,61 +206,22 @@ func TestServeRunsAndStops(t *testing.T) {
 	}
 }
 
-// flagComponent sets a flag when it starts, so a test proves that a
-// component built from the module set reaches the application.
-type flagComponent struct {
-	started *bool
-}
-
-func (flagComponent) Name() string { return "flag" }
-
-func (c flagComponent) Start(context.Context) error {
-	*c.started = true
-	return nil
-}
-
-func (flagComponent) Stop(context.Context) error { return nil }
-
-// Serve registers the components that Components builds from the module set
-// that Wire returns, so a component started by the application sets its
-// flag.
-func TestServeRegistersComponentsFromTheModuleSet(t *testing.T) {
+// A wire that returns a wiring with no router stops the run and names the
+// repair.
+func TestServeStopsOnAWiringFault(t *testing.T) {
 	t.Setenv("AVERO_SECRET", strings.Repeat("a", 64))
-
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Listen returned an error: %v", err)
+	var errOut strings.Builder
+	code := avero.Serve(avero.Service[serveConfig]{
+		Wire: func(*drel.Engine, serveConfig) (*avero.Wiring, error) {
+			return &avero.Wiring{Modules: avero.Modules()}, nil
+		},
+		Out: io.Discard,
+		Err: &errOut,
+	})
+	if code != 1 {
+		t.Fatalf("the run returned the code %d", code)
 	}
-
-	var started bool
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan int, 1)
-	go func() {
-		done <- avero.Serve(avero.Service[serveConfig]{
-			Args: nil,
-			Wire: serveWire,
-			Components: func(*avero.ModuleSet) []avero.Component {
-				return []avero.Component{flagComponent{started: &started}}
-			},
-			Ctx:     ctx,
-			Out:     io.Discard,
-			Err:     io.Discard,
-			Options: []avero.Option{avero.WithoutSignals(), avero.WithListener(ln)},
-		})
-	}()
-
-	time.Sleep(200 * time.Millisecond)
-	cancel()
-
-	select {
-	case code := <-done:
-		if code != 0 {
-			t.Fatalf("the run returned the code %d", code)
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("the run did not stop")
-	}
-	if !started {
-		t.Fatal("the component did not start")
+	if !strings.Contains(errOut.String(), "Router") {
+		t.Fatalf("the fault does not name the field: %q", errOut.String())
 	}
 }
