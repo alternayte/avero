@@ -45,9 +45,10 @@ tests of one feature. A slice imports no other slice.
 5. Change the row in `model/<name>.go`. A `db` tag names the column. Run
    `avero generate`, which writes the columns and the repository.
 
-6. Change the store in `store.go`. It reads and writes with the typed API of
-   drel, such as `repo.Where(model.<Name>s.Title.Contains(q)).All(ctx)`. Write
-   no SQL string. Every call runs inside the transaction of the request.
+6. Change the store in `store.go`. It reads with `avero.Repo` and writes with
+   `avero.Save`, and it reads with the typed API of drel, such as
+   `repo.Where(model.<Name>s.Title.Contains(q)).All(ctx)`. Write no SQL
+   string. Every call runs inside the transaction of the request.
 
 7. Write the change of the table:
 

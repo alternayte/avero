@@ -38,9 +38,9 @@ position.
 ## Read the application
 
 `main.go` calls `avero.Serve`, which runs the start sequence. It answers
-`avero routes` and `avero doctor`, it loads the configuration, it opens the
-database, it builds the router, it registers the boot checks and the
-migrator, and it serves until a signal. An application with an unusual start
+`avero routes` and `avero doctor`, loads the configuration, and opens the
+database. It builds the router and registers the boot checks and the
+migrator, then serves until a signal. An application with an unusual start
 calls `avero.Load`, `avero.New` and `Run` itself.
 
 ```go

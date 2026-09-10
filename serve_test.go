@@ -205,3 +205,62 @@ func TestServeRunsAndStops(t *testing.T) {
 		t.Fatal("the run did not stop")
 	}
 }
+
+// flagComponent sets a flag when it starts, so a test proves that a
+// component built from the module set reaches the application.
+type flagComponent struct {
+	started *bool
+}
+
+func (flagComponent) Name() string { return "flag" }
+
+func (c flagComponent) Start(context.Context) error {
+	*c.started = true
+	return nil
+}
+
+func (flagComponent) Stop(context.Context) error { return nil }
+
+// Serve registers the components that Components builds from the module set
+// that Wire returns, so a component started by the application sets its
+// flag.
+func TestServeRegistersComponentsFromTheModuleSet(t *testing.T) {
+	t.Setenv("AVERO_SECRET", strings.Repeat("a", 64))
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen returned an error: %v", err)
+	}
+
+	var started bool
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan int, 1)
+	go func() {
+		done <- avero.Serve(avero.Service[serveConfig]{
+			Args: nil,
+			Wire: serveWire,
+			Components: func(*avero.ModuleSet) []avero.Component {
+				return []avero.Component{flagComponent{started: &started}}
+			},
+			Ctx:     ctx,
+			Out:     io.Discard,
+			Err:     io.Discard,
+			Options: []avero.Option{avero.WithoutSignals(), avero.WithListener(ln)},
+		})
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+
+	select {
+	case code := <-done:
+		if code != 0 {
+			t.Fatalf("the run returned the code %d", code)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the run did not stop")
+	}
+	if !started {
+		t.Fatal("the component did not start")
+	}
+}
