@@ -293,5 +293,7 @@ if err := modules.Attach(r); err != nil {
 
 A module states a name and implements the interfaces of the concerns that it
 carries: `Routes`, `InboxHandlers`, `Schedule`, `Projections`, `Migrations` and
-`Describe`. Avero inspects each module one time at start. Two modules that
-register one pattern stop the process, and the fault names both modules.
+`Describe`. `avero generate` writes a `Models` method from the `model` package
+of the feature slice, so a module states no hand-written `Describe` method.
+Avero inspects each module one time at start. Two modules that register one
+pattern stop the process, and the fault names both modules.

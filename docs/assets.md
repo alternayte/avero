@@ -115,12 +115,16 @@ file therefore gets a new name, and the browser holds the old one no more.
 //go:embed all:assets/dist
 var dist embed.FS
 
-m, err := avero.LoadManifest(dist, "assets/dist/manifest.json")
-r.Mount("/assets/", avero.AssetHandler(files, m))
+manifest, err := avero.MountAssets(r, dist, "assets/dist")
 ```
 
-`ui.Asset("app.css")` answers the hashed path. The handler serves the files that
-the manifest names and nothing else, with a cache of one year.
+`avero.MountAssets` reads the manifest, mounts the handler at `/assets/`, and
+returns the manifest. `ui.Asset("app.css")` answers the hashed path. The
+handler serves the files that the manifest names and nothing else, with a
+cache of one year.
+
+An application that mounts the handler at another path calls
+`avero.LoadManifest` and `avero.AssetHandler` itself.
 
 ## The configuration
 

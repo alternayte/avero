@@ -7,6 +7,13 @@ The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`avero.Serve`** runs the start sequence, so `main.go` states the
+  application and not the sequence.
+- **`avero.Repo`** and **`avero.Save`** return the repository of the
+  transaction of the request, so a store states no lookup.
+- **`avero.MountAssets`** reads the manifest and serves the built assets.
+- **`avero generate`** writes a `Models` method from the `model` package of a
+  feature slice. `module.ModelModule` states the contract.
 - **`avero ui add basecoat`** adds the Basecoat component library to an
   application of the ssr shape. It fetches the released tarball. It writes the
   `dist` tree to `assets/vendor/basecoat/`. It imports the stylesheet and the
@@ -28,6 +35,12 @@ The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   out. `Middleware` builds the chain of a browser application and `API` builds
   the chain of a JSON service, which carries no flash cookie and no CSRF token.
   The three scaffold shapes use it.
+
+### Changed
+
+- A scaffolded module states no `Describe` method. The module system builds
+  the description from the routes and the generated models.
+- A scaffolded application writes about 390 lines of Go in place of 532.
 
 ### Fixed
 

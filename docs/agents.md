@@ -30,6 +30,11 @@ description: Use when the task adds a feature to this Avero application, ...
 The description states when to use the skill, so an agent chooses the right one
 before it reads the body.
 
+A module needs no `Describe` method. `avero generate` reads the `model`
+package of the feature slice and writes a `Models` method. The module system
+builds the description from the routes and the models. Run `avero schema
+--json` to read the result.
+
 ## The MCP server
 
 ```
