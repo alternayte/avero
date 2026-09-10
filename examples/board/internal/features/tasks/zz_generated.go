@@ -10,6 +10,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/alternayte/avero/module"
 	"github.com/alternayte/avero/router"
 )
 
@@ -123,5 +124,25 @@ func (m *Module) Summaries() map[string]string {
 		"Delete": "Removes one task",
 		"List":   "Answers every task",
 		"Update": "Marks one task complete, or open again",
+	}
+}
+
+// Models returns the persistent models of Module.
+//
+// The model package of this feature states them. Change a field and run
+// `avero generate`.
+func (m *Module) Models() []module.ModelDesc {
+	return []module.ModelDesc{
+		{
+			Name:  "Task",
+			Table: "tasks",
+			Fields: []module.FieldDesc{
+				{Name: "ID", Type: "uuid.UUID"},
+				{Name: "Title", Type: "string"},
+				{Name: "Done", Type: "bool"},
+				{Name: "CreatedAt", Type: "time.Time"},
+				{Name: "UpdatedAt", Type: "time.Time"},
+			},
+		},
 	}
 }

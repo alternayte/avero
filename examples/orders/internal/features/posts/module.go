@@ -23,6 +23,9 @@ func New(engine *drel.Engine) *Module { return &Module{store: NewStore(engine)} 
 // Name identifies the module in the contribution table.
 func (m *Module) Name() string { return "posts" }
 
+// The description of this module needs no hand-written method. `avero
+// generate` writes the models from the model package, and the module system
+// reads the routes from this method. See AN-3.
 // Routes registers the JSON routes of the feature.
 //
 // The registration reads the type of the input and the type of the answer from
@@ -36,22 +39,4 @@ func (m *Module) Routes(r *avero.Router) {
 	avero.Get(r, "/posts/{id}", m.Show,
 		avero.Answers[avero.Problem](http.StatusNotFound, "the post does not exist"))
 	avero.Delete(r, "/posts/{id}", m.Delete)
-}
-
-// Describe states what the feature contributes. `avero schema` reads it.
-func (m *Module) Describe() avero.Description {
-	return avero.Description{
-		Name: "posts",
-		Models: []avero.ModelDesc{{
-			Name:  "Post",
-			Table: "posts",
-			Fields: []avero.FieldDesc{
-				{Name: "ID", Type: "uuid.UUID"},
-				{Name: "Title", Type: "string"},
-				{Name: "Body", Type: "string"},
-				{Name: "CreatedAt", Type: "time.Time"},
-				{Name: "UpdatedAt", Type: "time.Time"},
-			},
-		}},
-	}
 }
