@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/alternayte/avero"
-	"github.com/alternayte/avero/assets"
 	"github.com/alternayte/drel"
 
 	"[[.Module]]/internal/features/posts"
@@ -25,12 +24,6 @@ var dist embed.FS
 // An inspection command passes a nil engine and a zero configuration, because
 // a route registration touches no database and needs no key.
 func wire(engine *drel.Engine, cfg Config) (*avero.Router, *avero.ModuleSet, error) {
-	manifest, err := avero.LoadManifest(dist, "assets/dist/manifest.json")
-	if err != nil {
-		return nil, nil, err
-	}
-	ui.SetManifest(manifest)
-
 	r := avero.NewRouter(avero.WithForm(func(c *avero.Ctx, f *avero.Fields) avero.ViewComponent {
 		// The form failed validation. The page renders again with the old
 		// input and the field errors. See S10.
@@ -49,12 +42,13 @@ func wire(engine *drel.Engine, cfg Config) (*avero.Router, *avero.ModuleSet, err
 	// the Session and Auth fields, and Stack puts them in the correct place.
 	r.Use(avero.Stack{Secret: secret, Engine: engine}.Middleware()...)
 
-	files, err := fs.Sub(dist, "assets/dist")
+	// MountAssets reads the manifest and serves the built files at /assets/.
+	// The binary carries them, so the server needs no directory beside it.
+	manifest, err := avero.MountAssets(r, dist, "assets/dist")
 	if err != nil {
 		return nil, nil, err
 	}
-	// Mount strips the prefix, so the handler reads the path of the asset.
-	r.Mount("/assets/", assets.Handler(files, manifest))
+	ui.SetManifest(manifest)
 
 	modules := avero.Modules(posts.New(engine))
 	if err := modules.Attach(r); err != nil {

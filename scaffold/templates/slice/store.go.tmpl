@@ -2,9 +2,9 @@ package [[.Package]]
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
+	"github.com/alternayte/avero"
 	"github.com/alternayte/drel"
 	"github.com/google/uuid"
 
@@ -15,9 +15,8 @@ import (
 // passes its own database. See design rule 3.
 //
 // Every call runs inside the transaction of the request, which the transaction
-// middleware opens. A read therefore reads its own writes, and a write stages
-// the change on the transaction. drel sends only the columns that changed.
-// See S4.
+// middleware opens. avero.Repo returns the repository of that transaction, and
+// avero.Save flushes the staged changes. See S4.
 type Store struct {
 	engine *drel.Engine
 }
@@ -27,7 +26,7 @@ func NewStore(engine *drel.Engine) *Store { return &Store{engine: engine} }
 
 // List returns the rows, newest first. An empty search returns every row.
 func (s *Store) List(ctx context.Context, search string) ([]*model.[[.Type]], error) {
-	repo, err := s.repo(ctx)
+	repo, err := avero.Repo(ctx, model.[[.Type]]Meta)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +48,7 @@ func (s *Store) Get(ctx context.Context, id string) (*model.[[.Type]], bool, err
 	if err != nil {
 		return nil, false, nil
 	}
-	repo, err := s.repo(ctx)
+	repo, err := avero.Repo(ctx, model.[[.Type]]Meta)
 	if err != nil {
 		return nil, false, err
 	}
@@ -63,13 +62,13 @@ func (s *Store) Get(ctx context.Context, id string) (*model.[[.Type]], bool, err
 // Create writes one row. The identifier stands at once, because drel stamps
 // the UUID at Add.
 func (s *Store) Create(ctx context.Context, title string) (*model.[[.Type]], error) {
-	repo, err := s.repo(ctx)
+	repo, err := avero.Repo(ctx, model.[[.Type]]Meta)
 	if err != nil {
 		return nil, err
 	}
 	row := model.New[[.Type]](title)
 	repo.Add(row)
-	if err := s.save(ctx); err != nil {
+	if err := avero.Save(ctx); err != nil {
 		return nil, err
 	}
 	return row, nil
@@ -81,7 +80,7 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return nil
 	}
-	repo, err := s.repo(ctx)
+	repo, err := avero.Repo(ctx, model.[[.Type]]Meta)
 	if err != nil {
 		return err
 	}
@@ -95,33 +94,5 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 	if err := repo.Remove(row); err != nil {
 		return fmt.Errorf("the row does not delete: %w", err)
 	}
-	return s.save(ctx)
-}
-
-// repo returns the repository of the transaction of the request.
-//
-// The transaction middleware opens it, so a handler always holds one. A job
-// that reads outside a request opens its own with engine.WithTx.
-func (s *Store) repo(ctx context.Context) (*drel.TxRepository[model.[[.Type]]], error) {
-	tx, ok := drel.FromContext(ctx)
-	if !ok {
-		return nil, errors.New("the call needs a transaction: register avero.Transaction in wire.go, or wrap the call in engine.WithTx")
-	}
-	return drel.NewTxRepository(tx, model.[[.Type]]Meta), nil
-}
-
-// save writes the staged changes to the database inside the transaction of the
-// request.
-//
-// The transaction still commits at the end of the request. The flush only
-// makes a later read of the same request see the write.
-func (s *Store) save(ctx context.Context) error {
-	tx, ok := drel.FromContext(ctx)
-	if !ok {
-		return errors.New("the call needs a transaction: register avero.Transaction in wire.go, or wrap the call in engine.WithTx")
-	}
-	if err := tx.SaveChanges(ctx); err != nil {
-		return fmt.Errorf("the change does not write: %w", err)
-	}
-	return nil
+	return avero.Save(ctx)
 }
