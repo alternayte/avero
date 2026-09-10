@@ -51,7 +51,8 @@ A user adds a dependency with a lifecycle and a boot check, and keeps the lean
 - `Serve` does not start the jobs, the message handlers or the projections of
   the module set. The outbox and the inbox are their own work. See S7 and S8.
 - No service container. Section 1.1 of the SDD forbids it.
-- No change to how a module states its migrations.
+- `Serve` does not read the jobs, the message handlers or the projections of
+  the module set, only its migrations.
 
 ## 4. The design
 
@@ -173,6 +174,9 @@ only to name the variable that the old inspect path read.
 5. A nil `Wiring`, a nil `Router` and a nil `Modules` each state a fault that
    names the repair.
 6. A component stops in reverse order.
+7. `Serve` applies the migrations of a module that implements
+   `MigrationModule`, and it applies none when no module implements it.
+8. The migration check reads the same set that the migrator applies.
 
 ## 6. Constraints
 
@@ -184,8 +188,42 @@ only to name the variable that the old inspect path read.
   branch and no release carries them.
 - The work starts from the `lean-user-code` branch, because `Serve` lives there.
 
+### 4.5 A module states its own migrations
+
+Section 5.2 of the SDD states `MigrationModule`, and `module.Set` already holds
+`Migrations() []fs.FS`. No scaffold template implements the interface, so every
+application repeats the list by hand in `wire.go`.
+
+```go
+func migrationSets() []fs.FS {
+	return []fs.FS{postmigrations.FS}
+}
+```
+
+That list is a second source of truth. A person who adds a feature slice and
+forgets the line gets a boot that applies an incomplete schema and states no
+fault. The scaffold contradicts the SDD.
+
+Each slice states its own migrations instead.
+
+```go
+// Migrations returns the migration files of this feature. drel merges the
+// sets of every module in version order.
+func (m *Module) Migrations() fs.FS { return migrations.FS }
+```
+
+`Serve` then reads `Wiring.Modules.Migrations()`. The `Migrations` field of
+`Service` goes away, and so does `migrationSets` in every `wire.go` and the
+`Migrations` field in every `main.go`.
+
+An acceptance test reads the same set from the module set that `wire` returns,
+so the test and the boot apply one list and not two.
+
+`Serve` applies no migration when the module set holds none. An application
+with no migration therefore needs no field and no method.
+
 ## 7. What this does not repair
 
-`Service.Migrations` still states the migration sets that a module could state
-through `MigrationModule`. No module implements that interface today, so a
-fallback would be dead code. It belongs in its own change.
+`Serve` does not start the jobs, the message handlers or the projections of the
+module set. The outbox and the inbox subsystems own that work. See S7 and S8.
+The `Components` field is the seam for an application that must start one now.
