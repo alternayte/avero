@@ -138,10 +138,16 @@ func Serve[C Configurer](s Service[C]) int {
 			checks = append(checks, MigrationCheckOnFS(engine, s.Migrations()...))
 		}
 	}
+	// The checks of the application run after the checks of Avero, so the
+	// secret, the database and the migrations are proved first.
+	checks = append(checks, w.Checks...)
 
 	opts := []Option{WithHandler(handler), WithChecks(checks...)}
 	if engine != nil && s.Migrations != nil {
 		opts = append(opts, WithMigrator(fsMigrator{engine: engine, sets: s.Migrations}))
+	}
+	if len(w.Components) > 0 {
+		opts = append(opts, WithComponents(w.Components...))
 	}
 	opts = append(opts, s.Options...)
 

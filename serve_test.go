@@ -2,11 +2,13 @@ package avero_test
 
 import (
 	"context"
+	"errors"
 	"io"
 	"io/fs"
 	"net"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -223,5 +225,107 @@ func TestServeStopsOnAWiringFault(t *testing.T) {
 	}
 	if !strings.Contains(errOut.String(), "Router") {
 		t.Fatalf("the fault does not name the field: %q", errOut.String())
+	}
+}
+
+// recorder is a component that records its own lifecycle. A test proves the
+// order of a start and of a stop.
+type recorder struct {
+	name string
+	log  *[]string
+}
+
+func (r recorder) Name() string { return r.name }
+
+func (r recorder) Start(context.Context) error {
+	*r.log = append(*r.log, "start "+r.name)
+	return nil
+}
+
+func (r recorder) Stop(context.Context) error {
+	*r.log = append(*r.log, "stop "+r.name)
+	return nil
+}
+
+// A component that wire builds starts with the application and stops with it.
+// Avero starts in registration order and stops in reverse order.
+func TestServeStartsTheComponentsOfTheWiring(t *testing.T) {
+	t.Setenv("AVERO_SECRET", strings.Repeat("a", 64))
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("the listener does not open: %v", err)
+	}
+
+	var log []string
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan int, 1)
+	go func() {
+		done <- avero.Serve(avero.Service[serveConfig]{
+			Wire: func(*drel.Engine, serveConfig) (*avero.Wiring, error) {
+				r := avero.NewRouter()
+				r.Get("/{$}", func(_ *avero.Ctx) (avero.Response, error) {
+					return avero.Text(http.StatusOK, "ready"), nil
+				})
+				return &avero.Wiring{
+					Router:  r,
+					Modules: avero.Modules(),
+					Components: []avero.Component{
+						recorder{name: "first", log: &log},
+						recorder{name: "second", log: &log},
+					},
+				}, nil
+			},
+			Ctx:     ctx,
+			Out:     io.Discard,
+			Err:     io.Discard,
+			Options: []avero.Option{avero.WithListener(listener), avero.WithoutSignals()},
+		})
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+
+	select {
+	case code := <-done:
+		if code != 0 {
+			t.Fatalf("the run returned the code %d", code)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the run did not stop")
+	}
+
+	want := []string{"start first", "start second", "stop second", "stop first"}
+	if !slices.Equal(log, want) {
+		t.Fatalf("the lifecycle reads %v and it must read %v", log, want)
+	}
+}
+
+// A check that the wiring carries stops a bad boot with the code 1, and the
+// fault names the repair. See DX-8.
+func TestServeRunsTheChecksOfTheWiring(t *testing.T) {
+	t.Setenv("AVERO_SECRET", strings.Repeat("a", 64))
+	var errOut strings.Builder
+	code := avero.Serve(avero.Service[serveConfig]{
+		Wire: func(*drel.Engine, serveConfig) (*avero.Wiring, error) {
+			return &avero.Wiring{
+				Router:  avero.NewRouter(),
+				Modules: avero.Modules(),
+				Checks: []avero.Check{{
+					Name:   "the mail server",
+					Repair: "Set SMTP_URL to the address of the mail server",
+					Run: func(context.Context) error {
+						return errors.New("the mail server does not answer")
+					},
+				}},
+			}, nil
+		},
+		Out: io.Discard,
+		Err: &errOut,
+	})
+	if code != 1 {
+		t.Fatalf("the run returned the code %d", code)
+	}
+	if !strings.Contains(errOut.String(), "SMTP_URL") {
+		t.Fatalf("the fault does not state the repair: %q", errOut.String())
 	}
 }
