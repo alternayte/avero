@@ -80,7 +80,7 @@ func runNew(ctx context.Context, s Streams, args []string) int {
 	// The application must build at once, so the command reads the
 	// dependencies and writes every generated file.
 	if out, err := goCommand(ctx, opts.Dir, "mod", "tidy"); err != nil {
-		return failf(s, "avero new: the dependencies do not read\n%s\n  → Prove the network, then run `go mod tidy` in %s",
+		return failf(s, "avero new: the dependencies do not read\n%s\n  → Prove the network. Run `go mod tidy` in %s.",
 			strings.TrimSpace(out), name)
 	}
 	if err := Drel(ctx, opts.Dir); err != nil {

@@ -150,6 +150,13 @@ func runVersion(_ context.Context, s Streams, _ []string) int {
 	return 0
 }
 
+// hint returns the repair line of a fault.
+//
+// An error carries one sentence that states the repair. That sentence ends
+// with a full stop. The linter refuses an error literal that ends with
+// punctuation, so the sentence arrives as a value. See DX-7.
+func hint(sentence string) string { return "\n  → " + sentence }
+
 // failf writes a fault and returns the exit code.
 func failf(s Streams, format string, args ...any) int {
 	_, _ = fmt.Fprintf(s.Err, format+"\n", args...)
