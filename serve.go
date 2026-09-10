@@ -185,14 +185,15 @@ func isDoctor(args []string) bool {
 // The doctor holds no engine, so each check opens its own connection and
 // closes it. The boot uses the engine of the application instead. See DX-8.
 func (s Service[C]) doctorChecks(cfg C, w *Wiring) []Check {
+	checks := []Check{SecretCheck(cfg.Base().Secret)}
 	if s.DSN == nil {
-		return w.Checks
+		return append(checks, w.Checks...)
 	}
 	dsn := s.DSN(cfg)
 	if dsn == "" {
-		return w.Checks
+		return append(checks, w.Checks...)
 	}
-	checks := []Check{DatabaseCheck(dsn)}
+	checks = append(checks, DatabaseCheck(dsn))
 	if sets := w.Modules.Migrations(); len(sets) > 0 {
 		checks = append(checks, MigrationCheckFS(dsn, sets...))
 	}

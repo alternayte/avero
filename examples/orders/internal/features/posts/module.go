@@ -7,10 +7,13 @@
 package posts
 
 import (
+	"io/fs"
 	"net/http"
 
 	"github.com/alternayte/avero"
 	"github.com/alternayte/drel"
+
+	"orders/internal/features/posts/migrations"
 )
 
 //go:generate go run github.com/alternayte/avero/internal/cmd/averogen .
@@ -41,3 +44,7 @@ func (m *Module) Routes(r *avero.Router) {
 		avero.Answers[avero.Problem](http.StatusNotFound, "the post does not exist"))
 	avero.Delete(r, "/posts/{id}", m.Delete)
 }
+
+// Migrations returns the migration files of this feature. The module set
+// merges the sets of every module, and drel applies them in version order.
+func (m *Module) Migrations() fs.FS { return migrations.FS }

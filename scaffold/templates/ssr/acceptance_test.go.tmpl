@@ -26,17 +26,17 @@ func app(t *testing.T) http.Handler {
 		t.Fatalf("the database does not open: %v", err)
 	}
 	t.Cleanup(func() { engine.Close() })
-	if _, err := engine.ApplyMigrationsFS(context.Background(), migrationSets()...); err != nil {
-		t.Fatalf("the migrations do not apply: %v", err)
-	}
 
 	cfg := Config{}
 	cfg.Secret = avero.Secret(strings.Repeat("k", 64))
-	r, _, err := wire(engine, cfg)
+	w, err := wire(engine, cfg)
 	if err != nil {
 		t.Fatalf("the wiring failed: %v", err)
 	}
-	handler, err := r.Handler()
+	if _, err := engine.ApplyMigrationsFS(context.Background(), w.Modules.Migrations()...); err != nil {
+		t.Fatalf("the migrations do not apply: %v", err)
+	}
+	handler, err := w.Router.Handler()
 	if err != nil {
 		t.Fatalf("the router holds a fault: %v", err)
 	}

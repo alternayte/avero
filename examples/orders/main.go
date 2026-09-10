@@ -15,9 +15,8 @@ import (
 // Read the doc comment of avero.Serve for the long form.
 func main() {
 	os.Exit(avero.Serve(avero.Service[Config]{
-		Args:       os.Args[1:],
-		Wire:       wire,
-		DSN:        func(c Config) string { return c.DatabaseURL },
-		Migrations: migrationSets,
+		Args: os.Args[1:],
+		Wire: wire,
+		DSN:  func(c Config) string { return c.DatabaseURL },
 	}))
 }
