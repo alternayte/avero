@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"strings"
 
 	"github.com/alternayte/drel"
 )
@@ -34,12 +35,6 @@ type Service[C Configurer] struct {
 	// DSN reads the database address from the configuration. A nil value
 	// starts an application with no database.
 	DSN func(cfg C) string
-	// DSNEnv names the variable that `avero doctor` reads for the database
-	// address. An empty value reads DATABASE_URL. `avero doctor` reads the
-	// address from this variable and not from the configuration. An
-	// application that reads its address from another source gets no
-	// database check from the doctor.
-	DSNEnv string
 	// Migrations holds the migration files of each feature slice. drel
 	// merges the sets in version order. A nil value applies no migration.
 	Migrations func() []fs.FS
@@ -84,19 +79,11 @@ func Serve[C Configurer](s Service[C]) int {
 		ctx = context.Background()
 	}
 
-	// An inspection command reads the routes and the modules. It opens no
-	// database and it reads no configuration, so `avero routes` works on a
-	// machine with no database.
+	// An inspection command reads the routes and the modules. Every command
+	// but `avero doctor` opens no database and reads no configuration, so
+	// `avero routes` works on a machine with no database.
 	if Inspecting(s.Args) {
-		var zero C
-		w, err := s.Wire(nil, zero)
-		if err != nil {
-			return Exit(errOut, err)
-		}
-		if err := w.validate(); err != nil {
-			return Exit(errOut, err)
-		}
-		return Inspect[C](s.Args, out, errOut, w.Router, w.Modules, s.doctorChecks()...)
+		return s.inspect(ctx, out, errOut)
 	}
 
 	cfg, err := Load[C](ctx)
@@ -110,8 +97,8 @@ func Serve[C Configurer](s Service[C]) int {
 		engine, err = drel.NewEngine(s.DSN(*cfg))
 		if err != nil {
 			_, _ = fmt.Fprintf(errOut,
-				"the database does not open: %v\n  → Prove %s. Start the database.\n",
-				err, s.dsnEnv())
+				"the database does not open: %v\n  → Prove the database address in the configuration. Start the database.\n",
+				err)
 			return 1
 		}
 		defer engine.Close()
@@ -154,28 +141,62 @@ func Serve[C Configurer](s Service[C]) int {
 	return Exit(errOut, New(base, opts...).Run(ctx))
 }
 
-// dsnEnv returns the name of the variable that holds the database address.
-func (s Service[C]) dsnEnv() string {
-	if s.DSNEnv == "" {
-		return "DATABASE_URL"
+// inspect answers one inspection command.
+//
+// `avero doctor` reports the checks of the application, so it loads the
+// configuration. Every other command reads none, so `avero routes` works on a
+// machine with no database. See DX-8.
+//
+// wire receives a nil engine in both cases. A route registration touches no
+// database, and a boot check opens its own connection.
+func (s Service[C]) inspect(ctx context.Context, out, errOut io.Writer) int {
+	var cfg C
+	doctor := isDoctor(s.Args)
+	if doctor {
+		// A configuration that does not load does not stop the doctor.
+		// Inspect reports the fault itself.
+		if loaded, err := Load[C](ctx); err == nil {
+			cfg = *loaded
+		}
 	}
-	return s.DSNEnv
+
+	w, err := s.Wire(nil, cfg)
+	if err != nil {
+		return Exit(errOut, err)
+	}
+	if err := w.validate(); err != nil {
+		return Exit(errOut, err)
+	}
+
+	var checks []Check
+	if doctor {
+		checks = s.doctorChecks(cfg, w)
+	}
+	return Inspect[C](s.Args, out, errOut, w.Router, w.Modules, checks...)
 }
 
-// doctorChecks returns the boot checks of `avero doctor`.
+// isDoctor reports the doctor command.
+func isDoctor(args []string) bool {
+	return len(args) > 0 && strings.TrimPrefix(args[0], InspectPrefix) == "doctor"
+}
+
+// doctorChecks returns the boot checks that `avero doctor` runs.
 //
-// The doctor holds no engine, so a check opens its own connection and closes
-// it. The boot uses the engine of the application instead. See DX-8.
-func (s Service[C]) doctorChecks() []Check {
-	dsn := os.Getenv(s.dsnEnv())
-	if dsn == "" || s.DSN == nil {
-		return nil
+// The doctor holds no engine, so each check opens its own connection and
+// closes it. The boot uses the engine of the application instead. See DX-8.
+func (s Service[C]) doctorChecks(cfg C, w *Wiring) []Check {
+	if s.DSN == nil {
+		return w.Checks
+	}
+	dsn := s.DSN(cfg)
+	if dsn == "" {
+		return w.Checks
 	}
 	checks := []Check{DatabaseCheck(dsn)}
 	if s.Migrations != nil {
 		checks = append(checks, MigrationCheckFS(dsn, s.Migrations()...))
 	}
-	return checks
+	return append(checks, w.Checks...)
 }
 
 // fsMigrator applies the pending migrations when MIGRATE_ON_BOOT is true.

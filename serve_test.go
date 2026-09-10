@@ -70,17 +70,16 @@ func TestServeStopsOnAConfigurationFault(t *testing.T) {
 }
 
 // A database address that Serve cannot open stops the process with the code
-// 1 before it serves, and the fault names the variable that DSNEnv states.
+// 1 before it serves, and the fault states the repair.
 func TestServeStopsOnADatabaseFault(t *testing.T) {
 	t.Setenv("AVERO_SECRET", strings.Repeat("a", 64))
 	var errOut strings.Builder
 	code := avero.Serve(avero.Service[serveConfig]{
-		Args:   nil,
-		Wire:   serveWire,
-		DSN:    func(serveConfig) string { return "postgres://bad:%zz@nope/db" },
-		DSNEnv: "APP_DATABASE_URL",
-		Out:    io.Discard,
-		Err:    &errOut,
+		Args: nil,
+		Wire: serveWire,
+		DSN:  func(serveConfig) string { return "postgres://bad:%zz@nope/db" },
+		Out:  io.Discard,
+		Err:  &errOut,
 	})
 	if code != 1 {
 		t.Fatalf("the run returned the code %d", code)
@@ -88,8 +87,8 @@ func TestServeStopsOnADatabaseFault(t *testing.T) {
 	if !strings.Contains(errOut.String(), "the database does not open") {
 		t.Fatalf("the fault does not state the repair: %q", errOut.String())
 	}
-	if !strings.Contains(errOut.String(), "APP_DATABASE_URL") {
-		t.Fatalf("the fault does not name the variable: %q", errOut.String())
+	if !strings.Contains(errOut.String(), "the database address") {
+		t.Fatalf("the fault does not state the repair: %q", errOut.String())
 	}
 }
 
@@ -327,5 +326,75 @@ func TestServeRunsTheChecksOfTheWiring(t *testing.T) {
 	}
 	if !strings.Contains(errOut.String(), "SMTP_URL") {
 		t.Fatalf("the fault does not state the repair: %q", errOut.String())
+	}
+}
+
+// `avero doctor` reports a check that the wiring carries, so a person proves
+// a dependency of the application before the process serves. See DX-8.
+func TestTheDoctorReportsTheChecksOfTheWiring(t *testing.T) {
+	t.Setenv("AVERO_SECRET", strings.Repeat("a", 64))
+	var out strings.Builder
+	code := avero.Serve(avero.Service[serveConfig]{
+		Args: []string{avero.InspectPrefix + "doctor"},
+		Wire: func(*drel.Engine, serveConfig) (*avero.Wiring, error) {
+			return &avero.Wiring{
+				Router:  avero.NewRouter(),
+				Modules: avero.Modules(),
+				Checks: []avero.Check{{
+					Name:   "the mail server",
+					Repair: "Set SMTP_URL to the address of the mail server",
+					Run:    func(context.Context) error { return nil },
+				}},
+			}, nil
+		},
+		Out: &out,
+		Err: io.Discard,
+	})
+	if code != 0 {
+		t.Fatalf("the doctor returned the code %d", code)
+	}
+	if !strings.Contains(out.String(), "the mail server") {
+		t.Fatalf("the doctor does not name the check: %q", out.String())
+	}
+}
+
+// The doctor reads the address from the configuration and not from the
+// process environment, so an application that composes its address gets a
+// real database check.
+func TestTheDoctorReadsTheAddressFromTheConfiguration(t *testing.T) {
+	t.Setenv("AVERO_SECRET", strings.Repeat("a", 64))
+	t.Setenv("DATABASE_URL", "")
+	var out strings.Builder
+	code := avero.Serve(avero.Service[serveConfig]{
+		Args: []string{avero.InspectPrefix + "doctor"},
+		Wire: serveWire,
+		DSN: func(serveConfig) string {
+			return "file:" + filepath.Join(t.TempDir(), "doctor.db")
+		},
+		Out: &out,
+		Err: io.Discard,
+	})
+	if code != 0 {
+		t.Fatalf("the doctor returned the code %d", code)
+	}
+	if !strings.Contains(out.String(), "database") {
+		t.Fatalf("the doctor states no database check: %q", out.String())
+	}
+}
+
+// An inspection command that is not the doctor reads no configuration, so
+// `avero routes` works on a machine with no database. See DX-8.
+func TestTheRoutesCommandReadsNoConfiguration(t *testing.T) {
+	t.Setenv("AVERO_SECRET", "")
+	var out strings.Builder
+	code := avero.Serve(avero.Service[serveConfig]{
+		Args: []string{avero.InspectPrefix + "routes"},
+		Wire: serveWire,
+		DSN:  func(serveConfig) string { return "file:/does/not/exist/x.db" },
+		Out:  &out,
+		Err:  io.Discard,
+	})
+	if code != 0 {
+		t.Fatalf("the routes command returned the code %d", code)
 	}
 }
