@@ -37,6 +37,23 @@ position.
 
 ## Read the application
 
+`main.go` calls `avero.Serve`, which runs the start sequence. It answers
+`avero routes` and `avero doctor`, it loads the configuration, it opens the
+database, it builds the router, it registers the boot checks and the
+migrator, and it serves until a signal. An application with an unusual start
+calls `avero.Load`, `avero.New` and `Run` itself.
+
+```go
+func main() {
+	os.Exit(avero.Serve(avero.Service[Config]{
+		Args:       os.Args[1:],
+		Wire:       wire,
+		DSN:        func(c Config) string { return c.DatabaseURL },
+		Migrations: migrationSets,
+	}))
+}
+```
+
 ```
 blog/
 ├── main.go                   the composition root
@@ -70,7 +87,7 @@ migration of the table, and registers the module in `wire.go`.
 A store reads and writes with the typed API of drel. It writes no SQL string.
 
 ```go
-repo, err := s.repo(ctx)
+repo, err := avero.Repo(ctx, model.PostMeta)
 if err != nil {
 	return nil, err
 }
@@ -79,6 +96,9 @@ return repo.AsNoTracking().
 	OrderBy(model.Posts.ID.Desc()).
 	All(ctx)
 ```
+
+`avero.Repo` returns the repository of the transaction of the request. The
+transaction middleware opens that transaction, so a handler always holds one.
 
 `model.Posts` is generated. A column that no model names does not compile, so a
 name fault appears before the process starts. See design rule 8.
@@ -91,7 +111,9 @@ repo.Add(post)
 ```
 
 The key is a UUID of version 7. drel stamps it at `Add`, so the answer of the
-handler carries the identifier before the commit.
+handler carries the identifier before the commit. Call `avero.Save(ctx)` to
+flush the staged change, so a later read of the same request sees it. The
+transaction still commits at the end of the request.
 
 ## Change a table
 
