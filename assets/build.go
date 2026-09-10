@@ -291,7 +291,7 @@ func repairOf(msg api.Message) string {
 	if strings.Contains(msg.Text, "avero js pin") {
 		return "Run the command that the message names"
 	}
-	return "Repair the file that the position names, then run `avero build` again"
+	return "Repair the file that the position names. Run `avero build` again."
 }
 
 // relative returns the path of a file inside the application.
