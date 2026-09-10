@@ -108,6 +108,16 @@ func build(dir string) ([]result, error) {
 			if len(p.Inputs) == 0 {
 				continue
 			}
+			// The model package of the feature slice states the persistent
+			// models. The generator writes them, so a person states each
+			// field one time. See AN-3.
+			if p.Receiver != "" {
+				models, modelErr := modelsOf(fset, d)
+				if modelErr != nil {
+					return nil, modelErr
+				}
+				p.Models = models
+			}
 			source, emitErr := emit(p)
 			if emitErr != nil {
 				return nil, fmt.Errorf("avero generate: the output of %s does not format: %w", d, emitErr)

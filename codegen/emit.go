@@ -24,6 +24,7 @@ func emit(p pkg) ([]byte, error) {
 		emitValidate(&body, in, imports)
 	}
 	emitSummaries(&body, p)
+	emitModels(&body, p, imports)
 
 	var head strings.Builder
 	head.WriteString(generatedHeader + "\n//\n")
@@ -76,6 +77,37 @@ func emitSummaries(b *strings.Builder, p pkg) {
 	b.WriteString("\treturn map[string]string{\n")
 	for _, name := range names {
 		fmt.Fprintf(b, "\t\t%s: %s,\n", strconv.Quote(name), strconv.Quote(p.Summaries[name]))
+	}
+	b.WriteString("\t}\n}\n\n")
+}
+
+// emitModels writes the Models method of the module of a package.
+//
+// The model package of the feature slice states each field, so a person
+// writes it one time and the description of the module carries it. See
+// module.ModelModule and AN-3.
+func emitModels(b *strings.Builder, p pkg, imports map[string]bool) {
+	if p.Receiver == "" || len(p.Models) == 0 {
+		return
+	}
+	imports[modelImport] = true
+
+	fmt.Fprintf(b, "// Models returns the persistent models of %s.\n", p.Receiver)
+	b.WriteString("//\n")
+	b.WriteString("// The model package of this feature states them. Change a field and run\n")
+	b.WriteString("// `avero generate`.\n")
+	fmt.Fprintf(b, "func (m *%s) Models() []module.ModelDesc {\n", p.Receiver)
+	b.WriteString("\treturn []module.ModelDesc{\n")
+	for _, mod := range p.Models {
+		b.WriteString("\t\t{\n")
+		fmt.Fprintf(b, "\t\t\tName:  %s,\n", strconv.Quote(mod.Name))
+		fmt.Fprintf(b, "\t\t\tTable: %s,\n", strconv.Quote(mod.Table))
+		b.WriteString("\t\t\tFields: []module.FieldDesc{\n")
+		for _, f := range mod.Fields {
+			fmt.Fprintf(b, "\t\t\t\t{Name: %s, Type: %s},\n",
+				strconv.Quote(f.Name), strconv.Quote(f.Type))
+		}
+		b.WriteString("\t\t\t},\n\t\t},\n")
 	}
 	b.WriteString("\t}\n}\n\n")
 }
