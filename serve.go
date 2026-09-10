@@ -27,9 +27,10 @@ type Service[C Configurer] struct {
 	// Args holds the command line without the name of the program. Pass
 	// os.Args[1:].
 	Args []string
-	// Wire builds the router and the module set. An inspection command
-	// passes a nil engine and a zero configuration.
-	Wire func(engine *drel.Engine, cfg C) (*Router, *ModuleSet, error)
+	// Wire builds the wiring of the application. An inspection command
+	// passes a nil engine, and every command but `avero doctor` passes a
+	// zero configuration.
+	Wire func(engine *drel.Engine, cfg C) (*Wiring, error)
 	// DSN reads the database address from the configuration. A nil value
 	// starts an application with no database.
 	DSN func(cfg C) string
@@ -42,11 +43,6 @@ type Service[C Configurer] struct {
 	// Migrations holds the migration files of each feature slice. drel
 	// merges the sets in version order. A nil value applies no migration.
 	Migrations func() []fs.FS
-	// Components builds the components of the application from the module
-	// set. Serve registers them after the handler, so a scheduled job or a
-	// message consumer starts with the application. A nil value registers
-	// none.
-	Components func(set *ModuleSet) []Component
 	// Options pass to New after the options that Serve builds, so an
 	// application can add a component or a check of its own.
 	Options []Option
@@ -93,11 +89,14 @@ func Serve[C Configurer](s Service[C]) int {
 	// machine with no database.
 	if Inspecting(s.Args) {
 		var zero C
-		r, modules, err := s.Wire(nil, zero)
+		w, err := s.Wire(nil, zero)
 		if err != nil {
 			return Exit(errOut, err)
 		}
-		return Inspect[C](s.Args, out, errOut, r, modules, s.doctorChecks()...)
+		if err := w.validate(); err != nil {
+			return Exit(errOut, err)
+		}
+		return Inspect[C](s.Args, out, errOut, w.Router, w.Modules, s.doctorChecks()...)
 	}
 
 	cfg, err := Load[C](ctx)
@@ -118,17 +117,17 @@ func Serve[C Configurer](s Service[C]) int {
 		defer engine.Close()
 	}
 
-	r, modules, err := s.Wire(engine, *cfg)
+	w, err := s.Wire(engine, *cfg)
 	if err != nil {
 		return Exit(errOut, err)
 	}
-	handler, err := r.Handler()
+	if err := w.validate(); err != nil {
+		return Exit(errOut, err)
+	}
+	handler, err := w.Router.Handler()
 	if err != nil {
 		return Exit(errOut, err)
 	}
-	// The module set carries the jobs, the message handlers and the
-	// projections. Serve does not start them yet. Components is the seam
-	// for an application that must.
 
 	// The boot checks read the engine that the application already opened,
 	// so a start opens one connection pool and no more. See DX-8.
@@ -143,11 +142,6 @@ func Serve[C Configurer](s Service[C]) int {
 	opts := []Option{WithHandler(handler), WithChecks(checks...)}
 	if engine != nil && s.Migrations != nil {
 		opts = append(opts, WithMigrator(fsMigrator{engine: engine, sets: s.Migrations}))
-	}
-	if s.Components != nil {
-		if cs := s.Components(modules); len(cs) > 0 {
-			opts = append(opts, WithComponents(cs...))
-		}
 	}
 	opts = append(opts, s.Options...)
 
