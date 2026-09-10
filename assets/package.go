@@ -141,7 +141,7 @@ func extract(body []byte, root, name string) ([]string, error) {
 	zip, err := gzip.NewReader(bytes.NewReader(body))
 	if err != nil {
 		return nil, fault(LockName, fmt.Sprintf("the package %q does not open as a gzip file", name),
-			"Prove that the address names a tarball of npm, then run the command again")
+			"Prove that the address names a tarball of npm. Run the command again.")
 	}
 	defer func() { _ = zip.Close() }()
 
@@ -155,7 +155,7 @@ func extract(body []byte, root, name string) ([]string, error) {
 		}
 		if err != nil {
 			return nil, fault(LockName, fmt.Sprintf("the package %q does not read as a tarball", name),
-				"Prove that the address names a tarball of npm, then run the command again")
+				"Prove that the address names a tarball of npm. Run the command again.")
 		}
 		if header.Typeflag != tar.TypeReg {
 			continue

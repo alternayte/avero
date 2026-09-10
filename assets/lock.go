@@ -230,7 +230,7 @@ func PinJS(ctx context.Context, cfg PinConfig, name, url string) error {
 	source, err := cfg.fetcher().Fetch(ctx, url)
 	if err != nil {
 		return fault(LockName, fmt.Sprintf("the module %q does not download from %s: %v", name, url, err),
-			"Prove the address in a browser, then run the command again")
+			"Prove the address in a browser. Run the command again.")
 	}
 	// A CDN keeps a peer dependency outside the bundle and names it with an
 	// absolute path of its own host. The pin rewrites such an import to the
@@ -244,7 +244,7 @@ func PinJS(ctx context.Context, cfg PinConfig, name, url string) error {
 		return fault(LockName,
 			fmt.Sprintf("the module %q does not match its hash: %s holds %s and %s records %s",
 				name, url, hash[:12], LockName, pin.SHA256[:12]),
-			fmt.Sprintf("Prove the change, then delete the entry of %q from %s and run the command again", name, LockName))
+			fmt.Sprintf("Prove the change. Delete the entry of %q from %s. Run the command again.", name, LockName))
 	}
 
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {

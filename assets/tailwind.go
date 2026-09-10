@@ -117,7 +117,7 @@ func (t *Tailwind) Ensure(ctx context.Context) (string, error) {
 		return "", fault(LockName,
 			fmt.Sprintf("the Tailwind binary does not match its hash: the release holds %s and %s records %s",
 				hash[:12], LockName, pin.SHA256[:12]),
-			fmt.Sprintf("Prove the change, then delete the binary entry from %s and run the command again", LockName))
+			fmt.Sprintf("Prove the change. Delete the binary entry from %s. Run the command again.", LockName))
 	}
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 		return "", fault(BinDir, "the binary directory does not open",
@@ -161,12 +161,12 @@ func (t *Tailwind) Compile(ctx context.Context) ([]byte, error) {
 	if body, err := cmd.CombinedOutput(); err != nil {
 		return nil, fault(t.Input,
 			fmt.Sprintf("Tailwind failed: %v\n%s", err, strings.TrimSpace(string(body))),
-			"Repair the stylesheet that the message names, then run `avero build` again")
+			"Repair the stylesheet that the message names. Run `avero build` again.")
 	}
 	css, err := os.ReadFile(name)
 	if err != nil {
 		return nil, fault(t.Input, "Tailwind wrote no stylesheet",
-			"Prove the Tailwind version, then run `avero build` again")
+			"Prove the Tailwind version. Run `avero build` again.")
 	}
 	return css, nil
 }
