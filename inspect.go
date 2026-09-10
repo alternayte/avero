@@ -253,7 +253,7 @@ func UnpackMigrations(fsys fs.FS, root string) (string, func(), error) {
 func DatabaseCheck(dsn string) Check {
 	return Check{
 		Name:   "the database",
-		Repair: "Start the database, and prove DATABASE_URL",
+		Repair: "Start the database. Prove DATABASE_URL.",
 		Run: func(ctx context.Context) error {
 			e, err := drel.NewEngine(dsn)
 			if err != nil {
@@ -270,7 +270,7 @@ func DatabaseCheck(dsn string) Check {
 func DatabaseCheckOn(e *drel.Engine) Check {
 	return Check{
 		Name:   "the database",
-		Repair: "Start the database, and prove DATABASE_URL",
+		Repair: "Start the database. Prove DATABASE_URL.",
 		Run: func(ctx context.Context) error {
 			if e == nil {
 				return fmt.Errorf("the check holds no database")
@@ -294,7 +294,7 @@ func answers(ctx context.Context, e *drel.Engine) error {
 func BrokerCheck(address string) Check {
 	return Check{
 		Name:   "the broker",
-		Repair: "Start the broker, and prove AMQP_URL",
+		Repair: "Start the broker. Prove AMQP_URL.",
 		Run: func(ctx context.Context) error {
 			u, err := url.Parse(address)
 			if err != nil || u.Host == "" {

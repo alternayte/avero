@@ -29,6 +29,13 @@ import (
 	"time"
 )
 
+// hint returns the repair line of a fault.
+//
+// An error carries one sentence that states the repair. That sentence ends
+// with a full stop. The linter refuses an error literal that ends with
+// punctuation, so the sentence arrives as a value. See DX-7.
+func hint(sentence string) string { return "\n  → " + sentence }
+
 // debugWatch prints each change that the watcher reports. A test of the loop
 // sets AVERO_DEV_DEBUG to read it.
 var debugWatch = os.Getenv("AVERO_DEV_DEBUG") != ""
@@ -380,8 +387,8 @@ func (s *Server) waitForChild(ctx context.Context, child Process) error {
 		case <-time.After(5 * time.Millisecond):
 		}
 	}
-	return fmt.Errorf("avero dev: the application did not answer on %s\n  → Read the output of the application, then repair the fault that it names",
-		address)
+	return fmt.Errorf("avero dev: the application did not answer on %s%s", address,
+		hint("Read the output of the application. Repair the fault that it names."))
 }
 
 // startFrontEnd runs the development server of the front end.
@@ -399,7 +406,8 @@ func (s *Server) startFrontEnd(ctx context.Context) (Process, error) {
 	Group(cmd)
 	cmd.WaitDelay = 2 * time.Second
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("avero dev: the front end does not start: %w\n  → Install Node.js, then run `avero dev` again", err)
+		return nil, fmt.Errorf("avero dev: the front end does not start: %w%s", err,
+			hint("Install Node.js. Run `avero dev` again."))
 	}
 	_, _ = fmt.Fprintf(s.cfg.Out, "avero dev: %s in %s\n",
 		strings.Join(s.cfg.FrontEnd, " "), s.cfg.FrontEndDir)
@@ -478,7 +486,8 @@ func classify(files []string) changeKind {
 func freePort() (int, error) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return 0, fmt.Errorf("avero dev: no port is free: %w\n  → Close a process that holds every port, then run the command again", err)
+		return 0, fmt.Errorf("avero dev: no port is free: %w%s", err,
+			hint("Close a process that holds every port. Run the command again."))
 	}
 	defer func() { _ = l.Close() }()
 	return l.Addr().(*net.TCPAddr).Port, nil

@@ -140,7 +140,7 @@ func (a *App) Run(ctx context.Context) error {
 			return errors.Join(&Fault{
 				Stage: StageStart, Subject: "the HTTP server",
 				Message: "the server stopped while the application ran",
-				Repair:  "Read the cause and repair the server, then start the application again",
+				Repair:  "Read the cause. Repair the server. Start the application again.",
 				Err:     err,
 			}, a.shutdown(ctx, started))
 		}

@@ -60,7 +60,8 @@ func StartTempl(ctx context.Context, dir string, out interface{ Write([]byte) (i
 	Group(cmd)
 	cmd.WaitDelay = 2 * time.Second
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("avero dev: templ does not start: %w\n  → Run `go get -tool github.com/a-h/templ/cmd/templ`, then run `avero dev` again", err)
+		return nil, fmt.Errorf("avero dev: templ does not start: %w%s", err,
+			hint("Run `go get -tool github.com/a-h/templ/cmd/templ`. Run `avero dev` again."))
 	}
 	return stopper{stop: func() error {
 		KillGroup(cmd)

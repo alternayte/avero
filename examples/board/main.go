@@ -34,7 +34,7 @@ func run() int {
 
 	engine, err := drel.NewEngine(cfg.DatabaseURL)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "the database does not open: %v\n  → Prove DATABASE_URL, and start the database\n", err)
+		fmt.Fprintf(os.Stderr, "the database does not open: %v\n  → Prove DATABASE_URL. Start the database.\n", err)
 		return 1
 	}
 	defer engine.Close()

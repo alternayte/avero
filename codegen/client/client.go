@@ -439,7 +439,7 @@ func decode(res *http.Response, out any) error {
 	}
 	if err := json.NewDecoder(res.Body).Decode(out); err != nil {
 		return fault(fmt.Sprintf("the response body does not parse as JSON: %v", err),
-			"Prove the shape of the answer, then repair the return type of the method")
+			"Prove the shape of the answer. Repair the return type of the method.")
 	}
 	return nil
 }

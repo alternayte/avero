@@ -88,7 +88,7 @@ func Explain(dir, message string) map[string]any {
 			Line:    lineNumber,
 			Column:  column,
 			Message: strings.TrimSpace(m[4]),
-			Repair:  "Repair the file that the position names, then run `avero verify`",
+			Repair:  "Repair the file that the position names. Run `avero verify`.",
 		}
 		if next := repairOf(lines, i); next != "" {
 			fault.Kind, fault.Repair = KindAvero, next
@@ -136,7 +136,7 @@ func mapGenerated(dir string, fault *Fault) {
 		return
 	}
 	fault.Generated = true
-	fault.Repair = "Repair the type that the generator reads, then run `avero generate`"
+	fault.Repair = "Repair the type that the generator reads. Run `avero generate`."
 
 	path := fault.File
 	if !filepath.IsAbs(path) {
@@ -163,10 +163,10 @@ func mapGenerated(dir string, fault *Fault) {
 	fault.SourceFile, fault.SourceLine = sourceFile, sourceLine
 	switch {
 	case field != "":
-		fault.Repair = fmt.Sprintf("Repair the field %s of %s in %s, then run `avero generate`",
+		fault.Repair = fmt.Sprintf("Repair the field %s of %s in %s. Run `avero generate`.",
 			field, owner, filepath.Base(sourceFile))
 	default:
-		fault.Repair = fmt.Sprintf("Repair the type %s in %s, then run `avero generate`",
+		fault.Repair = fmt.Sprintf("Repair the type %s in %s. Run `avero generate`.",
 			owner, filepath.Base(sourceFile))
 	}
 }

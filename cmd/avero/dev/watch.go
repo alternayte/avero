@@ -41,7 +41,8 @@ type watcher struct {
 func newWatcher(dir, skip string) (*watcher, error) {
 	inner, err := fsnotify.NewWatcher()
 	if err != nil {
-		return nil, fmt.Errorf("avero dev: the watcher does not open: %w\n  → Raise the file limit of the shell, then run the command again", err)
+		return nil, fmt.Errorf("avero dev: the watcher does not open: %w%s", err,
+			hint("Raise the file limit of the shell. Run the command again."))
 	}
 	w := &watcher{
 		dir:     dir,
