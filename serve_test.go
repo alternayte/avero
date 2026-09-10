@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/alternayte/drel"
@@ -108,14 +109,13 @@ func TestServeRunsWithADatabaseAndStops(t *testing.T) {
 	done := make(chan int, 1)
 	go func() {
 		done <- avero.Serve(avero.Service[serveConfig]{
-			Args:       nil,
-			Wire:       serveWire,
-			DSN:        func(serveConfig) string { return dsn },
-			Migrations: func() []fs.FS { return []fs.FS{} },
-			Ctx:        ctx,
-			Out:        io.Discard,
-			Err:        io.Discard,
-			Options:    []avero.Option{avero.WithoutSignals(), avero.WithListener(ln)},
+			Args:    nil,
+			Wire:    serveWire,
+			DSN:     func(serveConfig) string { return dsn },
+			Ctx:     ctx,
+			Out:     io.Discard,
+			Err:     io.Discard,
+			Options: []avero.Option{avero.WithoutSignals(), avero.WithListener(ln)},
 		})
 	}()
 
@@ -147,14 +147,13 @@ func TestServeRunsWithAMigrationCheckAndStops(t *testing.T) {
 	done := make(chan int, 1)
 	go func() {
 		done <- avero.Serve(avero.Service[serveConfig]{
-			Args:       nil,
-			Wire:       serveWire,
-			DSN:        func(serveConfig) string { return dsn },
-			Migrations: func() []fs.FS { return []fs.FS{} },
-			Ctx:        ctx,
-			Out:        io.Discard,
-			Err:        io.Discard,
-			Options:    []avero.Option{avero.WithoutSignals(), avero.WithListener(ln)},
+			Args:    nil,
+			Wire:    serveWire,
+			DSN:     func(serveConfig) string { return dsn },
+			Ctx:     ctx,
+			Out:     io.Discard,
+			Err:     io.Discard,
+			Options: []avero.Option{avero.WithoutSignals(), avero.WithListener(ln)},
 		})
 	}()
 
@@ -355,6 +354,75 @@ func TestTheDoctorReportsTheChecksOfTheWiring(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "the mail server") {
 		t.Fatalf("the doctor does not name the check: %q", out.String())
+	}
+}
+
+// migrating is a module that carries migration files, so Serve reads the set
+// from the module set and not from a second list.
+type migrating struct{ files fs.FS }
+
+func (migrating) Name() string { return "migrating" }
+
+func (m migrating) Migrations() fs.FS { return m.files }
+
+// Serve applies the migrations that a module states, so an application keeps
+// one list and not two.
+func TestServeAppliesTheMigrationsOfAModule(t *testing.T) {
+	t.Setenv("AVERO_SECRET", strings.Repeat("a", 64))
+	t.Setenv("MIGRATE_ON_BOOT", "true")
+	dsn := "file:" + filepath.Join(t.TempDir(), "migrate.db")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("the listener does not open: %v", err)
+	}
+
+	files := fstest.MapFS{
+		"0001_widgets.up.sql": &fstest.MapFile{
+			Data: []byte("CREATE TABLE widgets (id TEXT PRIMARY KEY);"),
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan int, 1)
+	go func() {
+		done <- avero.Serve(avero.Service[serveConfig]{
+			Wire: func(*drel.Engine, serveConfig) (*avero.Wiring, error) {
+				return &avero.Wiring{
+					Router:  avero.NewRouter(),
+					Modules: avero.Modules(migrating{files: files}),
+				}, nil
+			},
+			DSN:     func(serveConfig) string { return dsn },
+			Ctx:     ctx,
+			Out:     io.Discard,
+			Err:     io.Discard,
+			Options: []avero.Option{avero.WithListener(listener), avero.WithoutSignals()},
+		})
+	}()
+
+	time.Sleep(500 * time.Millisecond)
+	cancel()
+
+	select {
+	case code := <-done:
+		if code != 0 {
+			t.Fatalf("the run returned the code %d", code)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the run did not stop")
+	}
+
+	// No migration is pending, so the migrator read the set of the module
+	// and applied it. MigrationCheckOnFS states the same fact that the boot
+	// check states, so the test needs no raw query.
+	engine, err := drel.NewEngine(dsn)
+	if err != nil {
+		t.Fatalf("the database does not open: %v", err)
+	}
+	defer engine.Close()
+	check := avero.MigrationCheckOnFS(engine, files)
+	if err := check.Run(context.Background()); err != nil {
+		t.Fatalf("a migration is still pending: %v", err)
 	}
 }
 
