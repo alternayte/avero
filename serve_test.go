@@ -3,8 +3,10 @@ package avero_test
 import (
 	"context"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -62,6 +64,70 @@ func TestServeStopsOnAConfigurationFault(t *testing.T) {
 	}
 	if !strings.Contains(errOut.String(), "AVERO_SECRET") {
 		t.Fatalf("the fault does not name the variable: %q", errOut.String())
+	}
+}
+
+// A database address that Serve cannot open stops the process with the code
+// 1 before it serves, and the fault names the variable that DSNEnv states.
+func TestServeStopsOnADatabaseFault(t *testing.T) {
+	t.Setenv("AVERO_SECRET", strings.Repeat("a", 64))
+	var errOut strings.Builder
+	code := avero.Serve(avero.Service[serveConfig]{
+		Args:   nil,
+		Wire:   serveWire,
+		DSN:    func(serveConfig) string { return "postgres://bad:%zz@nope/db" },
+		DSNEnv: "APP_DATABASE_URL",
+		Out:    io.Discard,
+		Err:    &errOut,
+	})
+	if code != 1 {
+		t.Fatalf("the run returned the code %d", code)
+	}
+	if !strings.Contains(errOut.String(), "the database does not open") {
+		t.Fatalf("the fault does not state the repair: %q", errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "APP_DATABASE_URL") {
+		t.Fatalf("the fault does not name the variable: %q", errOut.String())
+	}
+}
+
+// Serve opens a database, runs the migrator and the migration check, and
+// stops on the end of the context.
+func TestServeRunsWithADatabaseAndStops(t *testing.T) {
+	t.Setenv("AVERO_SECRET", strings.Repeat("a", 64))
+	t.Setenv("MIGRATE_ON_BOOT", "true")
+	dsn := filepath.Join(t.TempDir(), "serve.db")
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen returned an error: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan int, 1)
+	go func() {
+		done <- avero.Serve(avero.Service[serveConfig]{
+			Args:       nil,
+			Wire:       serveWire,
+			DSN:        func(serveConfig) string { return dsn },
+			Migrations: func() []fs.FS { return []fs.FS{} },
+			Ctx:        ctx,
+			Out:        io.Discard,
+			Err:        io.Discard,
+			Options:    []avero.Option{avero.WithoutSignals(), avero.WithListener(ln)},
+		})
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+
+	select {
+	case code := <-done:
+		if code != 0 {
+			t.Fatalf("the run returned the code %d", code)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the run did not stop")
 	}
 }
 

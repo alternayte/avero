@@ -103,7 +103,7 @@ func Serve[C Configurer](s Service[C]) int {
 		engine, err = drel.NewEngine(s.DSN(*cfg))
 		if err != nil {
 			_, _ = fmt.Fprintf(errOut,
-				"the database does not open: %v\n  → Prove %s, and start the database\n",
+				"the database does not open: %v\n  → Prove %s. Start the database.\n",
 				err, s.dsnEnv())
 			return 1
 		}
