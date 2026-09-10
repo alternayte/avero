@@ -35,12 +35,28 @@ The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   out. `Middleware` builds the chain of a browser application and `API` builds
   the chain of a JSON service, which carries no flash cookie and no CSRF token.
   The three scaffold shapes use it.
+- **`avero.Wiring`** carries the router, the module set, the components and the
+  boot checks of an application. `wire` returns it.
+- An application adds a dependency with a lifecycle and a boot check, and
+  keeps the lean `main.go`.
+- **`avero doctor`** loads the configuration and reads the database address
+  from it.
 
 ### Changed
 
 - A scaffolded module states no `Describe` method. The module system builds
   the description from the routes and the generated models.
 - A scaffolded application writes about 390 lines of Go in place of 532.
+- `Service.Wire` returns one `*avero.Wiring` and an error.
+- A scaffolded slice states its own migrations through a `Migrations` method.
+  `wire.go` holds no list.
+
+### Removed
+
+- `Service.Migrations`. The module set states the migration files.
+- `Service.Components`. `Wiring.Components` replaces it and reaches the values
+  that `wire` built.
+- `Service.DSNEnv`. The doctor reads the address from the configuration.
 
 ### Fixed
 

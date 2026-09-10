@@ -17,10 +17,13 @@ import (
 //go:embed all:assets/dist
 var dist embed.FS
 
-// wire builds the router and the module set.
+// wire builds the wiring of the application: the router, the module set,
+// the components and the boot checks.
 //
-// An inspection command passes a nil engine and a zero configuration, because
-// a route registration touches no database and needs no key.
+// An inspection command passes a nil engine. `avero doctor` passes the
+// loaded configuration, and every other inspection command passes a zero
+// configuration, because a route registration touches no database and needs
+// no key.
 func wire(engine *drel.Engine, cfg Config) (*avero.Wiring, error) {
 	r := avero.NewRouter()
 	// Stack states the order of the chain one time. API leaves the flash
