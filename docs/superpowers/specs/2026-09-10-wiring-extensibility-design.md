@@ -139,10 +139,19 @@ skips the database check and reports success.
 `Inspect` already loads the configuration for the `doctor` command. It calls
 `config.LoadFrom[T]`. So `Serve` splits the inspect path in two.
 
-| Command | Configuration | Engine | Checks |
+| Command | Configuration that `wire` receives | Engine that `wire` receives | Checks |
 |---|---|---|---|
-| `doctor` | loaded | opened when `DSN` is not nil | the database check, the migration check and `Wiring.Checks` |
+| `doctor` | the loaded configuration | nil | the database check, the migration check and `Wiring.Checks` |
 | `routes`, `modules`, `schema`, `openapi` | zero | nil | none |
+
+The doctor holds no engine. It builds `DatabaseCheck` and `MigrationCheckFS`
+from the address that `DSN` reads out of the loaded configuration, and each
+check opens its own connection and closes it. This is the behaviour that the
+doctor holds today. Only the source of the address changes, from the process
+environment to the configuration.
+
+`wire` receives a nil engine for the doctor as well, because a route
+registration touches no database and a check needs no engine.
 
 `avero routes` therefore still runs on a machine with no database and no
 configuration. `avero doctor` reports the checks of the application, including
