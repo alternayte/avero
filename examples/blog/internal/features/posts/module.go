@@ -1,5 +1,9 @@
 // Package posts holds the posts feature: its routes, its handlers, its input
 // types, its store and its tests. It imports no other feature.
+//
+// The description of this module needs no hand-written method. `avero
+// generate` writes the models from the model package, and the module system
+// reads the routes from the Routes method. See AN-3.
 package posts
 
 import (
@@ -23,9 +27,6 @@ func New(engine *drel.Engine) *Module {
 // Name identifies the module in the contribution table.
 func (m *Module) Name() string { return "posts" }
 
-// The description of this module needs no hand-written method. `avero
-// generate` writes the models from the model package, and the module system
-// reads the routes from this method. See AN-3.
 // Routes registers the routes of the feature.
 func (m *Module) Routes(r *avero.Router) {
 	// The root page carries {$}, so it matches the root only. A bare
