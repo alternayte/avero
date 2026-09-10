@@ -250,6 +250,9 @@ func TestMCPRefusesAFlag(t *testing.T) {
 // The slice adds itself to the modules block of drel.yaml, because drel writes
 // the columns and the migrations of the new feature. A directory without the
 // file states the repair.
+//
+// The command writes no file when the configuration is absent. A slice states
+// its own migrations, so a half-written slice does not compile. See DX-8.
 func TestSliceNeedsTheDrelConfiguration(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module blog\n\ngo 1.26.2\n"), 0o644); err != nil {
@@ -258,6 +261,54 @@ func TestSliceNeedsTheDrelConfiguration(t *testing.T) {
 	code, _, errOut := run(t, dir, "slice", "comment")
 	if code != 1 || !strings.Contains(errOut, "drel.yaml") {
 		t.Fatalf("the code is %d and the fault is %q", code, errOut)
+	}
+	proveNoSlice(t, dir)
+}
+
+// The fault names the command that a person ran, and not another command.
+// See DX-6.
+func TestSliceNamesItselfInAFault(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module blog\n\ngo 1.26.2\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile returned %v", err)
+	}
+	_, _, errOut := run(t, dir, "slice", "comment")
+	if !strings.Contains(errOut, "avero slice:") {
+		t.Fatalf("the fault does not name the command: %q", errOut)
+	}
+	if strings.Contains(errOut, "avero new:") {
+		t.Fatalf("the fault names another command: %q", errOut)
+	}
+}
+
+// A configuration with no modules block states the repair, and the command
+// writes no file.
+func TestSliceNeedsTheModulesBlock(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module blog\n\ngo 1.26.2\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile returned %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "drel.yaml"), []byte("dialect: sqlite\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile returned %v", err)
+	}
+	code, _, errOut := run(t, dir, "slice", "comment")
+	if code != 1 || !strings.Contains(errOut, "modules") {
+		t.Fatalf("the code is %d and the fault is %q", code, errOut)
+	}
+	proveNoSlice(t, dir)
+}
+
+// proveNoSlice states that the command wrote no feature directory.
+func proveNoSlice(t *testing.T, dir string) {
+	t.Helper()
+	features := filepath.Join(dir, "internal", "features")
+	if _, err := os.Stat(features); !os.IsNotExist(err) {
+		entries, _ := os.ReadDir(features)
+		names := make([]string, 0, len(entries))
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+		t.Fatalf("the command wrote a slice and then failed: %v", names)
 	}
 }
 

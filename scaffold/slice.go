@@ -79,20 +79,46 @@ func WriteSlice(opts SliceOptions) ([]string, error) {
 
 	dir := filepath.Join(opts.Dir, "internal", "features", values.Package)
 	if entries, err := os.ReadDir(dir); err == nil && len(entries) > 0 {
-		return nil, faultOf(fmt.Sprintf("the slice %s already exists", values.Package),
+		return nil, sliceFaultOf(fmt.Sprintf("the slice %s already exists", values.Package),
 			"Give the feature another name, or delete the directory that holds it")
+	}
+
+	// The configuration is proved before the first write. A slice states its
+	// own migrations, so a half-written slice does not compile. See DX-8.
+	source, err := readSliceConfig(opts.Dir)
+	if err != nil {
+		return nil, err
 	}
 
 	written, err := renderSlice(dir, values)
 	if err != nil {
 		return nil, err
 	}
-	config, err := addSliceModule(opts.Dir, values)
+	config, err := addSliceModule(opts.Dir, source, values)
 	if err != nil {
 		return nil, err
 	}
 	written = append(written, config...)
 	return written, nil
+}
+
+// readSliceConfig returns the source of drel.yaml, and it proves that the file
+// holds a modules block.
+//
+// The caller runs it before it writes one file of the slice, so a fault leaves
+// the directory as it was. See DX-8.
+func readSliceConfig(dir string) (string, error) {
+	body, err := os.ReadFile(filepath.Join(dir, DrelConfig))
+	if err != nil {
+		return "", sliceFaultOf("this directory holds no "+DrelConfig,
+			"Run the command in the directory of an Avero application, or write one with `avero new`")
+	}
+	source := string(body)
+	if !strings.Contains(source, "\nmodules:\n") {
+		return "", sliceFaultOf(DrelConfig+" holds no modules block",
+			"Add a `modules:` block to "+DrelConfig+". Run the command again.")
+	}
+	return source, nil
 }
 
 // renderSlice writes the Go files of one slice.
@@ -180,21 +206,15 @@ func renderSliceDir(dir, name string, values sliceData) ([]string, error) {
 // drel then writes the columns, the repository and the migrations of the
 // model package of the slice. The caller runs `drel generate` and
 // `drel migrate new` after this call. See the SDD, S14.
-func addSliceModule(dir string, values sliceData) ([]string, error) {
+func addSliceModule(dir, source string, values sliceData) ([]string, error) {
 	name := filepath.Join(dir, DrelConfig)
-	body, err := os.ReadFile(name)
-	if err != nil {
-		return nil, faultOf("this directory holds no "+DrelConfig,
-			"Run the command in the directory of an Avero application, or write one with `avero new`")
-	}
-	source := string(body)
 	if strings.Contains(source, "\n  - name: "+values.Package+"\n") {
 		return nil, nil
 	}
 	marker := "\nmodules:\n"
 	i := strings.Index(source, marker)
 	if i < 0 {
-		return nil, faultOf(DrelConfig+" holds no modules block",
+		return nil, sliceFaultOf(DrelConfig+" holds no modules block",
 			"Add a `modules:` block to "+DrelConfig+". Run the command again.")
 	}
 	entry := "  - name: " + values.Package + "\n" +
