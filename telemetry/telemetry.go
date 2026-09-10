@@ -266,6 +266,6 @@ func checkProtocol(cfg config.BaseConfig) error {
 	return &Fault{
 		Variable: "OTEL_EXPORTER_OTLP_PROTOCOL",
 		Message:  fmt.Sprintf("OTEL_EXPORTER_OTLP_PROTOCOL names %q, and Avero ships http/protobuf only", p),
-		Repair:   "Set OTEL_EXPORTER_OTLP_PROTOCOL to http/protobuf, and point the endpoint at the OTLP HTTP port of the collector",
+		Repair:   "Set OTEL_EXPORTER_OTLP_PROTOCOL to http/protobuf. Point the endpoint at the OTLP HTTP port of the collector.",
 	}
 }

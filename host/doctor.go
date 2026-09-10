@@ -81,7 +81,7 @@ func Doctor(ctx context.Context, cfgReport *config.Report, cfgErr error, checks 
 		rep.add(CheckResult{
 			Name: "the configuration", State: StateFail,
 			Message: cfgErr.Error(),
-			Repair:  "Repair the configuration that the message names, then run `avero doctor` again",
+			Repair:  "Repair the configuration that the message names. Run `avero doctor` again.",
 		})
 	}
 

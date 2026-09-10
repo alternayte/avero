@@ -26,7 +26,7 @@ func emit(pkg string, ifaces []iface) ([]byte, error) {
 	var head strings.Builder
 	head.WriteString(generatedHeader + "\n//\n")
 	head.WriteString("// The source of this file is the client interface of this package. Change the\n")
-	head.WriteString("// interface and its directives, then run `avero generate`. Do not edit this\n")
+	head.WriteString("// interface and its directives. Run `avero generate`. Do not edit this\n")
 	head.WriteString("// file by hand.\n\n")
 	fmt.Fprintf(&head, "package %s\n\n", pkg)
 	head.WriteString("import (\n\t\"context\"\n\n\t" + strconv.Quote(runtimeImport) + "\n)\n\n")

@@ -195,7 +195,7 @@ func addSliceModule(dir string, values sliceData) ([]string, error) {
 	i := strings.Index(source, marker)
 	if i < 0 {
 		return nil, faultOf(DrelConfig+" holds no modules block",
-			"Add a `modules:` block to "+DrelConfig+", then run the command again")
+			"Add a `modules:` block to "+DrelConfig+". Run the command again.")
 	}
 	entry := "  - name: " + values.Package + "\n" +
 		"    packages:\n" +

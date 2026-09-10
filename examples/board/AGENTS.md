@@ -53,7 +53,7 @@ internal/features/          one directory for each feature. Each holds a
 internal/ui/                the views. They import no feature package.
 web/                        the front end. TypeScript, React and Vite.
 web/src/client/             the generated client. Never edit it. Change the
-                            type of the answer of a handler, then run
+                            type of the answer of a handler. Run
                             `avero build`.
 drel.yaml                   the model packages and the migrations of drel
 assets/                     the source of the stylesheet and of the script

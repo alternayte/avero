@@ -15,5 +15,5 @@ output:
   db: ./internal/db/drel_gen.go
 
 # The dialect of the code generation. Write postgres when DATABASE_URL names a
-# PostgreSQL server, then write the migrations again.
+# PostgreSQL server. Write the migrations again.
 dialect: sqlite

@@ -13,8 +13,8 @@ import (
 // The key is a UUID of version 7, which drel stamps at Add, so the identifier
 // stands before the commit and the answer of a handler can carry it.
 //
-// A db tag names the column. Write a field, then run `avero generate`. Write
-// the change of the table with `avero migrate new add_a_column`.
+// A db tag names the column. Write a field. Run `avero generate`. Write the
+// change of the table with `avero migrate new add_a_column`.
 type Task struct {
 	drel.Model[uuid.UUID]
 

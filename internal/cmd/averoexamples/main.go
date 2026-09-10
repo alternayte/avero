@@ -248,8 +248,9 @@ func prove(e example) error {
 		got, gotErr := read(filepath.Join(committed, name))
 		switch {
 		case wantErr != nil:
-			return fmt.Errorf("examples: %s holds %s, and the templates write no such file\n  → Run `just examples` and commit the result",
+			message := fmt.Sprintf("examples: %s holds %s, and the templates write no such file\n  → Run `just examples`. Commit the result.",
 				committed, name)
+			return errors.New(message)
 		case gotErr != nil:
 			return fmt.Errorf("examples: %s holds no %s\n  → Run `just examples` and commit the result", committed, name)
 		case normalise(want, root) != normalise(got, "../.."):
