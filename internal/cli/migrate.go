@@ -44,7 +44,8 @@ func runMigrate(ctx context.Context, s Streams, args []string) int {
 		return withEngine(ctx, s, func(e *drel.Engine) error {
 			n, err := e.ApplyMigrations(ctx, migrations)
 			if err != nil {
-				return fmt.Errorf("avero migrate up: the migrations did not apply: %w\n  → Repair the SQL that the message names, then run the command again", err)
+				return fmt.Errorf("avero migrate up: the migrations did not apply: %w%s", err,
+					hint("Repair the SQL that the message names. Run the command again."))
 			}
 			_, _ = fmt.Fprintf(s.Out, "applied %d migrations\n", n)
 			return nil
@@ -85,7 +86,7 @@ func drelMigrate(ctx context.Context, s Streams, dir string, args []string) int 
 		if errors.As(err, &exit) {
 			return exit.ExitCode()
 		}
-		return failf(s, "avero migrate: drel did not run: %v\n  → Run `go mod tidy`, then run the command again", err)
+		return failf(s, "avero migrate: drel did not run: %v\n  → Run `go mod tidy`. Run the command again.", err)
 	}
 	return 0
 }
@@ -98,7 +99,7 @@ func withEngine(_ context.Context, s Streams, fn func(e *drel.Engine) error) int
 	}
 	e, err := drel.NewEngine(dsn)
 	if err != nil {
-		return failf(s, "avero migrate: the database does not open: %v\n  → Prove DATABASE_URL, and start the database", err)
+		return failf(s, "avero migrate: the database does not open: %v\n  → Prove DATABASE_URL. Start the database.", err)
 	}
 	defer e.Close()
 	return fail(s, fn(e))
@@ -181,8 +182,8 @@ func down(ctx context.Context, s Streams, e *drel.Engine, dir string) error {
 		}
 		body, readErr := os.ReadFile(migrations.File(dir, m, "down"))
 		if readErr != nil {
-			return fmt.Errorf("avero migrate down: the down file of %s is absent\n  → Write %s_%s.down.sql, then run the command again",
-				m.Version, m.Version, m.Name)
+			return fmt.Errorf("avero migrate down: the down file of %s is absent%s", m.Version,
+				hint(fmt.Sprintf("Write %s_%s.down.sql. Run the command again.", m.Version, m.Name)))
 		}
 		err := e.WithTx(ctx, func(ctx context.Context) error {
 			tx := drel.MustFromContext(ctx)
@@ -193,7 +194,8 @@ func down(ctx context.Context, s Streams, e *drel.Engine, dir string) error {
 			return err
 		})
 		if err != nil {
-			return fmt.Errorf("avero migrate down: %s did not reverse: %w\n  → Repair the SQL of the down file, then run the command again", m.Version, err)
+			return fmt.Errorf("avero migrate down: %s did not reverse: %w%s", m.Version, err,
+				hint("Repair the SQL of the down file. Run the command again."))
 		}
 		_, _ = fmt.Fprintf(s.Out, "reversed %s_%s\n", m.Version, m.Name)
 		return nil

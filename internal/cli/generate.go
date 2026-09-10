@@ -74,8 +74,8 @@ func Drel(ctx context.Context, dir string) error {
 	}
 	out, err := goCommand(ctx, dir, "tool", "drel", "generate")
 	if err != nil {
-		return fmt.Errorf("avero generate: drel failed\n%s\n  → Repair the model that the message names, then run the command again",
-			strings.TrimSpace(out))
+		return fmt.Errorf("avero generate: drel failed\n%s%s", strings.TrimSpace(out),
+			hint("Repair the model that the message names. Run the command again."))
 	}
 	return nil
 }
@@ -90,8 +90,8 @@ func Templ(ctx context.Context, dir string) error {
 	}
 	out, err := goCommand(ctx, dir, "tool", "templ", "generate")
 	if err != nil {
-		return fmt.Errorf("avero generate: templ failed\n%s\n  → Repair the .templ file that the message names, then run the command again",
-			strings.TrimSpace(out))
+		return fmt.Errorf("avero generate: templ failed\n%s%s", strings.TrimSpace(out),
+			hint("Repair the .templ file that the message names. Run the command again."))
 	}
 	return nil
 }
@@ -143,7 +143,7 @@ func runBuild(ctx context.Context, s Streams, args []string) int {
 	}
 	out, goErr := goCommand(ctx, dir, "build", "-o", "bin/"+project.Name, ".")
 	if goErr != nil {
-		return failf(s, "avero build: the compiler failed\n%s\n  → Repair the fault that the compiler names, then run `avero build` again", strings.TrimSpace(out))
+		return failf(s, "avero build: the compiler failed\n%s\n  → Repair the fault that the compiler names. Run `avero build` again.", strings.TrimSpace(out))
 	}
 	_, _ = fmt.Fprintf(s.Out, "binary: bin/%s\n", project.Name)
 	return 0
@@ -197,8 +197,9 @@ func Describe(ctx context.Context, dir string, project *Project, s Streams) erro
 		return err
 	}
 	if result.Code != 0 {
-		return fmt.Errorf("avero build: the description of the API does not write\n%s\n  → Repair the fault that the message names, then run the command again",
-			strings.TrimSpace(result.Stderr))
+		return fmt.Errorf("avero build: the description of the API does not write\n%s%s",
+			strings.TrimSpace(result.Stderr),
+			hint("Repair the fault that the message names. Run the command again."))
 	}
 	doc, err := openapi.Parse([]byte(result.Stdout))
 	if err != nil {
@@ -214,8 +215,9 @@ func Describe(ctx context.Context, dir string, project *Project, s Streams) erro
 	cmd.Dir = front
 	cmd.Env = os.Environ()
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("avero build: the client of the front end does not generate\n%s\n  → Repair the fault that the message names, then run the command again",
-			strings.TrimSpace(string(out)))
+		return fmt.Errorf("avero build: the client of the front end does not generate\n%s%s",
+			strings.TrimSpace(string(out)),
+			hint("Repair the fault that the message names. Run the command again."))
 	}
 	return nil
 }
@@ -248,8 +250,9 @@ func Install(ctx context.Context, dir string, project *Project, s Streams) error
 	cmd.Dir = front
 	cmd.Env = os.Environ()
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("avero build: npm install failed in %s\n%s\n  → Install Node.js, which the spa shape needs, then run the command again",
-			project.Assets.Dir, strings.TrimSpace(string(out)))
+		return fmt.Errorf("avero build: npm install failed in %s\n%s%s",
+			project.Assets.Dir, strings.TrimSpace(string(out)),
+			hint("Install Node.js, which the spa shape needs. Run the command again."))
 	}
 	return nil
 }

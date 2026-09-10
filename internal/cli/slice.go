@@ -30,7 +30,7 @@ func runSlice(ctx context.Context, s Streams, args []string) int {
 	if !registered {
 		_, _ = fmt.Fprintf(s.Out, "\nRegister the module in wire.go:\n\n\tmodules := avero.Modules(%s.New(engine))\n", packageOf(args[0]))
 	}
-	_, _ = fmt.Fprintf(s.Out, "\nRun `avero migrate up`, then `avero verify`.\n")
+	_, _ = fmt.Fprintf(s.Out, "\nRun `avero migrate up`. Run `avero verify`.\n")
 	return 0
 }
 

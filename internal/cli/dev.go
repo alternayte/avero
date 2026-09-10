@@ -167,7 +167,8 @@ func newProcess(cmd *exec.Cmd) *process {
 	p := &process{cmd: cmd, exited: make(chan error, 1)}
 	go func() {
 		err := cmd.Wait()
-		p.exited <- fmt.Errorf("avero dev: the application ended: %w\n  → Read the output above, then repair the fault that it names", err)
+		p.exited <- fmt.Errorf("avero dev: the application ended: %w%s", err,
+			hint("Read the output above. Repair the fault that it names."))
 	}()
 	return p
 }
