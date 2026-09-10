@@ -9,9 +9,9 @@ import (
 
 // main starts the application and returns the exit code of the process.
 //
-// Serve runs the sequence of the host: it answers an inspection command, it
-// loads the configuration, it opens the database, it builds the router, it
-// registers the boot checks and the migrator, and it serves until a signal.
+// Serve runs the sequence of the host. It answers an inspection command,
+// loads the configuration, and opens the database. It builds the router and
+// registers the boot checks and the migrator, then serves until a signal.
 // Read the doc comment of avero.Serve for the long form.
 func main() {
 	os.Exit(avero.Serve(avero.Service[Config]{

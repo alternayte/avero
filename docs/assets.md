@@ -124,7 +124,10 @@ handler serves the files that the manifest names and nothing else, with a
 cache of one year.
 
 An application that mounts the handler at another path calls
-`avero.LoadManifest` and `avero.AssetHandler` itself.
+`avero.LoadManifest` and `avero.AssetHandler` itself. A single page
+application mounts `assets.SPA` at the root, because it must answer a deep
+link and a reload with the index document. `avero.MountAssets` serves only
+the files the manifest lists.
 
 ## The configuration
 

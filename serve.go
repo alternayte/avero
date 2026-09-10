@@ -34,11 +34,19 @@ type Service[C Configurer] struct {
 	// starts an application with no database.
 	DSN func(cfg C) string
 	// DSNEnv names the variable that `avero doctor` reads for the database
-	// address. An empty value reads DATABASE_URL.
+	// address. An empty value reads DATABASE_URL. `avero doctor` reads the
+	// address from this variable and not from the configuration. An
+	// application that reads its address from another source gets no
+	// database check from the doctor.
 	DSNEnv string
 	// Migrations holds the migration files of each feature slice. drel
 	// merges the sets in version order. A nil value applies no migration.
 	Migrations func() []fs.FS
+	// Components builds the components of the application from the module
+	// set. Serve registers them after the handler, so a scheduled job or a
+	// message consumer starts with the application. A nil value registers
+	// none.
+	Components func(set *ModuleSet) []Component
 	// Options pass to New after the options that Serve builds, so an
 	// application can add a component or a check of its own.
 	Options []Option
@@ -51,9 +59,9 @@ type Service[C Configurer] struct {
 
 // Serve runs one Avero application and returns the exit code of the process.
 //
-// It runs the sequence of section 5.3 of the SDD: it answers an inspection
-// command, it loads the configuration, it opens the database, it builds the
-// router, it registers the boot checks and the migrator, and it runs the
+// It runs the sequence of section 5.3 of the SDD. It answers an inspection
+// command, loads the configuration, and opens the database. It builds the
+// router and registers the boot checks and the migrator. It then runs the
 // application until a signal or the end of the context.
 //
 // An application with an unusual start calls Load, New and Run itself. Serve
@@ -118,7 +126,9 @@ func Serve[C Configurer](s Service[C]) int {
 	if err != nil {
 		return Exit(errOut, err)
 	}
-	_ = modules
+	// The module set carries the jobs, the message handlers and the
+	// projections. Serve does not start them yet. Components is the seam
+	// for an application that must.
 
 	// The boot checks read the engine that the application already opened,
 	// so a start opens one connection pool and no more. See DX-8.
@@ -133,6 +143,11 @@ func Serve[C Configurer](s Service[C]) int {
 	opts := []Option{WithHandler(handler), WithChecks(checks...)}
 	if engine != nil && s.Migrations != nil {
 		opts = append(opts, WithMigrator(fsMigrator{engine: engine, sets: s.Migrations}))
+	}
+	if s.Components != nil {
+		if cs := s.Components(modules); len(cs) > 0 {
+			opts = append(opts, WithComponents(cs...))
+		}
 	}
 	opts = append(opts, s.Options...)
 

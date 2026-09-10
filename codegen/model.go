@@ -107,18 +107,31 @@ func scanModels(fset *token.FileSet, files []*ast.File) []model {
 }
 
 // readTable records the table of a meta value, such as
-// `var PostMeta = drel.ModelMeta[Post]{Table: "posts"}`.
+// `var PostMeta = drel.ModelMeta[Post]{Table: "posts"}`. A meta value with
+// two type parameters parses as an IndexListExpr. readTable reads the first
+// index of either node type as the type name.
 func readTable(s *ast.ValueSpec, tables map[string]string) {
 	for _, value := range s.Values {
 		lit, ok := value.(*ast.CompositeLit)
 		if !ok {
 			continue
 		}
-		index, ok := lit.Type.(*ast.IndexExpr)
-		if !ok || !isSelectorNamed(index.X, "ModelMeta") {
+		var x, first ast.Expr
+		switch idx := lit.Type.(type) {
+		case *ast.IndexExpr:
+			x, first = idx.X, idx.Index
+		case *ast.IndexListExpr:
+			if len(idx.Indices) == 0 {
+				continue
+			}
+			x, first = idx.X, idx.Indices[0]
+		default:
 			continue
 		}
-		name, ok := index.Index.(*ast.Ident)
+		if !isSelectorNamed(x, "ModelMeta") {
+			continue
+		}
+		name, ok := first.(*ast.Ident)
 		if !ok {
 			continue
 		}
