@@ -112,3 +112,14 @@ type SummaryModule interface {
 	// Summaries returns the summary of each handler.
 	Summaries() map[string]string
 }
+
+// ModelModule states the persistent models of one module.
+//
+// `avero generate` reads the model package of the feature slice and writes
+// the method, so a person states each field one time. The module system
+// merges the result into the description that an agent reads. See AN-3.
+type ModelModule interface {
+	Module
+	// Models returns the persistent models of the module.
+	Models() []ModelDesc
+}

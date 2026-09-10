@@ -137,6 +137,11 @@ func (s *Set) inspect(i int, m Module, names map[string]bool) {
 			row.Migrations = true
 		}
 	}
+	var models []ModelDesc
+	if h, ok := m.(ModelModule); ok {
+		row.Interfaces = append(row.Interfaces, "ModelModule")
+		models = h.Models()
+	}
 	if h, ok := m.(DescribeModule); ok {
 		row.Interfaces = append(row.Interfaces, "DescribeModule")
 		d := h.Describe()
@@ -146,9 +151,14 @@ func (s *Set) inspect(i int, m Module, names map[string]bool) {
 		if d.Routes == nil {
 			d.Routes = row.Routes
 		}
+		// A hand-written description that states no model takes the models
+		// of the generator, so the two never disagree.
+		if d.Models == nil {
+			d.Models = models
+		}
 		row.Description = &d
 	} else {
-		row.Description = describe(row, types)
+		row.Description = describe(row, types, models)
 	}
 	sort.Strings(row.Interfaces)
 	row.Description.normalise()
@@ -180,10 +190,11 @@ func (s *Set) readRoutes(name string, probe *router.Router, row *Contribution) {
 
 // describe builds the description of a module that implements no
 // DescribeModule. It states what the inspection found.
-func describe(row Contribution, types []string) *Description {
+func describe(row Contribution, types []string, models []ModelDesc) *Description {
 	return &Description{
 		Name:        row.Module,
 		Routes:      row.Routes,
+		Models:      models,
 		Projections: row.Projections,
 		InboxTypes:  types,
 	}

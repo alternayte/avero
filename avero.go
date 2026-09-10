@@ -453,6 +453,9 @@ type (
 	MigrationModule = module.MigrationModule
 	// DescribeModule states the description that an agent reads.
 	DescribeModule = module.DescribeModule
+	// ModelModule states the persistent models of a module. `avero generate`
+	// writes the method.
+	ModelModule = module.ModelModule
 	// Description states what one module contributes. See AN-3.
 	Description = module.Description
 	// RouteDesc is one route of a module.
