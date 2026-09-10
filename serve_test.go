@@ -131,6 +131,45 @@ func TestServeRunsWithADatabaseAndStops(t *testing.T) {
 	}
 }
 
+// Serve registers MigrationCheckOnFS when MIGRATE_ON_BOOT is false, and the
+// check passes on a database with no pending migration.
+func TestServeRunsWithAMigrationCheckAndStops(t *testing.T) {
+	t.Setenv("AVERO_SECRET", strings.Repeat("a", 64))
+	dsn := filepath.Join(t.TempDir(), "serve.db")
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen returned an error: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan int, 1)
+	go func() {
+		done <- avero.Serve(avero.Service[serveConfig]{
+			Args:       nil,
+			Wire:       serveWire,
+			DSN:        func(serveConfig) string { return dsn },
+			Migrations: func() []fs.FS { return []fs.FS{} },
+			Ctx:        ctx,
+			Out:        io.Discard,
+			Err:        io.Discard,
+			Options:    []avero.Option{avero.WithoutSignals(), avero.WithListener(ln)},
+		})
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+
+	select {
+	case code := <-done:
+		if code != 0 {
+			t.Fatalf("the run returned the code %d", code)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the run did not stop")
+	}
+}
+
 // Serve starts the application, serves the handler and stops on the end of
 // the context.
 func TestServeRunsAndStops(t *testing.T) {
