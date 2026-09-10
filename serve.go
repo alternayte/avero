@@ -35,9 +35,6 @@ type Service[C Configurer] struct {
 	// DSN reads the database address from the configuration. A nil value
 	// starts an application with no database.
 	DSN func(cfg C) string
-	// Migrations holds the migration files of each feature slice. drel
-	// merges the sets in version order. A nil value applies no migration.
-	Migrations func() []fs.FS
 	// Options pass to New after the options that Serve builds, so an
 	// application can add a component or a check of its own.
 	Options []Option
@@ -60,10 +57,9 @@ type Service[C Configurer] struct {
 //
 //	func main() {
 //	    os.Exit(avero.Serve(avero.Service[Config]{
-//	        Args:       os.Args[1:],
-//	        Wire:       wire,
-//	        DSN:        func(c Config) string { return c.DatabaseURL },
-//	        Migrations: migrationSets,
+//	        Args: os.Args[1:],
+//	        Wire: wire,
+//	        DSN:  func(c Config) string { return c.DatabaseURL },
 //	    }))
 //	}
 func Serve[C Configurer](s Service[C]) int {
@@ -116,13 +112,17 @@ func Serve[C Configurer](s Service[C]) int {
 		return Exit(errOut, err)
 	}
 
+	// A module states its own migration files. The module set merges them
+	// in registration order, so an application keeps one list and not two.
+	sets := w.Modules.Migrations()
+
 	// The boot checks read the engine that the application already opened,
 	// so a start opens one connection pool and no more. See DX-8.
 	checks := []Check{SecretCheck(base.Secret)}
 	if engine != nil {
 		checks = append(checks, DatabaseCheckOn(engine))
-		if !base.MigrateOnBoot && s.Migrations != nil {
-			checks = append(checks, MigrationCheckOnFS(engine, s.Migrations()...))
+		if !base.MigrateOnBoot && len(sets) > 0 {
+			checks = append(checks, MigrationCheckOnFS(engine, sets...))
 		}
 	}
 	// The checks of the application run after the checks of Avero, so the
@@ -130,8 +130,8 @@ func Serve[C Configurer](s Service[C]) int {
 	checks = append(checks, w.Checks...)
 
 	opts := []Option{WithHandler(handler), WithChecks(checks...)}
-	if engine != nil && s.Migrations != nil {
-		opts = append(opts, WithMigrator(fsMigrator{engine: engine, sets: s.Migrations}))
+	if engine != nil && len(sets) > 0 {
+		opts = append(opts, WithMigrator(fsMigrator{engine: engine, sets: sets}))
 	}
 	if len(w.Components) > 0 {
 		opts = append(opts, WithComponents(w.Components...))
@@ -193,24 +193,24 @@ func (s Service[C]) doctorChecks(cfg C, w *Wiring) []Check {
 		return w.Checks
 	}
 	checks := []Check{DatabaseCheck(dsn)}
-	if s.Migrations != nil {
-		checks = append(checks, MigrationCheckFS(dsn, s.Migrations()...))
+	if sets := w.Modules.Migrations(); len(sets) > 0 {
+		checks = append(checks, MigrationCheckFS(dsn, sets...))
 	}
 	return append(checks, w.Checks...)
 }
 
 // fsMigrator applies the pending migrations when MIGRATE_ON_BOOT is true.
 //
-// Each feature slice embeds its own migrations, and drel merges the sets in
+// Each feature slice carries its own migrations, and drel merges the sets in
 // version order. The files come from the binary, so one artifact carries the
 // server and the schema.
 type fsMigrator struct {
 	engine *drel.Engine
-	sets   func() []fs.FS
+	sets   []fs.FS
 }
 
 // Migrate applies every migration that the database does not hold.
 func (m fsMigrator) Migrate(ctx context.Context) error {
-	_, err := m.engine.ApplyMigrationsFS(ctx, m.sets()...)
+	_, err := m.engine.ApplyMigrationsFS(ctx, m.sets...)
 	return err
 }
