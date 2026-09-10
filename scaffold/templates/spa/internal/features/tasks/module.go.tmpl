@@ -1,5 +1,9 @@
 // Package tasks holds the tasks feature of the JSON API that the front end
 // calls. It imports no other feature.
+//
+// The description of this module needs no hand-written method. `avero
+// generate` writes the models from the model package, and the module system
+// reads the routes from the Routes method. See AN-3.
 package tasks
 
 import (
@@ -23,9 +27,6 @@ func New(engine *drel.Engine) *Module { return &Module{store: NewStore(engine)} 
 // Name identifies the module in the contribution table.
 func (m *Module) Name() string { return "tasks" }
 
-// The description of this module needs no hand-written method. `avero
-// generate` writes the models from the model package, and the module system
-// reads the routes from this method. See AN-3.
 // Routes registers the JSON routes that the front end calls.
 //
 // The registration reads the type of the input and the type of the answer from
