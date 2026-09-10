@@ -30,15 +30,21 @@ func (l Loader) lookup(name string) (string, bool) {
 }
 
 // Load reads the process environment into a new T. It returns a *FaultList
-// when T holds a fault. Call Exit to print the faults and to get the exit code.
+// when T holds a fault, and a nil value beside it. Call Exit to print the
+// faults and to get the exit code.
 func Load[T any](ctx context.Context) (*T, error) {
 	cfg, _, err := LoadFrom[T](ctx, Loader{})
-	return cfg, err
+	if err != nil {
+		return nil, err
+	}
+	return cfg, nil
 }
 
 // LoadFrom reads l into a new T and returns a report of every field. It
-// returns a *FaultList when T holds a fault. The report is complete for a
-// successful load. It is nil for a fault.
+// returns a *FaultList when T holds a fault, together with the value the
+// loader already filled and the report of every field it read before the
+// fault. A caller such as `avero doctor` reads the value that did load
+// beside the fault that did not.
 func LoadFrom[T any](ctx context.Context, l Loader) (*T, *Report, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
@@ -54,10 +60,11 @@ func LoadFrom[T any](ctx context.Context, l Loader) (*T, *Report, error) {
 	}
 	w.walk(reflect.ValueOf(cfg).Elem(), "", "")
 	if err := w.faults.err(); err != nil {
-		// The report goes back with the faults. `avero doctor` prints the
-		// whole table even when a variable is absent. See DX-8.
+		// The report and the value go back with the faults. `avero doctor`
+		// prints the whole table and proves the parts that did load, even
+		// when a variable is absent. See DX-8.
 		w.faults.Report = w.report
-		return nil, w.report, err
+		return cfg, w.report, err
 	}
 	return cfg, w.report, nil
 }

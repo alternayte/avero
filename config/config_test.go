@@ -429,3 +429,36 @@ func TestARequiredVariableWithAnEmptyValueIsAFault(t *testing.T) {
 		t.Fatal("the fault states no repair")
 	}
 }
+
+// A fault must not discard the field that did load. `avero doctor` proves
+// the parts of the configuration that work, beside the fault that does not.
+// See DX-8.
+func TestLoadFromReturnsThePartialValueOnAFault(t *testing.T) {
+	type Two struct {
+		Name string `env:"NAME,required"`
+		Port int    `env:"PORT" default:"5432"`
+	}
+	cfg, _, err := config.LoadFrom[Two](context.Background(), env(map[string]string{}))
+	if err == nil {
+		t.Fatal("LoadFrom accepted a Two with no NAME")
+	}
+	if cfg == nil {
+		t.Fatal("LoadFrom returned no value alongside the fault")
+	}
+	if cfg.Port != 5432 {
+		t.Fatalf("Port = %d, want the default 5432", cfg.Port)
+	}
+}
+
+// Load keeps its own contract: a caller of Load gets a nil pointer on a
+// fault, whether or not LoadFrom fills part of the value.
+func TestLoadReturnsNilOnAFault(t *testing.T) {
+	t.Setenv("AVERO_SECRET", "")
+	cfg, err := config.Load[config.BaseConfig](context.Background())
+	if err == nil {
+		t.Fatal("Load accepted a BaseConfig with no AVERO_SECRET")
+	}
+	if cfg != nil {
+		t.Fatalf("Load returned %+v, want nil", cfg)
+	}
+}
