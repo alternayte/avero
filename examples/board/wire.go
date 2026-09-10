@@ -9,7 +9,6 @@ import (
 	"github.com/alternayte/drel"
 
 	"board/internal/features/tasks"
-	taskmigrations "board/internal/features/tasks/migrations"
 )
 
 // dist holds the build of the front end. Vite writes it, and the compiler puts
@@ -22,7 +21,7 @@ var dist embed.FS
 //
 // An inspection command passes a nil engine and a zero configuration, because
 // a route registration touches no database and needs no key.
-func wire(engine *drel.Engine, cfg Config) (*avero.Router, *avero.ModuleSet, error) {
+func wire(engine *drel.Engine, cfg Config) (*avero.Wiring, error) {
 	r := avero.NewRouter()
 	// Stack states the order of the chain one time. API leaves the flash
 	// cookie and the CSRF token out, because a JSON client needs neither. A
@@ -31,22 +30,18 @@ func wire(engine *drel.Engine, cfg Config) (*avero.Router, *avero.ModuleSet, err
 
 	modules := avero.Modules(tasks.New(engine))
 	if err := modules.Attach(r); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// The front end owns every path that no route holds. It reads the path
 	// itself, so a deep link and a reload reach the same document.
 	files, err := fs.Sub(dist, "assets/dist")
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	r.Mount("/", assets.SPA(files))
 
-	return r, modules, nil
-}
-
-// migrationSets holds the migrations of each feature slice. drel merges them
-// in version order, and the binary carries them. See drel.yaml.
-func migrationSets() []fs.FS {
-	return []fs.FS{taskmigrations.FS}
+	// Wiring states what this application is. Add a dependency of your own
+	// with a lifecycle in Components, and its boot check in Checks.
+	return &avero.Wiring{Router: r, Modules: modules}, nil
 }

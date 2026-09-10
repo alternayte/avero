@@ -2,14 +2,12 @@ package main
 
 import (
 	"embed"
-	"io/fs"
 	"strings"
 
 	"github.com/alternayte/avero"
 	"github.com/alternayte/drel"
 
 	"blog/internal/features/posts"
-	postmigrations "blog/internal/features/posts/migrations"
 	"blog/internal/ui"
 )
 
@@ -23,7 +21,7 @@ var dist embed.FS
 //
 // An inspection command passes a nil engine and a zero configuration, because
 // a route registration touches no database and needs no key.
-func wire(engine *drel.Engine, cfg Config) (*avero.Router, *avero.ModuleSet, error) {
+func wire(engine *drel.Engine, cfg Config) (*avero.Wiring, error) {
 	r := avero.NewRouter(avero.WithForm(func(c *avero.Ctx, f *avero.Fields) avero.ViewComponent {
 		// The form failed validation. The page renders again with the old
 		// input and the field errors. See S10.
@@ -46,19 +44,15 @@ func wire(engine *drel.Engine, cfg Config) (*avero.Router, *avero.ModuleSet, err
 	// The binary carries them, so the server needs no directory beside it.
 	manifest, err := avero.MountAssets(r, dist, "assets/dist")
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	ui.SetManifest(manifest)
 
 	modules := avero.Modules(posts.New(engine))
 	if err := modules.Attach(r); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return r, modules, nil
-}
-
-// migrationSets holds the migrations of each feature slice. drel merges them
-// in version order, and the binary carries them. See drel.yaml.
-func migrationSets() []fs.FS {
-	return []fs.FS{postmigrations.FS}
+	// Wiring states what this application is. Add a dependency of your own
+	// with a lifecycle in Components, and its boot check in Checks.
+	return &avero.Wiring{Router: r, Modules: modules}, nil
 }

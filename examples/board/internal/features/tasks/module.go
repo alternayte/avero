@@ -7,10 +7,13 @@
 package tasks
 
 import (
+	"io/fs"
 	"net/http"
 
 	"github.com/alternayte/avero"
 	"github.com/alternayte/drel"
+
+	"board/internal/features/tasks/migrations"
 )
 
 //go:generate go run github.com/alternayte/avero/internal/cmd/averogen .
@@ -39,3 +42,7 @@ func (m *Module) Routes(r *avero.Router) {
 		avero.Answers[avero.Problem](http.StatusNotFound, "the task does not exist"))
 	avero.Delete(r, "/api/tasks/{id}", m.Delete)
 }
+
+// Migrations returns the migration files of this feature. The module set
+// merges the sets of every module, and drel applies them in version order.
+func (m *Module) Migrations() fs.FS { return migrations.FS }
