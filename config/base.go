@@ -33,6 +33,13 @@ type BaseConfig struct {
 	OTel OTelConfig `env:"OTEL"`
 }
 
+// Base returns the base configuration.
+//
+// The configuration of an application embeds BaseConfig, so it carries this
+// method and avero.Serve reads the port, the secret and the shutdown grace of
+// any application. An application writes no method of its own.
+func (c BaseConfig) Base() BaseConfig { return c }
+
 // OTelConfig holds the standard OTEL_* variables. The default exporter is
 // none, so an application produces no telemetry until a person asks for it.
 // See the SDD, S3.
