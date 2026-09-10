@@ -61,6 +61,9 @@ type pkg struct {
 	// Summaries holds the first sentence of the comment of each handler, by
 	// the name of its method.
 	Summaries map[string]string
+	// Models holds the persistent models of the sibling model package, in
+	// name order. It is empty for a package with no model directory.
+	Models []model
 }
 
 // scan reads the files of one package and returns the input types that its
