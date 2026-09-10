@@ -23,6 +23,10 @@ type Wiring struct {
 	Components []Component
 	// Checks are the boot checks of the application. Serve runs them before
 	// the process serves, and `avero doctor` reports them. See DX-8.
+	//
+	// A check runs before every component starts. A check that depends on a
+	// component must open its own connection and close it, and must not
+	// assume the connection that Start of that component opened.
 	Checks []Check
 }
 

@@ -62,7 +62,11 @@ app := avero.New(cfg.BaseConfig,
 `avero doctor` runs the same list and prints one row for each check. A failed
 row states the fault and the repair. `avero doctor` also loads the
 configuration and reads the database address through the `DSN` function of
-the service, so it reports the address that the application uses.
+the service. It reports the address that the application uses.
+
+A configuration with a fault still yields the values that did load, so the
+doctor can state a composed address that is incomplete. The table above names
+the absent variable in the same report.
 
 ## A secret
 

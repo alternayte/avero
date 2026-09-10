@@ -36,27 +36,28 @@ The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the chain of a JSON service, which carries no flash cookie and no CSRF token.
   The three scaffold shapes use it.
 - **`avero.Wiring`** carries the router, the module set, the components and the
-  boot checks of an application. `wire` returns it.
+  boot checks of an application. `wire` returns it, in place of
+  `Service.Migrations`, `Service.Components` and `Service.DSNEnv`, which this
+  release removes. `Wiring.Components` reaches the values that `wire` built,
+  and the module set states the migration files.
 - An application adds a dependency with a lifecycle and a boot check, and
   keeps the lean `main.go`.
 - **`avero doctor`** loads the configuration and reads the database address
-  from it.
+  from it, in place of `Service.DSNEnv`.
 
 ### Changed
 
 - A scaffolded module states no `Describe` method. The module system builds
   the description from the routes and the generated models.
 - A scaffolded application writes about 390 lines of Go in place of 532.
-- `Service.Wire` returns one `*avero.Wiring` and an error.
+- `Service.Wire` returns one `*avero.Wiring` and an error, in place of the
+  router, the migration set and the components that it returned before.
 - A scaffolded slice states its own migrations through a `Migrations` method.
   `wire.go` holds no list.
-
-### Removed
-
-- `Service.Migrations`. The module set states the migration files.
-- `Service.Components`. `Wiring.Components` replaces it and reaches the values
-  that `wire` built.
-- `Service.DSNEnv`. The doctor reads the address from the configuration.
+- **`config.LoadFrom` returns the partially filled configuration beside a
+  fault, in place of a nil pointer.** `avero doctor` therefore reports a
+  missing secret and a pending migration in one run. `config.Load` is
+  unchanged: it still returns a nil pointer on a fault.
 
 ### Fixed
 

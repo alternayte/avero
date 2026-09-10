@@ -94,6 +94,22 @@ func wire(engine *drel.Engine, cfg Config) (*avero.Wiring, error) {
 }
 ```
 
+```
+blog/
+├── main.go                   the composition root
+├── config.go                 every variable that the application reads
+├── wire.go                   the router, the middleware and the modules
+├── avero.json                the shape and the asset pipeline
+├── internal/features/posts/  one feature: routes, handlers, inputs, store
+│   ├── model/                the rows that drel reads
+│   └── migrations/           the SQL of this feature. drel writes it.
+├── internal/ui/              the templ pages. They import no feature package.
+├── drel.yaml                 the model packages and the migrations of drel
+├── assets/                   the source of the stylesheet and of the script
+├── AGENTS.md                 the rules that an agent reads
+└── .claude/skills/           one skill for each task that repeats
+```
+
 ## Add a dependency of your own
 
 Avero carries no emailer, no blob store and no cache. Build one in `wire` and
@@ -124,25 +140,14 @@ Avero starts a component before the server accepts a request. It stops the
 component after the last request drains. It runs a check before the process
 serves, and `avero doctor` reports it.
 
+Serve runs every check before it starts any component. A check that depends
+on a component, such as the mailer above, must open its own connection and
+close it. It must not assume the connection that `Start` of that component
+opened. `avero doctor` runs the checks and starts no component.
+
 A constructor must not dial, connect or read a file. `wire` also runs for an
 inspection command with a nil engine. Build the value in the constructor.
 Connect in `Start`.
-
-```
-blog/
-├── main.go                   the composition root
-├── config.go                 every variable that the application reads
-├── wire.go                   the router, the middleware and the modules
-├── avero.json                the shape and the asset pipeline
-├── internal/features/posts/  one feature: routes, handlers, inputs, store
-│   ├── model/                the rows that drel reads
-│   └── migrations/           the SQL of this feature. drel writes it.
-├── internal/ui/              the templ pages. They import no feature package.
-├── drel.yaml                 the model packages and the migrations of drel
-├── assets/                   the source of the stylesheet and of the script
-├── AGENTS.md                 the rules that an agent reads
-└── .claude/skills/           one skill for each task that repeats
-```
 
 ## Add a feature
 

@@ -185,8 +185,10 @@ func isDoctor(args []string) bool {
 
 // doctorChecks returns the boot checks that `avero doctor` runs.
 //
-// The doctor holds no engine, so each check opens its own connection and
-// closes it. The boot uses the engine of the application instead. See DX-8.
+// The doctor holds no engine. SecretCheck reads no database. DatabaseCheck
+// and MigrationCheckFS each open their own connection and close it. w.Checks
+// must do the same, by the rule that the Checks field of Wiring states. The
+// boot uses the engine of the application instead. See DX-8.
 func (s Service[C]) doctorChecks(cfg C, w *Wiring) []Check {
 	checks := []Check{SecretCheck(cfg.Base().Secret)}
 	if s.DSN == nil {
