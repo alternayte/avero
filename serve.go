@@ -154,8 +154,11 @@ func (s Service[C]) inspect(ctx context.Context, out, errOut io.Writer) int {
 	doctor := isDoctor(s.Args)
 	if doctor {
 		// A configuration that does not load does not stop the doctor.
-		// Inspect reports the fault itself.
-		if loaded, err := Load[C](ctx); err == nil {
+		// Inspect reports the fault itself. LoadFrom returns the value it
+		// already filled beside the fault, so the doctor proves the part
+		// of the configuration that did load, such as the database
+		// address, together with the variable that did not.
+		if loaded, _, _ := LoadFrom[C](ctx, Loader{}); loaded != nil {
 			cfg = *loaded
 		}
 	}

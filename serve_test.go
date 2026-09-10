@@ -450,6 +450,62 @@ func TestTheDoctorReadsTheAddressFromTheConfiguration(t *testing.T) {
 	}
 }
 
+// databaseConfig carries a variable of its own, so a test can prove that the
+// doctor reads it from the configuration and not from a fixed string.
+type databaseConfig struct {
+	avero.BaseConfig
+	DatabaseURL string `env:"DATABASE_URL"`
+}
+
+func databaseWire(_ *drel.Engine, _ databaseConfig) (*avero.Wiring, error) {
+	return &avero.Wiring{Router: avero.NewRouter(), Modules: avero.Modules()}, nil
+}
+
+// The doctor exists for a broken configuration. An absent secret must not
+// hide the database check, because the report must prove every part of the
+// configuration at the same time, and the database check reads the address
+// that the loader read, not a zero value. See DX-8.
+func TestTheDoctorReportsTheDatabaseWithAnAbsentSecret(t *testing.T) {
+	t.Setenv("AVERO_SECRET", "")
+	t.Setenv("DATABASE_URL", "file:"+filepath.Join(t.TempDir(), "doctor.db"))
+	var out strings.Builder
+	code := avero.Serve(avero.Service[databaseConfig]{
+		Args: []string{avero.InspectPrefix + "doctor"},
+		Wire: databaseWire,
+		DSN:  func(c databaseConfig) string { return c.DatabaseURL },
+		Out:  &out,
+		Err:  io.Discard,
+	})
+	if code != 1 {
+		t.Fatalf("the doctor returned the code %d, want 1", code)
+	}
+	if !strings.Contains(out.String(), "AVERO_SECRET") {
+		t.Fatalf("the doctor states no absent secret: %q", out.String())
+	}
+	if !strings.Contains(out.String(), "database") {
+		t.Fatalf("the doctor states no database check: %q", out.String())
+	}
+}
+
+// A short secret loads without a fault, but it fails the boot. The doctor
+// must report that failure by name, not just the presence of the variable.
+func TestTheDoctorReportsAShortSecret(t *testing.T) {
+	t.Setenv("AVERO_SECRET", "too-short")
+	var out strings.Builder
+	code := avero.Serve(avero.Service[serveConfig]{
+		Args: []string{avero.InspectPrefix + "doctor"},
+		Wire: serveWire,
+		Out:  &out,
+		Err:  io.Discard,
+	})
+	if code != 1 {
+		t.Fatalf("the doctor returned the code %d, want 1", code)
+	}
+	if !strings.Contains(out.String(), "the length of AVERO_SECRET") {
+		t.Fatalf("the doctor states no failed length check: %q", out.String())
+	}
+}
+
 // An inspection command that is not the doctor reads no configuration, so
 // `avero routes` works on a machine with no database. See DX-8.
 func TestTheRoutesCommandReadsNoConfiguration(t *testing.T) {
