@@ -60,7 +60,9 @@ app := avero.New(cfg.BaseConfig,
 ```
 
 `avero doctor` runs the same list and prints one row for each check. A failed
-row states the fault and the repair.
+row states the fault and the repair. `avero doctor` also loads the
+configuration and reads the database address through the `DSN` function of
+the service, so it reports the address that the application uses.
 
 ## A secret
 

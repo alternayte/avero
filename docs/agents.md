@@ -35,6 +35,11 @@ package of the feature slice and writes a `Models` method. The module system
 builds the description from the routes and the models. Run `avero schema
 --json` to read the result.
 
+A module states its own migrations through a `Migrations` method that returns
+the embedded file system of the slice. `avero.Serve` reads the migration
+files of the application from the module set, so `wire.go` holds no list of
+its own.
+
 ## The MCP server
 
 ```

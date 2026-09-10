@@ -60,6 +60,11 @@ tests of one feature. A slice imports no other slice.
    drel compares the model with its snapshot and writes the two SQL files in
    `internal/features/<name>s/migrations/`. Read them before you apply them.
 
+   The module states its own migrations through a `Migrations` method that
+   returns the embedded file system of the slice. `avero.Serve` reads the
+   migration files of the application from the module set. `wire.go` needs no
+   change for a migration.
+
 8. For a page, write the view in `internal/ui/`. The view reads the old input
    with `view.Old` and the field error with `view.Error`. `internal/ui`
    imports no feature package.

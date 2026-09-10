@@ -46,13 +46,87 @@ calls `avero.Load`, `avero.New` and `Run` itself.
 ```go
 func main() {
 	os.Exit(avero.Serve(avero.Service[Config]{
-		Args:       os.Args[1:],
-		Wire:       wire,
-		DSN:        func(c Config) string { return c.DatabaseURL },
-		Migrations: migrationSets,
+		Args: os.Args[1:],
+		Wire: wire,
+		DSN:  func(c Config) string { return c.DatabaseURL },
 	}))
 }
 ```
+
+`wire` builds the wiring of the application: the router, the module set, the
+components and the boot checks.
+
+```go
+func wire(engine *drel.Engine, cfg Config) (*avero.Wiring, error) {
+	r := avero.NewRouter(avero.WithForm(func(c *avero.Ctx, f *avero.Fields) avero.ViewComponent {
+		// The form failed validation. The page renders again with the old
+		// input and the field errors. See S10.
+		return ui.Page("New post", ui.NewPostForm())
+	}))
+
+	// An inspection command carries a zero configuration. The router only
+	// records the middleware there, so a fixed value keeps the chain of an
+	// inspection identical to the chain of a run.
+	secret := cfg.Secret
+	if secret == "" {
+		secret = avero.Secret(strings.Repeat("0", 64))
+	}
+	// Stack states the order of the chain one time. A nil engine leaves the
+	// transaction out. Add the session and the authentication of auth-all in
+	// the Session and Auth fields, and Stack puts them in the correct place.
+	r.Use(avero.Stack{Secret: secret, Engine: engine}.Middleware()...)
+
+	// MountAssets reads the manifest and serves the built files at /assets/.
+	// The binary carries them, so the server needs no directory beside it.
+	manifest, err := avero.MountAssets(r, dist, "assets/dist")
+	if err != nil {
+		return nil, err
+	}
+	ui.SetManifest(manifest)
+
+	modules := avero.Modules(posts.New(engine))
+	if err := modules.Attach(r); err != nil {
+		return nil, err
+	}
+	// Wiring states what this application is. Add a dependency of your own
+	// with a lifecycle in Components, and its boot check in Checks.
+	return &avero.Wiring{Router: r, Modules: modules}, nil
+}
+```
+
+## Add a dependency of your own
+
+Avero carries no emailer, no blob store and no cache. Build one in `wire` and
+state it in the wiring.
+
+```go
+func wire(engine *drel.Engine, cfg Config) (*avero.Wiring, error) {
+	r := avero.NewRouter()
+	r.Use(avero.Stack{Secret: cfg.Secret, Engine: engine}.Middleware()...)
+
+	mailer := smtp.New(cfg.SMTPURL)
+
+	modules := avero.Modules(posts.New(engine, mailer))
+	if err := modules.Attach(r); err != nil {
+		return nil, err
+	}
+
+	return &avero.Wiring{
+		Router:     r,
+		Modules:    modules,
+		Components: []avero.Component{mailer},
+		Checks:     []avero.Check{mailer.Check()},
+	}, nil
+}
+```
+
+Avero starts a component before the server accepts a request. It stops the
+component after the last request drains. It runs a check before the process
+serves, and `avero doctor` reports it.
+
+A constructor must not dial, connect or read a file. `wire` also runs for an
+inspection command with a nil engine. Build the value in the constructor.
+Connect in `Start`.
 
 ```
 blog/
