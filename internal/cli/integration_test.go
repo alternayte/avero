@@ -564,8 +564,10 @@ func TestTheGeneratedModulesHoldARepository(t *testing.T) {
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/alternayte/avero"
 	"github.com/alternayte/drel"
 
 	"orders/internal/db"
@@ -580,7 +582,13 @@ func TestTheModuleHolderReads(t *testing.T) {
 		t.Fatalf("the database does not open: %v", err)
 	}
 	defer handle.Close()
-	if _, err := handle.ApplyMigrationsFS(context.Background(), migrationSets()...); err != nil {
+	cfg := Config{}
+	cfg.Secret = avero.Secret(strings.Repeat("k", 64))
+	w, err := wire(handle.Engine, cfg)
+	if err != nil {
+		t.Fatalf("the wiring failed: %v", err)
+	}
+	if _, err := handle.ApplyMigrationsFS(context.Background(), w.Modules.Migrations()...); err != nil {
 		t.Fatalf("the migrations do not apply: %v", err)
 	}
 

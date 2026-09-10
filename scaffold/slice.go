@@ -234,37 +234,6 @@ func ModulePath(dir string) (string, error) {
 		"Write the module line in go.mod, such as `module blog`")
 }
 
-// addMigrationSet adds the migrations of one slice to migrationSets in
-// wire.go. The binary then carries the table of the new feature.
-//
-// It changes nothing when the function is absent, so a wiring that a person
-// wrote by hand stays as it is.
-func addMigrationSet(source, module, pkg string) string {
-	const marker = "return []fs.FS{"
-	i := strings.Index(source, marker)
-	if i < 0 {
-		return source
-	}
-	alias := strings.TrimSuffix(pkg, "s") + "migrations"
-	if strings.Contains(source, alias+" \"") {
-		return source
-	}
-	at := i + len(marker)
-	source = source[:at] + alias + ".FS, " + source[at:]
-
-	importLine := "\t" + alias + " \"" + module + "/internal/features/" + pkg + "/migrations\""
-	k := strings.LastIndex(source, "\t\""+module+"/internal/features/")
-	if k < 0 {
-		return source
-	}
-	end := strings.Index(source[k:], "\n")
-	if end < 0 {
-		return source
-	}
-	end += k + 1
-	return source[:end] + importLine + "\n" + source[end:]
-}
-
 // upper returns the name with the first letter in upper case.
 func upper(name string) string {
 	if name == "" {
@@ -308,7 +277,6 @@ func RegisterSlice(dir, module, pkg string) (bool, error) {
 
 	j := strings.Index(source, call)
 	source = source[:j+len(call)] + pkg + ".New(engine), " + source[j+len(call):]
-	source = addMigrationSet(source, module, pkg)
 
 	// The file must read as gofmt writes it, so the import block sorts again.
 	out, err := format.Source([]byte(source))

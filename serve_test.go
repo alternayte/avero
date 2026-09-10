@@ -136,7 +136,31 @@ func TestServeRunsWithADatabaseAndStops(t *testing.T) {
 // check passes on a database with no pending migration.
 func TestServeRunsWithAMigrationCheckAndStops(t *testing.T) {
 	t.Setenv("AVERO_SECRET", strings.Repeat("a", 64))
-	dsn := filepath.Join(t.TempDir(), "serve.db")
+	dsn := "file:" + filepath.Join(t.TempDir(), "serve.db")
+
+	files := fstest.MapFS{
+		"0001_widgets.up.sql": &fstest.MapFile{
+			Data: []byte("CREATE TABLE widgets (id TEXT PRIMARY KEY);"),
+		},
+	}
+	wire := func(*drel.Engine, serveConfig) (*avero.Wiring, error) {
+		r := avero.NewRouter()
+		r.Get("/{$}", func(_ *avero.Ctx) (avero.Response, error) {
+			return avero.Text(http.StatusOK, "ready"), nil
+		})
+		return &avero.Wiring{Router: r, Modules: avero.Modules(migrating{files: files})}, nil
+	}
+
+	// The check must find no pending migration, so apply the set before
+	// Serve runs. MIGRATE_ON_BOOT stays false, so Serve does not migrate.
+	engine, err := drel.NewEngine(dsn)
+	if err != nil {
+		t.Fatalf("the database does not open: %v", err)
+	}
+	if _, err := engine.ApplyMigrationsFS(context.Background(), files); err != nil {
+		t.Fatalf("the migrations do not apply: %v", err)
+	}
+	engine.Close()
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -148,7 +172,7 @@ func TestServeRunsWithAMigrationCheckAndStops(t *testing.T) {
 	go func() {
 		done <- avero.Serve(avero.Service[serveConfig]{
 			Args:    nil,
-			Wire:    serveWire,
+			Wire:    wire,
 			DSN:     func(serveConfig) string { return dsn },
 			Ctx:     ctx,
 			Out:     io.Discard,
