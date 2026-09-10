@@ -176,20 +176,12 @@ func (w *Wiring) validate() error {
 Run: `go test . -race -run TestTheWiring -v`
 Expected: PASS
 
-- [ ] **Step 5: Add the alias**
+- [ ] **Step 5: Change the Wire field**
 
-In `avero.go`, in the block of module type aliases, add:
+`Wiring` lives in the root package already, so `avero.go` needs no alias for
+it. Add none.
 
-```go
-	// Wiring is what wire builds. See wiring.go.
-	Wiring = Wiring
-```
 
-**Note:** `Wiring` lives in this package already, so it needs no alias. Skip
-this step and delete nothing. It is stated here only so a reader of the plan
-does not add one.
-
-- [ ] **Step 6: Change the Wire field**
 
 In `serve.go`, change the `Wire` field of `Service`:
 
@@ -202,7 +194,7 @@ In `serve.go`, change the `Wire` field of `Service`:
 
 Delete the `Components` field of `Service`. `Wiring.Components` replaces it.
 
-- [ ] **Step 7: Change Serve to read the wiring**
+- [ ] **Step 6: Change Serve to read the wiring**
 
 In `serve.go`, in the run path of `Serve`, replace the three lines that call
 `s.Wire` and build the handler with:
@@ -239,7 +231,7 @@ In the inspect path, replace the call with:
 Delete the block that reads `s.Components`. Task 2 puts the components back
 through the wiring.
 
-- [ ] **Step 8: Change the tests to the new shape**
+- [ ] **Step 7: Change the tests to the new shape**
 
 In `serve_test.go`, change `serveWire` and every other wire function:
 
@@ -281,7 +273,7 @@ func TestServeStopsOnAWiringFault(t *testing.T) {
 }
 ```
 
-- [ ] **Step 9: Run the whole unit gate**
+- [ ] **Step 8: Run the whole unit gate**
 
 Run: `gofmt -l . && go vet ./... && golangci-lint run && go test . ./module ./config -race -count=1`
 Expected: no output from `gofmt`, and PASS from the tests.
@@ -290,7 +282,7 @@ The examples do not build yet, because their `wire` still returns three
 values. Task 5 repairs them. Do not run `just verify` in this task, and do not
 run `go build ./...` over the examples.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add wiring.go wiring_test.go serve.go serve_test.go
@@ -765,22 +757,23 @@ func TestServeAppliesTheMigrationsOfAModule(t *testing.T) {
 		t.Fatal("the run did not stop")
 	}
 
-	// The table exists, so the migrator read the set of the module.
+	// No migration is pending, so the migrator read the set of the module
+	// and applied it. MigrationCheckOnFS states the same fact that the boot
+	// check states, so the test needs no raw query.
 	engine, err := drel.NewEngine(dsn)
 	if err != nil {
 		t.Fatalf("the database does not open: %v", err)
 	}
 	defer engine.Close()
-	if err := proveTheTableExists(context.Background(), engine, "widgets"); err != nil {
-		t.Fatalf("the migration did not apply: %v", err)
+	check := avero.MigrationCheckOnFS(engine, files)
+	if err := check.Run(context.Background()); err != nil {
+		t.Fatalf("a migration is still pending: %v", err)
 	}
 }
 ```
 
-**Note:** `proveTheTableExists` does not exist. Read the drel API and write the
-smallest helper that proves the table is present, such as a query of
-`sqlite_master`. Put it beside the test. If drel states no way to run a raw
-query, prove the migration another way and say what you did in your report.
+**Note:** read the `Check` type in `host/component.go` before you write this.
+It holds `Name`, `Repair` and `Run`. Call the `Run` field.
 
 Add the imports `io/fs`, `testing/fstest`, `net` and `path/filepath` if they
 are absent.
