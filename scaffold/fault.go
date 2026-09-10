@@ -13,13 +13,31 @@ type Fault struct {
 	Message string `json:"message"`
 	// Repair states what to do. It is one sentence.
 	Repair string `json:"repair"`
+	// Command names the command that a person ran, such as `avero slice`. An
+	// empty value names `avero new`. See DX-6.
+	Command string `json:"command,omitempty"`
 }
 
-// Error returns the message and the repair.
-func (f *Fault) Error() string { return fmt.Sprintf("avero new: %s\n  → %s", f.Message, f.Repair) }
+// Error returns the command, the message and the repair.
+func (f *Fault) Error() string {
+	return fmt.Sprintf("%s: %s\n  → %s", f.command(), f.Message, f.Repair)
+}
+
+// command returns the name that the fault prints.
+func (f *Fault) command() string {
+	if f.Command == "" {
+		return "avero new"
+	}
+	return f.Command
+}
 
 // faultOf returns one fault as an error.
 func faultOf(message, repair string) error { return &Fault{Message: message, Repair: repair} }
+
+// sliceFaultOf returns one fault of the slice command as an error.
+func sliceFaultOf(message, repair string) error {
+	return &Fault{Message: message, Repair: repair, Command: "avero slice"}
+}
 
 // secret returns a value for AVERO_SECRET of the example environment, so a
 // person runs the application at once and no application carries a shared key.
