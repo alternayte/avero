@@ -13,12 +13,11 @@ require (
 	// The host. The CLI scaffolds an application that imports it, and it
 	// reads the manifest and the description of the API that the host writes.
 	//
-	// The version names the release before this one while the work is in
-	// progress, because a require must name a tag that exists: go reads the
-	// go.mod of that version even in the workspace. The release raises it to
-	// the new tag of the host, and the tag of this module follows. See the
-	// release steps in the SDD, section 12.
-	github.com/alternayte/avero v0.4.0
+	// A require must name a tag that exists: go reads the go.mod of that
+	// version even in the workspace. The release raises this line after it
+	// tags the host, and the tag of this module follows. See the release
+	// steps in the SDD, section 13.
+	github.com/alternayte/avero v0.5.0
 	// drel applies the migrations that `avero migrate` runs.
 	github.com/alternayte/drel v0.7.1
 	// esbuild is the bundler of the asset pipeline. S11 names it: "Bundle
@@ -33,7 +32,6 @@ require (
 )
 
 require (
-	github.com/alternayte/auth-all v0.2.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/coder/websocket v1.8.12 // indirect
@@ -53,7 +51,6 @@ require (
 	go.opentelemetry.io/otel v1.41.0 // indirect
 	go.opentelemetry.io/otel/metric v1.41.0 // indirect
 	go.opentelemetry.io/otel/trace v1.41.0 // indirect
-	golang.org/x/crypto v0.55.0 // indirect
 	golang.org/x/exp v0.0.0-20240325151524-a685a6edb6d8 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
