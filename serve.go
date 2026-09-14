@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/alternayte/avero/internal/migrations"
 	"github.com/alternayte/drel"
 )
 
@@ -79,6 +80,9 @@ func Serve[C Configurer](s Service[C]) int {
 	// but `avero doctor` opens no database and reads no configuration, so
 	// `avero routes` works on a machine with no database.
 	if Inspecting(s.Args) {
+		if step, ok := migrateStep(s.Args); ok {
+			return s.migrate(ctx, step, out, errOut)
+		}
 		return s.inspect(ctx, out, errOut)
 	}
 
@@ -177,6 +181,115 @@ func (s Service[C]) inspect(ctx context.Context, out, errOut io.Writer) int {
 		checks = s.doctorChecks(cfg, w)
 	}
 	return Inspect[C](s.Args, out, errOut, w.Router, w.Modules, checks...)
+}
+
+// NoModuleMigrations is the exit code of `avero:migrate` for an application
+// whose modules state no migration.
+//
+// The CLI reads it and applies the files of the migrations directory that
+// avero.json names, so an application that holds SQL of its own keeps the
+// reader of Avero.
+const NoModuleMigrations = 3
+
+// MigrateCommand is the inspection command that applies the migrations of the
+// modules of an application, or reports the migrations that are pending.
+//
+// The migrations of a module stand in the binary of the application, so the
+// application applies them and the CLI asks for it. `avero migrate up` runs
+// `go run . avero:migrate up`.
+const MigrateCommand = "migrate"
+
+// migrateStep returns the step of the migration command: up or status.
+func migrateStep(args []string) (string, bool) {
+	if len(args) == 0 || strings.TrimPrefix(args[0], InspectPrefix) != MigrateCommand {
+		return "", false
+	}
+	if len(args) > 1 {
+		return args[1], true
+	}
+	return "up", true
+}
+
+// migrate applies the migrations of every module, or reports the ones that the
+// database does not hold.
+//
+// The boot applies the same sets when MIGRATE_ON_BOOT is true, and
+// MigrationCheckOnFS proves the same sets before the process serves. One
+// source therefore answers the command, the boot and the check, and a module
+// of a library never stands outside it.
+//
+// The command reads the configuration with LoadFrom, which returns the part
+// that did load beside a fault. A migration needs the address of the database
+// and nothing else, so a script migrates with DATABASE_URL alone and needs no
+// key and no whole configuration.
+func (s Service[C]) migrate(ctx context.Context, step string, out, errOut io.Writer) int {
+	switch step {
+	case "up", "status":
+	default:
+		_, _ = fmt.Fprintf(errOut, "avero migrate: the step %q is not known\n  → Write up or status\n", step)
+		return 1
+	}
+	var cfg C
+	if loaded, _, _ := LoadFrom[C](ctx, Loader{}); loaded != nil {
+		cfg = *loaded
+	}
+	if s.DSN == nil {
+		_, _ = fmt.Fprintln(errOut, "avero migrate: this application states no database\n  → Set the DSN field of avero.Service, which reads the address from the configuration")
+		return 1
+	}
+	dsn := s.DSN(cfg)
+	if dsn == "" {
+		_, _ = fmt.Fprintln(errOut, "avero migrate: the configuration names no database\n  → Set DATABASE_URL in .env, or export it in the shell")
+		return 1
+	}
+
+	// A route registration and a module constructor touch no database, so the
+	// wiring runs with no engine. See the Components field of Wiring.
+	w, err := s.Wire(nil, cfg)
+	if err != nil {
+		return Exit(errOut, err)
+	}
+	if err := w.validate(); err != nil {
+		return Exit(errOut, err)
+	}
+	sets := w.Modules.Migrations()
+	if len(sets) == 0 {
+		// The application keeps its migrations in a directory of its own, so
+		// the CLI reads that directory. The code states the case, because an
+		// exit of zero would state that the command applied every migration.
+		_, _ = fmt.Fprintln(errOut, "avero migrate: no module of this application states a migration")
+		return NoModuleMigrations
+	}
+
+	engine, err := drel.NewEngine(dsn)
+	if err != nil {
+		_, _ = fmt.Fprintf(errOut, "avero migrate: the database does not open: %v\n  → Prove the database address in the configuration. Start the database.\n", err)
+		return 1
+	}
+	defer engine.Close()
+
+	if step == "status" {
+		pending, err := migrations.PendingFS(ctx, engine, sets...)
+		if err != nil {
+			return Exit(errOut, err)
+		}
+		if len(pending) == 0 {
+			_, _ = fmt.Fprintln(out, "every migration is applied")
+			return 0
+		}
+		for _, m := range pending {
+			_, _ = fmt.Fprintf(out, "pending %s %s\n", m.Version, m.Name)
+		}
+		return 1
+	}
+
+	n, err := engine.ApplyMigrationsFS(ctx, sets...)
+	if err != nil {
+		_, _ = fmt.Fprintf(errOut, "avero migrate: the migrations did not apply: %v\n  → Repair the SQL that the message names. Run the command again.\n", err)
+		return 1
+	}
+	_, _ = fmt.Fprintf(out, "applied %d migrations\n", n)
+	return 0
 }
 
 // isDoctor reports the doctor command.

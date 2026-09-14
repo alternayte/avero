@@ -11,20 +11,31 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/alternayte/avero"
+	"github.com/alternayte/avero/internal/inspect"
 	"github.com/alternayte/avero/internal/migrations"
 	"github.com/alternayte/drel"
 )
 
 // runMigrate writes and applies the migrations of the application.
 //
-// An application that states its models in drel.yaml lets drel write and apply
-// them, because drel reads the models and writes the difference. An
-// application that holds SQL files of its own keeps the reader of Avero.
+// `up` and `status` ask the application, because a module carries its
+// migrations in the binary and a module of a library, such as the identity of
+// auth-all, states migrations that drel.yaml does not name. The application
+// applies every set, which is the set that the boot applies.
+//
+// `new` reads the models and writes the difference, so drel answers it. An
+// application that states no model keeps the reader of Avero.
 func runMigrate(ctx context.Context, s Streams, args []string) int {
 	if len(args) == 0 {
 		return failf(s, "avero migrate: the form is `avero migrate new <name>|up|down|status`\n  → Name the step that you want")
 	}
 	dir := dirOf(s)
+	if args[0] == "up" || args[0] == "status" {
+		if code, answered := moduleMigrate(ctx, s, dir, args[0]); answered {
+			return code
+		}
+	}
 	if body, err := os.ReadFile(filepath.Join(dir, DrelConfig)); err == nil && drelModules(string(body)) {
 		return drelMigrate(ctx, s, dir, args)
 	}
@@ -57,6 +68,50 @@ func runMigrate(ctx context.Context, s Streams, args []string) int {
 	default:
 		return failf(s, "avero migrate: the step %q is not known\n  → Write new, up, down or status", args[0])
 	}
+}
+
+// moduleMigrate asks the application to apply the migrations of its modules,
+// or to report the ones that are pending.
+//
+// The second result reports an application that answered. An application that
+// carries an older host does not know the command, so the caller runs the
+// step of drel instead and the command keeps its old behaviour.
+//
+// The environment carries .env, so one command migrates a database that the
+// application already names, and a person exports nothing.
+func moduleMigrate(ctx context.Context, s Streams, dir, step string) (int, bool) {
+	if _, err := os.Stat(filepath.Join(dir, "go.mod")); err != nil {
+		return 0, false
+	}
+	environment := append(os.Environ(), readEnvFile(dir)...)
+	result, err := inspect.RunWithEnv(ctx, dir, inspect.Migrate, environment, step)
+	if err != nil {
+		return fail(s, err), true
+	}
+	if unknownCommand(result.Stderr) || result.Code == avero.NoModuleMigrations {
+		// The application carries an older host, or its modules state no
+		// migration. The caller reads the migrations of the directory
+		// instead.
+		return 0, false
+	}
+	if result.Stdout != "" {
+		_, _ = fmt.Fprint(s.Out, result.Stdout)
+	}
+	if result.Stderr != "" {
+		_, _ = fmt.Fprintln(s.Err, result.Stderr)
+	}
+	return result.Code, true
+}
+
+// unknownCommand reports an application whose host does not know the migration
+// command. Avero added the command after v0.5.0.
+//
+// Such a host answers in one of two ways. It states that the inspection
+// command is not known, or it reads the step as a flag and states that the
+// flag is not known. Both sentences end with the same four words, and no
+// answer of the migration command itself holds them.
+func unknownCommand(message string) bool {
+	return strings.Contains(message, "is not known")
 }
 
 // drelMigrate runs the migration command of drel.

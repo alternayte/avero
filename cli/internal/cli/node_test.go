@@ -118,3 +118,20 @@ func TestDrelModulesReadsTheBlock(t *testing.T) {
 		}
 	}
 }
+
+// An application that carries a host older than v0.5.1 does not know the
+// migration command. It states an unknown inspection command, or it reads the
+// step as a flag and states an unknown flag. The CLI reads both and runs the
+// step of drel instead.
+func TestUnknownCommandReadsBothAnswersOfAnOlderHost(t *testing.T) {
+	for message, want := range map[string]bool{
+		`avero: the inspection command "migrate" is not known`:  true,
+		`avero migrate: the flag "up" is not known`:             true,
+		`avero migrate: the migrations did not apply: no table`: false,
+		"": false,
+	} {
+		if got := unknownCommand(message); got != want {
+			t.Fatalf("unknownCommand(%q) is %v", message, got)
+		}
+	}
+}

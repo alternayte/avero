@@ -33,6 +33,10 @@ const (
 	Schema = "schema"
 	// Doctor proves the configuration, the database and the broker.
 	Doctor = "doctor"
+	// Migrate applies the migrations of every module of the application, or
+	// reports the ones that the database does not hold. The migrations stand
+	// in the binary, so the application applies them.
+	Migrate = "migrate"
 )
 
 // Result is the answer of one inspection.
@@ -46,19 +50,30 @@ type Result struct {
 }
 
 // Run asks the application for one inspection. asJSON returns the document
-// that the schema of the report accepts.
-func Run(ctx context.Context, dir, command string, asJSON bool) (*Result, error) {
+// that the schema of the report accepts. args carry the step of a command
+// that states one, such as `avero:migrate up`.
+//
+// The application reads the environment of this process. RunWithEnv states
+// another environment, which the migration command needs: it reads .env, so a
+// person migrates with no export.
+func Run(ctx context.Context, dir, command string, asJSON bool, args ...string) (*Result, error) {
+	if asJSON {
+		args = append(args, "--json")
+	}
+	return RunWithEnv(ctx, dir, command, os.Environ(), args...)
+}
+
+// RunWithEnv asks the application for one inspection with the environment that
+// the caller states.
+func RunWithEnv(ctx context.Context, dir, command string, environment []string, args ...string) (*Result, error) {
 	if _, err := os.Stat(filepath.Join(dir, "go.mod")); err != nil {
 		return nil, fmt.Errorf("avero %s: this directory holds no Go module\n  → Run the command in the directory of an Avero application, or write one with `avero new`",
 			command)
 	}
-	args := []string{"run", ".", Prefix + command}
-	if asJSON {
-		args = append(args, "--json")
-	}
-	cmd := exec.CommandContext(ctx, "go", args...)
+	run := append([]string{"run", ".", Prefix + command}, args...)
+	cmd := exec.CommandContext(ctx, "go", run...)
 	cmd.Dir = dir
-	cmd.Env = os.Environ()
+	cmd.Env = environment
 
 	var out, errOut bytes.Buffer
 	cmd.Stdout = &out

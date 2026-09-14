@@ -3,6 +3,32 @@
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.5.1
+
+### Fixed
+
+- **`avero migrate up` applies the migrations of every module.** It ran the
+  step of drel, which reads the modules block of `drel.yaml` and therefore sees
+  the migrations of a feature slice and no other. A module of a library, such
+  as an identity module that wraps auth-all, carries its migrations in the
+  binary and `drel.yaml` names none of them, so an empty database missed the
+  tables of that library and the first migration of a slice failed against
+  them.
+
+  The command now asks the application, which applies the sets that
+  `Modules.Migrations()` returns. That is the set that the boot applies with
+  `MIGRATE_ON_BOOT` and the set that `MigrationCheckOnFS` proves, so one source
+  answers the command, the boot and the check. `avero migrate status` reads the
+  same sets.
+
+  The command reads the configuration with `LoadFrom`, so a script migrates a
+  database with the address alone and needs no key and no whole configuration.
+  An application whose modules state no migration keeps the reader of Avero,
+  and an application that carries a host of v0.5.0 keeps the step of drel.
+
+  `avero.MigrateCommand` names the new inspection command. An application
+  reaches the new behaviour when it requires the host of this version.
+
 ## v0.5.0
 
 This release makes Avero adoptable in part. The router imports no database and

@@ -123,7 +123,7 @@ func Inspect[T any](args []string, out, errOut io.Writer, r *Router, set *Module
 		}
 		return 0
 	default:
-		_, _ = fmt.Fprintf(errOut, "avero: the inspection command %q is not known\n  → Run routes, modules, openapi, schema or doctor\n", name)
+		_, _ = fmt.Fprintf(errOut, "avero: the inspection command %q is not known\n  → Run routes, modules, openapi, schema, doctor or migrate\n", name)
 		return 1
 	}
 }

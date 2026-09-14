@@ -225,6 +225,13 @@ avero migrate up
 drel compares the model with its snapshot and writes the two SQL files. Read
 them before you apply them.
 
+`avero migrate new` reads the models, and drel answers it. `avero migrate up`
+and `avero migrate status` ask the application, which applies every migration
+that a module states. A module of a library, such as an identity module that
+wraps auth-all, therefore applies with the rest, and the command applies the
+same set that the boot applies. The command needs the address of the database
+and no other variable, so a script migrates with `DATABASE_URL` alone.
+
 ## Prove the work
 
 ```

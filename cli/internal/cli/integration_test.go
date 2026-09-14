@@ -643,3 +643,127 @@ func TestTheModuleHolderReads(t *testing.T) {
 		t.Fatalf("the module holder failed:\n%s", out)
 	}
 }
+
+// A module of a library carries its migrations in the binary, and drel.yaml
+// names none of them. `avero migrate up` must apply the same sets that the
+// boot applies, so a script migrates a database with no application start.
+//
+// The test adds a module that states one migration and no model, which is the
+// shape of the identity module of auth-all.
+func TestMigrateUpAppliesTheMigrationsOfEveryModule(t *testing.T) {
+	root := repoRoot(t)
+	dir := t.TempDir()
+	if code, _, errOut := run(t, dir, "new", "orders", "--shape", "api", "--replace", root); code != 0 {
+		t.Fatalf("avero new returned %d: %s", code, errOut)
+	}
+	app := filepath.Join(dir, "orders")
+
+	// The module of a library: one migration, no model, no route. drel.yaml
+	// does not name it.
+	feature := filepath.Join(app, "internal", "features", "identity")
+	if err := os.MkdirAll(filepath.Join(feature, "migrations"), 0o755); err != nil {
+		t.Fatalf("MkdirAll returned %v", err)
+	}
+	write := func(name, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(feature, name), []byte(body), 0o644); err != nil {
+			t.Fatalf("WriteFile returned %v", err)
+		}
+	}
+	write("migrations/00010101000000_create_identities.up.sql",
+		"CREATE TABLE identities (id text primary key);\n")
+	write("migrations/00010101000000_create_identities.down.sql", "DROP TABLE identities;\n")
+	write("module.go", `package identity
+
+import (
+	"embed"
+	"io/fs"
+
+	"github.com/alternayte/avero"
+)
+
+//go:embed all:migrations
+var files embed.FS
+
+// Module states the identity of a person. A library owns the table, so the
+// module carries the migrations and no model.
+type Module struct{}
+
+// New builds the module.
+func New() *Module { return &Module{} }
+
+// Name states the module.
+func (m *Module) Name() string { return "identity" }
+
+// Migrations returns the SQL that the library owns.
+func (m *Module) Migrations() fs.FS {
+	sub, err := fs.Sub(files, "migrations")
+	if err != nil {
+		panic(err)
+	}
+	return sub
+}
+
+// Routes states no route.
+func (m *Module) Routes(_ *avero.Router) {}
+`)
+
+	wire := filepath.Join(app, "wire.go")
+	body, err := os.ReadFile(wire)
+	if err != nil {
+		t.Fatalf("ReadFile returned %v", err)
+	}
+	source := strings.Replace(string(body), `"orders/internal/features/posts"`,
+		"\"orders/internal/features/identity\"\n\t\"orders/internal/features/posts\"", 1)
+	source = strings.Replace(source, "avero.Modules(posts.New(engine))",
+		"avero.Modules(identity.New(), posts.New(engine))", 1)
+	if err := os.WriteFile(wire, []byte(source), 0o644); err != nil {
+		t.Fatalf("WriteFile returned %v", err)
+	}
+
+	dsn := "file:" + filepath.Join(dir, "migrate.db")
+	t.Setenv("DATABASE_URL", dsn)
+	code, out, errOut := run(t, app, "migrate", "up")
+	if code != 0 {
+		t.Fatalf("avero migrate up returned %d:\n%s\n%s", code, out, errOut)
+	}
+
+	// The table of the library stands in the database, and so does the table
+	// of the slice that drel.yaml names.
+	prove := `package main
+
+import (
+	"context"
+	"os"
+	"testing"
+
+	"github.com/alternayte/drel"
+)
+
+func TestTheTablesStand(t *testing.T) {
+	e, err := drel.NewEngine(os.Getenv("DATABASE_URL"))
+	if err != nil {
+		t.Fatalf("the database does not open: %v", err)
+	}
+	defer e.Close()
+	for _, table := range []string{"identities", "posts"} {
+		rows, err := e.Query(context.Background(), "SELECT count(*) FROM "+table)
+		if err != nil {
+			t.Fatalf("the table %s is absent: %v", table, err)
+		}
+		rows.Close()
+	}
+}
+`
+	if err := os.WriteFile(filepath.Join(app, "tables_test.go"), []byte(prove), 0o644); err != nil {
+		t.Fatalf("WriteFile returned %v", err)
+	}
+	if out, err := goRun(t, app, "test", "-run", "TestTheTablesStand", "-count=1", "."); err != nil {
+		t.Fatalf("the migrations of the modules did not apply:\n%s", out)
+	}
+
+	// The status of the same application reports no pending migration.
+	if code, out, errOut := run(t, app, "migrate", "status"); code != 0 {
+		t.Fatalf("avero migrate status returned %d:\n%s\n%s", code, out, errOut)
+	}
+}
