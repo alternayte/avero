@@ -168,12 +168,12 @@ func (m *Manifest) UnmarshalJSON(b []byte) error {
 func LoadManifest(fsys fs.FS, name string) (*Manifest, error) {
 	b, err := fs.ReadFile(fsys, name)
 	if err != nil {
-		return nil, fault(name, "the asset manifest is absent",
+		return nil, NewFault(name, "the asset manifest is absent",
 			"Run `avero build` to write the manifest, and embed the output directory")
 	}
 	var m Manifest
 	if err := json.Unmarshal(b, &m); err != nil {
-		return nil, fault(name, "the asset manifest does not parse",
+		return nil, NewFault(name, "the asset manifest does not parse",
 			"Delete the output directory and run `avero build` again")
 	}
 	return &m, nil

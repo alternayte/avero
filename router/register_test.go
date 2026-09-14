@@ -191,3 +191,79 @@ func TestASummaryComesFromTheGeneratedMap(t *testing.T) {
 		t.Fatalf("the summary is %q", removed.Op.Summary)
 	}
 }
+
+// pageInput is the input of a typed route that renders a page.
+type pageInput struct {
+	ID string `path:"id"`
+}
+
+func (i *pageInput) Bind(c *router.Ctx) error {
+	i.ID = c.Request().PathValue("id")
+	return nil
+}
+
+func (i *pageInput) Validate(_ *router.Ctx, _ *router.Fields) {}
+
+// page is the value that a handler of the ssr shape answers. A responder turns
+// it into a Response.
+type page struct{ Title string }
+
+func showPage(_ *router.Ctx, in pageInput) (page, error) {
+	return page{Title: "post " + in.ID}, nil
+}
+
+// A typed route of an application that renders pages answers HTML, because the
+// responder of the router states the answer. The default writes JSON.
+func TestTheResponderOfTheRouterWritesTheAnswer(t *testing.T) {
+	r := router.New(router.WithResponder(func(_ *router.Ctx, code int, v any) router.Response {
+		if p, ok := v.(page); ok {
+			return router.HTML(code, "<h1>"+p.Title+"</h1>")
+		}
+		return router.JSON(code, v)
+	}))
+	router.Get(r, "/posts/{id}", showPage)
+
+	rec := serve(t, r, http.MethodGet, "/posts/7")
+	if rec.Code != 200 {
+		t.Fatalf("the answer is %d", rec.Code)
+	}
+	if got := rec.Body.String(); got != "<h1>post 7</h1>" {
+		t.Fatalf("the body is %q", got)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "text/html") {
+		t.Fatalf("the media type is %q", ct)
+	}
+}
+
+// A handler that returns a Response built the whole answer, so the responder
+// never sees it.
+func TestAHandlerThatReturnsAResponseKeepsIt(t *testing.T) {
+	called := false
+	r := router.New(router.WithResponder(func(_ *router.Ctx, code int, v any) router.Response {
+		called = true
+		return router.JSON(code, v)
+	}))
+	router.Get(r, "/x/{id}", func(_ *router.Ctx, _ pageInput) (router.Response, error) {
+		return router.Text(202, "mine"), nil
+	})
+	rec := serve(t, r, http.MethodGet, "/x/1")
+	if rec.Code != 202 || rec.Body.String() != "mine" {
+		t.Fatalf("the answer is %d %q", rec.Code, rec.Body.String())
+	}
+	if called {
+		t.Fatal("the responder wrapped a Response")
+	}
+}
+
+// A router with no responder writes JSON, which a service of an API needs.
+func TestTheDefaultResponderWritesJSON(t *testing.T) {
+	r := router.New()
+	router.Get(r, "/posts/{id}", showPage)
+	rec := serve(t, r, http.MethodGet, "/posts/7")
+	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+		t.Fatalf("the media type is %q", ct)
+	}
+	if got := strings.TrimSpace(rec.Body.String()); got != `{"Title":"post 7"}` {
+		t.Fatalf("the body is %q", got)
+	}
+}

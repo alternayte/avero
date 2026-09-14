@@ -38,18 +38,22 @@ func wire(engine *drel.Engine, cfg Config) (*avero.Wiring, error) {
 	if secret == "" {
 		secret = avero.Secret(strings.Repeat("0", 64))
 	}
-	// Stack states the order of the chain one time. A nil engine leaves the
-	// transaction out. Add the session and the authentication of auth-all in
-	// the Session and Auth fields, and Stack puts them in the correct place.
-	r.Use(avero.Stack{Secret: secret, Engine: engine}.Middleware()...)
-
 	// MountAssets reads the manifest and serves the built files at /assets/.
 	// The binary carries them, so the server needs no directory beside it.
+	//
+	// The mount stands before Use, because middleware applies to the routes
+	// that follow it. A built file needs no cookie and no session, so it runs
+	// no chain.
 	manifest, err := avero.MountAssets(r, dist, "assets/dist")
 	if err != nil {
 		return nil, err
 	}
 	ui.SetManifest(manifest)
+
+	// Stack states the order of the chain one time. A nil engine leaves the
+	// transaction out. Add the session and the authentication of auth-all in
+	// the Session and Auth fields, and Stack puts them in the correct place.
+	r.Use(avero.Stack{Secret: secret, Tx: avero.Transaction(engine)}.Middleware()...)
 
 	modules := avero.Modules(posts.New(engine))
 	if err := modules.Attach(r); err != nil {

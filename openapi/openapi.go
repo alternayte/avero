@@ -183,6 +183,9 @@ type Schema struct {
 	// OneOf holds the schemas of an answer that carries one of several
 	// shapes.
 	OneOf []Schema `json:"oneOf,omitempty"`
+	// AllOf holds the schemas that a value carries together, such as a
+	// problem document and the members that its kind adds.
+	AllOf []Schema `json:"allOf,omitempty"`
 	// Format states the shape of a string, such as email or uuid.
 	Format string `json:"format,omitempty"`
 	// MinLength and MaxLength bound a string.

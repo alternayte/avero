@@ -1,6 +1,11 @@
 package router
 
-import "net/http"
+import (
+	"bufio"
+	"fmt"
+	"net"
+	"net/http"
+)
 
 // Middleware wraps a handler. It carries a name, because `avero routes` prints
 // the chain of each route. See the SDD, S4.
@@ -9,6 +14,26 @@ type Middleware struct {
 	Name string
 	// Wrap returns a handler that calls next.
 	Wrap func(next Handler) Handler
+	// NeedsResponse states a middleware that acts on the response before one
+	// byte reaches the client. Transaction sets it, because it commits from
+	// the status and a commit must stand before the first byte.
+	//
+	// A mounted handler writes to the ResponseWriter itself, so such a
+	// middleware cannot hold its property there. Mount leaves it out and
+	// runs every other middleware of the scope. See Router.Mount.
+	NeedsResponse bool
+}
+
+// mountable returns the middleware that a mounted handler runs.
+func mountable(mws []Middleware) []Middleware {
+	out := make([]Middleware, 0, len(mws))
+	for _, mw := range mws {
+		if mw.NeedsResponse {
+			continue
+		}
+		out = append(out, mw)
+	}
+	return out
 }
 
 // chain applies the middleware in registration order. The first registered
@@ -81,6 +106,32 @@ func (w *statusWriter) Write(p []byte) (int, error) {
 		w.code = http.StatusOK
 	}
 	return w.ResponseWriter.Write(p)
+}
+
+// Unwrap returns the writer below, so http.NewResponseController reaches the
+// flush, the deadline and the hijack of the server.
+func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+// Flush sends the buffered bytes. A handler of a stream, such as a server sent
+// event stream, asks the writer for http.Flusher, so the wrapper carries the
+// method through.
+func (w *statusWriter) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		if w.code == 0 {
+			w.code = http.StatusOK
+		}
+		f.Flush()
+	}
+}
+
+// Hijack gives the connection to a handler that speaks another protocol, such
+// as a websocket.
+func (w *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := w.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("router: the response writer does not hijack")
+	}
+	return h.Hijack()
 }
 
 // status returns the status that the middleware wrote. A middleware that wrote

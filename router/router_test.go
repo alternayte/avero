@@ -178,6 +178,134 @@ func TestMountStripsThePrefix(t *testing.T) {
 	}
 }
 
+// KeepPrefix passes the whole path to a handler that removes its own base
+// path, such as the handler of auth-all.
+func TestMountWithKeepPrefixHoldsTheWholePath(t *testing.T) {
+	r := router.New()
+	var got string
+	r.Mount("/api/auth", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		got = req.URL.Path
+		w.WriteHeader(204)
+	}), router.KeepPrefix())
+	serve(t, r, http.MethodGet, "/api/auth/session")
+	if got != "/api/auth/session" {
+		t.Fatalf("the mounted handler saw %q, want /api/auth/session", got)
+	}
+}
+
+// A group carries the mount, and the merge of a module keeps the option.
+func TestMountWithKeepPrefixSurvivesAGroup(t *testing.T) {
+	r := router.New()
+	var got string
+	r.Group("/api", func(g *router.Router) {
+		g.Mount("/auth", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			got = req.URL.Path
+			w.WriteHeader(204)
+		}), router.KeepPrefix())
+	})
+	serve(t, r, http.MethodGet, "/api/auth/session")
+	if got != "/api/auth/session" {
+		t.Fatalf("the mounted handler saw %q, want /api/auth/session", got)
+	}
+}
+
+// The middleware of the scope wraps a mounted handler, so a library that the
+// application mounts carries the request identifier, the log and the session.
+func TestTheMiddlewareOfTheScopeWrapsAMountedHandler(t *testing.T) {
+	r := router.New()
+	var order []string
+	r.Use(router.Middleware{Name: "outer", Wrap: func(next router.Handler) router.Handler {
+		return func(c *router.Ctx) (router.Response, error) {
+			order = append(order, "outer")
+			c.Writer().Header().Set("X-Outer", "1")
+			return next(c)
+		}
+	}})
+	r.Mount("/admin", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		order = append(order, "mounted")
+		w.WriteHeader(201)
+	}))
+	rec := serve(t, r, http.MethodGet, "/admin/users")
+	if rec.Code != 201 {
+		t.Fatalf("GET /admin/users gave %d, want 201", rec.Code)
+	}
+	if rec.Header().Get("X-Outer") != "1" {
+		t.Fatal("the middleware of the scope did not run")
+	}
+	if strings.Join(order, ",") != "outer,mounted" {
+		t.Fatalf("the order is %v", order)
+	}
+}
+
+// A middleware that acts on the response cannot hold its property around a
+// handler that writes the answer itself, so a mount leaves it out. The
+// transaction is the one that states it.
+func TestAMountLeavesOutTheMiddlewareThatNeedsTheResponse(t *testing.T) {
+	r := router.New()
+	ran := false
+	r.Use(router.Middleware{Name: "transaction", NeedsResponse: true, Wrap: func(next router.Handler) router.Handler {
+		return func(c *router.Ctx) (router.Response, error) {
+			ran = true
+			return next(c)
+		}
+	}})
+	r.Mount("/admin", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(204)
+	}))
+	r.Get("/things", ok("get"))
+
+	if rec := serve(t, r, http.MethodGet, "/admin/users"); rec.Code != 204 {
+		t.Fatalf("GET /admin/users gave %d, want 204", rec.Code)
+	}
+	if ran {
+		t.Fatal("the middleware that needs the response wrapped the mount")
+	}
+	if rec := serve(t, r, http.MethodGet, "/things"); rec.Code != 200 {
+		t.Fatalf("GET /things gave %d", rec.Code)
+	}
+	if !ran {
+		t.Fatal("the middleware did not wrap a typed route")
+	}
+}
+
+// The table of the routes prints the chain that the mount runs, and not the
+// chain that it leaves out.
+func TestTheReportNamesTheChainOfAMount(t *testing.T) {
+	r := router.New()
+	r.Use(router.Middleware{Name: "request-id", Wrap: func(next router.Handler) router.Handler { return next }})
+	r.Use(router.Middleware{Name: "transaction", NeedsResponse: true, Wrap: func(next router.Handler) router.Handler { return next }})
+	r.Mount("/admin", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	rep, err := r.Report()
+	if err != nil {
+		t.Fatalf("Report returned %v", err)
+	}
+	row := rep.Routes[0]
+	if strings.Join(row.Middleware, ",") != "request-id" {
+		t.Fatalf("the row names %v", row.Middleware)
+	}
+}
+
+// A mounted handler of a stream asks the writer for http.Flusher, so the
+// wrapper that records the status carries the method through. A wrapper that
+// does not breaks a server sent event stream and a websocket.
+func TestAMountedHandlerReachesTheFlush(t *testing.T) {
+	r := router.New()
+	r.Use(router.Middleware{Name: "outer", Wrap: func(next router.Handler) router.Handler { return next }})
+	var flushed, controlled bool
+	r.Mount("/stream", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, flushed = w.(http.Flusher)
+		controlled = http.NewResponseController(w).Flush() == nil
+		w.WriteHeader(200)
+	}))
+	serve(t, r, http.MethodGet, "/stream/updates")
+	if !flushed {
+		t.Fatal("the mounted handler cannot flush")
+	}
+	if !controlled {
+		t.Fatal("http.NewResponseController does not reach the writer of the server")
+	}
+}
+
 func TestAnEmptyPatternIsAFault(t *testing.T) {
 	r := router.New()
 	r.Get("", ok("x"))
@@ -233,4 +361,44 @@ func record(h http.Handler, req *http.Request) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	return rec
+}
+
+// The zero middleware adds no frame, so a constructor that states none, such
+// as db.Transaction with a nil engine, needs no guard at the call site.
+func TestUseIgnoresTheZeroMiddleware(t *testing.T) {
+	r := router.New()
+	r.Use(router.Middleware{})
+	r.Get("/x", ok("x"))
+	if rec := serve(t, r, http.MethodGet, "/x"); rec.Code != 200 {
+		t.Fatalf("GET /x gave %d", rec.Code)
+	}
+}
+
+// net/http fills Request.Pattern during the dispatch of the mux. The router
+// registers each route with its own chain below that dispatch, so a middleware
+// reads the pattern of the route that matched. A metric label and a span name
+// therefore name the route and never the raw path.
+func TestTheMiddlewareReadsThePatternOfTheRoute(t *testing.T) {
+	r := router.New()
+	var typed, mounted string
+	r.Use(router.Middleware{Name: "probe", Wrap: func(next router.Handler) router.Handler {
+		return func(c *router.Ctx) (router.Response, error) {
+			typed = c.Request().Pattern
+			return next(c)
+		}
+	}})
+	r.Get("/posts/{id}", ok("x"))
+	r.Mount("/admin", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		mounted = req.Pattern
+		w.WriteHeader(204)
+	}))
+
+	serve(t, r, http.MethodGet, "/posts/7")
+	if typed != "GET /posts/{id}" {
+		t.Fatalf("the middleware read the pattern %q", typed)
+	}
+	serve(t, r, http.MethodGet, "/admin/users")
+	if mounted != "/admin/" {
+		t.Fatalf("the mounted handler read the pattern %q", mounted)
+	}
 }

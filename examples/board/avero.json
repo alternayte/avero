@@ -3,7 +3,7 @@
   "shape": "spa",
   "assets": {
     "tier": "external",
-    "command": ["npm", "run", "build"],
+    "packageManager": "npm",
     "dir": "web",
     "manifest": false
   },

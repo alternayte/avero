@@ -64,6 +64,18 @@ func Inspect[T any](args []string, out, errOut io.Writer, r *Router, set *Module
 	}
 
 	switch name {
+	case "routes", "openapi":
+		if r == nil {
+			// The application holds a router of another library, so Avero
+			// knows no route of it. See Wiring.Handler.
+			_, _ = fmt.Fprintf(errOut,
+				"avero %s: this application states an http.Handler and no Avero router%s\n",
+				name, "\n  → Register the routes on an avero.Router and put it in the Router field of the wiring")
+			return 1
+		}
+	}
+
+	switch name {
 	case "routes":
 		rep, err := r.Report()
 		if err != nil {
@@ -87,7 +99,11 @@ func Inspect[T any](args []string, out, errOut io.Writer, r *Router, set *Module
 		// The application names itself, so the description carries the name
 		// that a person reads. The version of the description follows the
 		// binary.
-		doc := openapi.Describe(AppName(), AppVersion(), rep.Routes, r.API())
+		doc, describeErr := openapi.Describe(AppName(), AppVersion(), rep.Routes, r.API())
+		if describeErr != nil {
+			_, _ = fmt.Fprintln(errOut, describeErr)
+			return 1
+		}
 		_, _ = io.WriteString(out, doc.String())
 		return 0
 	case "schema":

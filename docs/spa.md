@@ -3,6 +3,9 @@
 `avero new board --shape spa` writes a Go service and a TypeScript front end.
 Vite builds the front end, and the Go binary carries it.
 
+`--package-manager npm|bun|pnpm|yarn` states the tool of the front end. The
+default is npm. See [The package manager](#the-package-manager).
+
 ```
 board/
 ├── main.go                        the composition root
@@ -46,7 +49,7 @@ avero dev
 `avero dev` starts three things:
 
 - the Go application on a port of its own;
-- `npm run dev`, which is Vite, on http://localhost:5173;
+- the dev script of the front end, which is Vite, on http://localhost:5173;
 - the watcher, which rebuilds and restarts the Go application on a change to a
   `.go` file.
 
@@ -55,14 +58,53 @@ it proxies `/api` to the Go application, so one origin serves both in
 development. `avero dev` gives Vite the address of the application in
 `AVERO_API_URL`, so the port never has to match by hand.
 
-`avero dev` reads the dependencies with `npm install` when `web/node_modules`
-is absent, so one command starts a front end that a person just wrote.
+`avero dev` reads the dependencies when `web/node_modules` is absent, so one
+command starts a front end that a person just wrote.
+
+## The package manager
+
+Avero names no package manager of its own. It runs the one that the application
+states, in this order:
+
+1. the `packageManager` member of the assets block of `avero.json`;
+2. the `packageManager` member of `web/package.json`, which Corepack states,
+   such as `"bun@1.2.0"`;
+3. the lock file of `web/`: `bun.lock`, `pnpm-lock.yaml`, `yarn.lock` or
+   `package-lock.json`;
+4. npm.
+
+```json
+{
+  "assets": {
+    "tier": "external",
+    "packageManager": "bun",
+    "dir": "web",
+    "manifest": false
+  }
+}
+```
+
+Avero then runs `bun install`, `bun run dev`, `bun run api` and `bun run build`.
+A member of the same block replaces one command:
+
+```json
+{
+  "assets": {
+    "install": ["bun", "install", "--frozen-lockfile"],
+    "dev": ["bun", "run", "dev"],
+    "api": ["bun", "run", "api"],
+    "command": ["bun", "run", "build"]
+  }
+}
+```
+
+A tool that the machine does not hold states the repair before anything runs.
 
 ## Add a JavaScript library
 
 ```
 cd web
-npm install @tanstack/react-table
+npm install @tanstack/react-table   # or bun add, pnpm add, yarn add
 ```
 
 Import it by its name:
@@ -113,7 +155,7 @@ struct states it. A change to a handler that a component does not follow is a
 type fault of the build, not a fault of a person reading a page.
 
 Never edit `web/src/client/`. Change the Go handler and run `avero build`, or
-`npm run api` inside `web/`.
+the api script inside `web/`.
 
 ### The generator
 
@@ -148,13 +190,16 @@ avero routes --openapi                    write it to the output
 avero routes --openapi --out openapi.json write it to a file
 ```
 
-`avero build` writes it before the front end build. See [Routing and
-handlers](routing.md).
+`avero generate` writes it, and `avero generate --check` proves that the file
+is current. The check fails when a handler changed and the file did not, so the
+generated client of the front end can never state a route that the service does
+not hold. See [Routing and handlers](routing.md).
 
 ## One binary
 
-`avero build` runs `npm install`, writes `openapi.json`, generates the client,
-then runs `tsc --noEmit && vite build`, which writes `assets/dist`. `wire.go` embeds that directory:
+`avero generate` reads the dependencies, writes `openapi.json` and generates
+the client. `avero build` runs it, then runs the build script of the front end,
+which is `tsc --noEmit && vite build`, which writes `assets/dist`. `wire.go` embeds that directory:
 
 ```go
 //go:embed all:assets/dist

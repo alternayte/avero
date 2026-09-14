@@ -103,7 +103,10 @@ errors. See [Views and forms](views.md).
 ## The description of the API
 
 Every route states its faults against one Problem schema, so a client holds one
-error type. A route that binds a value states 400 and 422. A route that answers
+error type. A route that binds a value states 400 and 422. The 422 answer names
+the ValidationProblem schema, which carries the members of Problem and the
+`errors` member, a map of field name to message. A generated client therefore
+reads the field errors and needs no cast. A route that answers
 a further case states it at the registration:
 
 ```go

@@ -200,21 +200,24 @@ func Register[T any, P Input[T], V any](
 	for _, opt := range opts {
 		opt(&op)
 	}
+	responder := r.reg.responder
 	handler := In[T, P](func(c *Ctx, v T) (Response, error) {
 		out, err := fn(c, v)
 		if err != nil {
 			return nil, err
 		}
-		return answerOf(c, method, out), nil
+		return answerOf(c, method, out, responder), nil
 	})
 	r.registerOp(method, pattern, handler, &op, 3)
 }
 
 // answerOf turns the value of a handler into a response.
 //
-// A value of NoBody answers the status and no body. Every other value answers
-// JSON. Ctx.Status wins over the status of the method.
-func answerOf[V any](c *Ctx, method string, out V) Response {
+// A value of NoBody answers the status and no body. A value that is already a
+// Response is the answer itself, so a handler that renders a page states it in
+// its signature. Every other value reaches the responder of the router, which
+// writes JSON by default. Ctx.Status wins over the status of the method.
+func answerOf[V any](c *Ctx, method string, out V, responder Responder) Response {
 	_, empty := any(out).(NoBody)
 	code := c.StatusOf()
 	if code == 0 {
@@ -225,6 +228,14 @@ func answerOf[V any](c *Ctx, method string, out V) Response {
 	}
 	if empty {
 		return Empty(code)
+	}
+	if res, ok := any(out).(Response); ok {
+		// The handler built the whole answer. A responder that wrapped it
+		// would state a shape that no client reads.
+		return res
+	}
+	if responder != nil {
+		return responder(c, code, out)
 	}
 	return JSON(code, out)
 }

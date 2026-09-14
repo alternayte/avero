@@ -19,6 +19,9 @@ type Route struct {
 	// Mounted reports an http.Handler that Mount serves. No transaction
 	// surrounds a mounted handler.
 	Mounted bool `json:"mounted"`
+	// KeepPrefix reports a mount that passes the whole path to its handler.
+	// See Mount and KeepPrefix.
+	KeepPrefix bool `json:"keepPrefix,omitempty"`
 
 	// Op states what the route answers. A typed registration fills it, and
 	// the description of the API reads it. A plain handler leaves it nil.

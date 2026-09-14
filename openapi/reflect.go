@@ -8,13 +8,38 @@ import (
 	"strings"
 )
 
+// walk holds the state of one description: the schemas that it collected, the
+// type behind each name, and the names that two types share.
+//
+// The value passes through the walk, so the description holds no package level
+// state and two descriptions never read each other. See design rule 1.
+type walk struct {
+	schemas    map[string]Schema
+	holders    map[string]reflect.Type
+	collisions []collision
+}
+
+// newWalk returns the state of one description.
+func newWalk() *walk {
+	return &walk{schemas: map[string]Schema{}, holders: map[string]reflect.Type{}}
+}
+
+// collision names two types that state one schema name.
+type collision struct {
+	// Name is the name that both types state.
+	Name string
+	// First and Second are the two types, in the order that the walk met
+	// them.
+	First, Second reflect.Type
+}
+
 // inputOf reads the input type of a handler and returns the parameters and the
 // body of the request.
 //
 // A field carries its source in a tag: path, query or header for a parameter,
 // json or form for a member of the body. The validate tag states the rules,
 // which become the bounds of the schema.
-func inputOf(t reflect.Type, schemas map[string]Schema) ([]Parameter, *RequestBody) {
+func (w *walk) inputOf(t reflect.Type) ([]Parameter, *RequestBody) {
 	t = deref(t)
 	if t.Kind() != reflect.Struct {
 		return nil, nil
@@ -22,19 +47,36 @@ func inputOf(t reflect.Type, schemas map[string]Schema) ([]Parameter, *RequestBo
 	var params []Parameter
 	var kinds bodyKinds
 	body := Schema{Type: "object", Properties: map[string]Schema{}}
+	w.inputInto(t, &params, &kinds, &body)
+	if len(body.Properties) == 0 {
+		return params, nil
+	}
+	sort.Strings(body.Required)
+	return params, &RequestBody{Required: true, Content: mediaTypes(kinds, body)}
+}
+
+// inputInto reads the fields of one input type into the parameters and the
+// body.
+//
+// An embedded struct that carries no tag reaches the request as its own
+// fields, because encoding/json promotes them. The description states the same
+// fields, so the client of the front end sends the shape that the route reads.
+func (w *walk) inputInto(t reflect.Type, params *[]Parameter, kinds *bodyKinds, body *Schema) {
+	// The direct fields stand first, because a field of the outer struct
+	// hides the field of an embedded struct that carries the same name.
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
-		if !f.IsExported() {
+		if !f.IsExported() || embedded(f) {
 			continue
 		}
 		checks := readValidate(f.Tag.Get("validate"))
 		switch {
 		case name(f, "path") != "":
-			params = append(params, parameterOf(f, "path", name(f, "path"), checks))
+			*params = append(*params, parameterOf(f, "path", name(f, "path"), checks))
 		case name(f, "query") != "":
-			params = append(params, parameterOf(f, "query", name(f, "query"), checks))
+			*params = append(*params, parameterOf(f, "query", name(f, "query"), checks))
 		case name(f, "header") != "":
-			params = append(params, parameterOf(f, "header", name(f, "header"), checks))
+			*params = append(*params, parameterOf(f, "header", name(f, "header"), checks))
 		default:
 			member := name(f, "json")
 			if member != "" {
@@ -49,17 +91,42 @@ func inputOf(t reflect.Type, schemas map[string]Schema) ([]Parameter, *RequestBo
 			if member == "" {
 				continue
 			}
-			body.Properties[member] = withRules(typeSchema(f.Type, schemas), checks)
+			if _, held := body.Properties[member]; held {
+				// A field of the outer struct hides the field of an embedded
+				// struct that carries the same name. encoding/json does the
+				// same.
+				continue
+			}
+			body.Properties[member] = withRules(w.typeSchema(f.Type), checks)
 			if checks.required() {
 				body.Required = append(body.Required, member)
 			}
 		}
 	}
-	if len(body.Properties) == 0 {
-		return params, nil
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		if f.IsExported() && embedded(f) {
+			w.inputInto(deref(f.Type), params, kinds, body)
+		}
 	}
-	sort.Strings(body.Required)
-	return params, &RequestBody{Required: true, Content: mediaTypes(kinds, body)}
+}
+
+// embedded reports a field that reaches JSON as the fields of its own type.
+//
+// Go promotes the fields of an embedded struct that carries no name in a json
+// tag. A tag with a name states one member, so such a field is not embedded.
+func embedded(f reflect.StructField) bool {
+	if !f.Anonymous || name(f, "json") != "" || f.Tag.Get("json") == "-" {
+		return false
+	}
+	t := deref(f.Type)
+	if t.Kind() != reflect.Struct {
+		return false
+	}
+	// A type that writes itself as one value, such as time.Time, carries no
+	// fields that JSON promotes.
+	_, known := knownSchema(t)
+	return !known
 }
 
 // The media types that a request carries.
@@ -131,7 +198,7 @@ func omitempty(f reflect.StructField) bool {
 
 // typeSchema returns the schema of one type. A struct becomes a reference, and
 // the components carry it.
-func typeSchema(t reflect.Type, schemas map[string]Schema) Schema {
+func (w *walk) typeSchema(t reflect.Type) Schema {
 	t = deref(t)
 	if known, ok := knownSchema(t); ok {
 		return known
@@ -142,19 +209,19 @@ func typeSchema(t reflect.Type, schemas map[string]Schema) Schema {
 			// A slice of bytes reaches JSON as a string of base 64.
 			return Schema{Type: "string", Format: "byte"}
 		}
-		item := typeSchema(t.Elem(), schemas)
+		item := w.typeSchema(t.Elem())
 		return Schema{Type: "array", Items: &item}
 	case reflect.Map:
 		// The key of a map reaches JSON as a string, and the value carries
 		// its own schema.
-		value := typeSchema(t.Elem(), schemas)
+		value := w.typeSchema(t.Elem())
 		return Schema{Type: "object", AdditionalProperties: &value}
 	case reflect.Struct:
 		name := schemaName(t)
 		if name == "" {
 			return Schema{Type: "object"}
 		}
-		collectInto(schemas, t)
+		w.collectInto(t)
 		return Schema{Ref: "#/components/schemas/" + name}
 	case reflect.Interface:
 		// An empty interface carries any value, so the member states no type.
@@ -192,12 +259,30 @@ func knownSchema(t reflect.Type) (Schema, bool) {
 // textMarshaler is the interface of a type that writes itself as text.
 var textMarshaler = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
 
+// Named is a type that states the name of its schema.
+//
+// Two types of two packages can carry one name, such as models.User and
+// db.User. One description holds one schema for each name, so the walk reports
+// the pair as a fault. A type states another name to repair it, and the
+// generated client of a front end then reads both.
+//
+//	func (User) SchemaName() string { return "AccountUser" }
+type Named interface {
+	SchemaName() string
+}
+
+// named is the interface of a type that names its own schema.
+var named = reflect.TypeOf((*Named)(nil)).Elem()
+
 // schemaName returns the name of the schema of a struct.
 //
 // A generic type carries its argument in its name, such as Page[main.Task].
 // The characters of such a name do not stand in a reference, so the name loses
 // them and reads PageTask.
 func schemaName(t reflect.Type) string {
+	if name := statedName(t); name != "" {
+		return name
+	}
 	name := t.Name()
 	if name == "" {
 		return ""
@@ -217,37 +302,79 @@ func schemaName(t reflect.Type) string {
 	return b.String()
 }
 
+// statedName returns the name that a type states for its own schema, or the
+// empty string.
+func statedName(t reflect.Type) string {
+	if t.Implements(named) {
+		return reflect.New(t).Elem().Interface().(Named).SchemaName()
+	}
+	if reflect.PointerTo(t).Implements(named) {
+		return reflect.New(t).Interface().(Named).SchemaName()
+	}
+	return ""
+}
+
 // collectInto records the schema of a struct and of every struct that it
 // names. The entry stands before the walk, so a type that names itself ends.
-func collectInto(schemas map[string]Schema, t reflect.Type) {
+func (w *walk) collectInto(t reflect.Type) {
 	key := schemaName(t)
-	if _, ok := schemas[key]; ok {
+	if held, ok := w.holders[key]; ok {
+		if held != t {
+			// Two types carry one name. The walk keeps the first and reports
+			// the pair, because a silent second would state the shape of the
+			// first for both.
+			w.collisions = append(w.collisions, collision{Name: key, First: held, Second: t})
+		}
 		return
 	}
-	schemas[key] = Schema{Type: "object"}
+	w.holders[key] = t
+	w.schemas[key] = Schema{Type: "object"}
 
 	closed := false
 	out := Schema{
 		Type: "object", Description: docOf(t),
 		Properties: map[string]Schema{}, AdditionalProperties: &closed,
 	}
+	w.fieldsInto(t, &out)
+	sort.Strings(out.Required)
+	w.schemas[key] = out
+}
+
+// fieldsInto records the members of one struct on its schema.
+//
+// An embedded struct that carries no tag reaches JSON as its own fields,
+// because encoding/json promotes them. The schema therefore holds the same
+// fields, and a closed schema does not refuse the answer that the service
+// writes.
+func (w *walk) fieldsInto(t reflect.Type, out *Schema) {
+	// The direct fields stand first, because a field of the outer struct
+	// hides the field of an embedded struct that carries the same name.
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
-		if !f.IsExported() {
+		if !f.IsExported() || embedded(f) {
 			continue
 		}
 		member := name(f, "json")
 		if member == "" {
 			continue
 		}
-		out.Properties[member] = describeField(f, typeSchema(f.Type, schemas))
+		if _, held := out.Properties[member]; held {
+			// A field of the outer struct hides the field of an embedded
+			// struct that carries the same name. encoding/json does the same.
+			continue
+		}
+		out.Properties[member] = describeField(f, w.typeSchema(f.Type))
 		if !omitempty(f) {
 			// Go writes every field of a struct, so the answer carries it.
 			out.Required = append(out.Required, member)
 		}
 	}
-	sort.Strings(out.Required)
-	schemas[key] = out
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		if f.IsExported() && embedded(f) {
+			w.fieldsInto(deref(f.Type), out)
+		}
+	}
 }
 
 // describeField puts the prose and the values of the tags of a field on its

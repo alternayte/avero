@@ -28,6 +28,79 @@ A page of the ssr shape answers a view and names no body, so it registers with
 `Group` returns a child scope with a prefix and its own middleware. `Mount`
 serves an `http.Handler` under a prefix.
 
+## Mount a handler of another library
+
+`Mount` removes the prefix, so the handler reads the path below the mount:
+
+```go
+r.Mount("/admin", admin.Handler())   // GET /admin/users reaches /users
+```
+
+A library that states its own base path removes the prefix itself. Two removals
+leave a path that the handler does not hold, and the answer is 404.
+`avero.KeepPrefix()` gives such a handler the whole path:
+
+```go
+r.Mount("/api/auth", auth.Handler(), avero.KeepPrefix())   // the handler reads /api/auth/session
+```
+
+The middleware of the scope wraps a mounted handler, so the request
+identifier, the access log, the trace and the session reach it. The
+transaction is the one exception: a mounted handler writes to the
+ResponseWriter itself, so no commit can stand before the first byte. A
+middleware of your own states the same rule with
+`avero.Middleware{NeedsResponse: true}`.
+
+`avero routes` prints the chain that each mount runs.
+
+Middleware applies to the routes that follow `Use`, so a mount that needs no
+chain stands before it:
+
+```go
+manifest, _ := avero.MountAssets(r, dist, "assets/dist")   // no chain
+r.Use(avero.Stack{Secret: cfg.Secret, Tx: avero.Transaction(engine)}.Middleware()...)
+r.Get("/posts", avero.In(m.List))                          // the whole chain
+```
+
+## The answer of a typed handler
+
+A typed handler returns the value that it answers, and the responder of the
+router turns that value into a response. The default writes JSON.
+
+An application that renders pages states its own responder one time, and every
+typed handler then returns a view:
+
+```go
+r := avero.NewRouter(avero.WithResponder(func(c *avero.Ctx, code int, v any) avero.Response {
+	if component, ok := v.(avero.ViewComponent); ok {
+		return avero.View(component)
+	}
+	return avero.JSON(code, v)
+}))
+```
+
+A handler that returns a `Response` built the whole answer, so the responder
+never sees it. A handler that returns `avero.NoBody` answers 204.
+
+## Serve one part of Avero from another router
+
+Avero goes out as well as in. An application that holds a mux of its own, or a
+chi router, adopts one handler, one middleware or one router:
+
+```go
+mux.Handle("GET /posts", avero.In(m.List).HTTP())            // one handler
+mux.Handle("/", avero.RequestID().HTTP()(next))              // one middleware
+mux.Handle("/api/", http.StripPrefix("/api", api.MustHandler()))  // a whole router
+```
+
+`Handler.HTTP()` writes the Response itself, because no router surrounds it. An
+error becomes the problem document that the error carries.
+`Router.MustHandler()` panics on a registration fault, with the text that
+`Handler()` returns, so a fault still appears before the process serves.
+
+`avero.Adapt` carries the other direction: it turns a `net/http` middleware
+into an Avero one.
+
 ## A handler
 
 ```go
@@ -122,7 +195,7 @@ r.Use(avero.Stack{
 	Secret:  cfg.Secret,
 	Logger:  logger,
 	Trace:   provider.HTTPMiddleware(),
-	Engine:  engine,
+	Tx:      avero.Transaction(engine),
 	Session: []avero.Middleware{avero.Adapt("session", auth.LoadSession)},
 	Auth:    []avero.Middleware{avero.Adapt("auth", auth.RequireAuth)},
 }.Middleware()...)
@@ -131,6 +204,12 @@ r.Use(avero.Stack{
 The order is request ID, recover, access log, trace, flash, session, CSRF,
 transaction and authentication. A field with no value leaves its middleware
 out, so an inspection command passes a nil engine and runs no transaction.
+
+The router itself imports no database and no authentication library. `Tx` takes
+the middleware that `avero.Transaction` builds, which the `db` package holds,
+and `Session` and `Auth` take the middleware of auth-all through `Adapt`. An
+application that keeps its own storage writes its own middleware in `Tx` and
+compiles neither library.
 
 `Middleware` builds the chain of an application that serves a browser.
 `API` builds the same chain without the flash cookie and without the CSRF

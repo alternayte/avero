@@ -10,7 +10,7 @@ server, so the first application needs no database of its own.
 ## Write the application
 
 ```
-go install github.com/alternayte/avero/cmd/avero@latest
+go install github.com/alternayte/avero/cli/cmd/avero@latest
 
 avero new blog
 cd blog
@@ -74,7 +74,7 @@ func wire(engine *drel.Engine, cfg Config) (*avero.Wiring, error) {
 	// Stack states the order of the chain one time. A nil engine leaves the
 	// transaction out. Add the session and the authentication of auth-all in
 	// the Session and Auth fields, and Stack puts them in the correct place.
-	r.Use(avero.Stack{Secret: secret, Engine: engine}.Middleware()...)
+	r.Use(avero.Stack{Secret: secret, Tx: avero.Transaction(engine)}.Middleware()...)
 
 	// MountAssets reads the manifest and serves the built files at /assets/.
 	// The binary carries them, so the server needs no directory beside it.
@@ -118,7 +118,7 @@ state it in the wiring.
 ```go
 func wire(engine *drel.Engine, cfg Config) (*avero.Wiring, error) {
 	r := avero.NewRouter()
-	r.Use(avero.Stack{Secret: cfg.Secret, Engine: engine}.Middleware()...)
+	r.Use(avero.Stack{Secret: cfg.Secret, Tx: avero.Transaction(engine)}.Middleware()...)
 
 	mailer := smtp.New(cfg.SMTPURL)
 
@@ -135,6 +135,24 @@ func wire(engine *drel.Engine, cfg Config) (*avero.Wiring, error) {
 	}, nil
 }
 ```
+
+## Keep the router that you have
+
+An application that already holds a router, such as chi, states the `Handler`
+field of the wiring and no `Router`:
+
+```go
+func wire(engine *drel.Engine, cfg Config) (*avero.Wiring, error) {
+	r := chi.NewRouter()
+	r.Get("/posts", posts.List)
+	return &avero.Wiring{Handler: r}, nil
+}
+```
+
+It keeps the lifecycle, the configuration, the boot checks, the readiness path
+and `avero doctor`. It keeps its own routing. `avero routes` and
+`avero openapi` report nothing for such an application, because Avero knows no
+route of it, and each one says so.
 
 Avero starts a component before the server accepts a request. It stops the
 component after the last request drains. It runs a check before the process

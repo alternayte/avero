@@ -32,10 +32,13 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/alternayte/auth-all/store"
 	"github.com/alternayte/drel"
 
 	"github.com/alternayte/avero/assets"
+	"github.com/alternayte/avero/auth"
 	"github.com/alternayte/avero/config"
+	"github.com/alternayte/avero/db"
 	"github.com/alternayte/avero/host"
 	"github.com/alternayte/avero/module"
 	"github.com/alternayte/avero/router"
@@ -162,7 +165,14 @@ type (
 	Validator = router.Validator
 	// RouteReport lists every route of a router.
 	RouteReport = router.Report
+	// MountOption states one more fact of a mount.
+	MountOption = router.MountOption
 )
+
+// KeepPrefix passes the whole path to a mounted handler. See router.KeepPrefix.
+//
+//	r.Mount("/api/auth", auth.Handler(), avero.KeepPrefix())
+func KeepPrefix() MountOption { return router.KeepPrefix() }
 
 // The toast levels and the CSRF status.
 const (
@@ -178,8 +188,31 @@ const (
 // needs no router. See router.NewCtx.
 func NewCtx(w http.ResponseWriter, r *http.Request) *Ctx { return router.NewCtx(w, r) }
 
+// Responder turns the value that a typed handler returned into a Response.
+// See router.Responder.
+type Responder = router.Responder
+
+// WithResponder sets how a typed handler turns its value into a Response. The
+// default writes JSON. See router.WithResponder.
+//
+//	r := avero.NewRouter(avero.WithResponder(func(c *avero.Ctx, code int, v any) avero.Response {
+//	    if component, ok := v.(avero.ViewComponent); ok {
+//	        return avero.View(component)
+//	    }
+//	    return avero.JSON(code, v)
+//	}))
+func WithResponder(fn Responder) router.Option { return router.WithResponder(fn) }
+
 // NewRouter builds a router. See router.New.
 func NewRouter(opts ...router.Option) *Router { return router.New(opts...) }
+
+// The way out of Avero. Adapt is the way in. An application that holds a mux
+// of its own adopts one handler, one middleware or one router, and it keeps
+// the rest of its stack. See router/interop.go.
+//
+//	mux.Handle("GET /posts", avero.In(m.List).HTTP())
+//	mux.Handle("/api/", http.StripPrefix("/api", api.MustHandler()))
+//	stack := avero.RequestID().HTTP()(next)
 
 // The response constructors. See the router package.
 
@@ -361,8 +394,26 @@ func Flash(secret Secret, opts ...router.CookieOption) Middleware {
 }
 
 // Transaction opens a drel transaction and decides the commit from the
-// response.
-func Transaction(e *drel.Engine) Middleware { return router.Transaction(e) }
+// response. See db.Transaction.
+//
+// It stands in the Tx field of Stack. A nil engine returns the zero
+// middleware, which Stack leaves out.
+func Transaction(e *drel.Engine) Middleware { return db.Transaction(e) }
+
+// Tx returns the transaction that Transaction opened, and reports whether one
+// surrounds the request. See db.Tx.
+func Tx(ctx context.Context) (*drel.Tx, bool) { return db.Tx(ctx) }
+
+// MustTx returns the transaction and panics when none is present. See
+// db.MustTx.
+func MustTx(ctx context.Context) *drel.Tx { return db.MustTx(ctx) }
+
+// User returns the signed-in user of the request, or nil. See auth.User.
+func User(ctx context.Context) *store.User { return auth.User(ctx) }
+
+// Session returns the auth-all session of the request, or nil. See
+// auth.Session.
+func Session(ctx context.Context) *store.Session { return auth.Session(ctx) }
 
 // Adapt turns a net/http middleware into an Avero middleware.
 func Adapt(name string, mw func(http.Handler) http.Handler) Middleware {

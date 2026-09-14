@@ -3,6 +3,124 @@
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.5.0
+
+This release makes Avero adoptable in part. The router imports no database and
+no authentication library, an application that holds a router of another
+library keeps the lifecycle of the host, and one handler, one middleware or one
+whole router reaches a mux of the standard library or of chi.
+
+The CLI stands in a module of its own, `github.com/alternayte/avero/cli`.
+Install it with
+`go install github.com/alternayte/avero/cli/cmd/avero@latest`.
+
+### Breaking
+
+- `Ctx.Tx`, `Ctx.MustTx`, `Ctx.User` and `Ctx.Session` are gone. Write
+  `avero.MustTx(c)`, `avero.Tx(c)`, `avero.User(c)` and `avero.Session(c)`, or
+  import the `db` and `auth` packages.
+- `Stack.Engine` is now `Stack.Tx`, which takes `avero.Transaction(engine)`.
+- `openapi.Describe` returns a fault beside the document.
+- `assets.Build`, `assets.Config`, the tiers, the pins, the lock and Tailwind
+  stand in `assets/pipeline`, which the CLI module holds. An application keeps
+  `assets.Handler`, `assets.SPA`, `assets.Manifest` and `assets.LoadManifest`.
+- The CLI is the module `github.com/alternayte/avero/cli`. The packages
+  `scaffold`, `mcp` and `verify` moved with it.
+
+### Added
+
+- **`Wiring` accepts an `http.Handler`.** An application that holds a router of
+  another library, such as chi, states the `Handler` field instead of the
+  `Router` field, and it keeps the lifecycle, the configuration, the boot
+  checks, the readiness and `avero doctor`. `Modules` is now optional, so a
+  wiring can state one field. `avero routes` and `avero openapi` state the
+  repair for such an application, because Avero knows no route of it.
+- **`WithResponder` states how a typed handler answers.** A typed route wrote
+  JSON for every value. An application that renders pages now states one
+  responder, and a handler returns a view:
+  `avero.NewRouter(avero.WithResponder(...))`. A handler that returns a
+  `Response` keeps it, and the responder never sees it. The description of the
+  API states no JSON body for an answer of an interface type.
+- **A schema name that two types share is a fault.** The description held one
+  schema for each name, so `models.User` and `db.User` silently became one
+  shape, and the name was not deterministic. `openapi.Describe` now returns the
+  fault and names both types. A type states another name with
+  `func (T) SchemaName() string`. This matters for the gate, because
+  `openapi.json` stands under `git diff --exit-code`.
+- **The router imports no database and no authentication library.** `router`
+  and `config` are its whole dependency set. Two packages hold the glue: `db`
+  holds `Transaction`, `Tx`, `MustTx`, `Repo` and `Save`, and `auth` holds
+  `User` and `Session`. Each one takes a `context.Context`, and `Ctx` is a
+  `context.Context`, so a handler writes `avero.MustTx(c)` and `avero.User(c)`.
+  `Ctx.Tx`, `Ctx.MustTx`, `Ctx.User` and `Ctx.Session` are gone, and
+  `Stack.Engine` is now `Stack.Tx`, which takes `avero.Transaction(engine)`.
+  An application that keeps its own storage compiles neither library.
+- **Avero goes out as well as in.** `Handler.HTTP()`, `Middleware.HTTP()` and
+  `Router.MustHandler()` turn a handler, a middleware and a router into the
+  types of `net/http`, so a mux of another library serves one part of Avero and
+  keeps the rest of its stack. `Adapt` already carried the other direction.
+- **The CLI stands in a module of its own**, `github.com/alternayte/avero/cli`.
+  Install it with `go install github.com/alternayte/avero/cli/cmd/avero@latest`.
+  esbuild and fsnotify leave the go.mod of the host, so an application that
+  imports Avero carries neither. `go.work` joins the two modules for a person
+  who works on the repository.
+- **The asset pipeline stands in its own package.** `assets` holds the
+  manifest and the two handlers that an application serves. `assets/pipeline`
+  holds the bundler, Tailwind, the pins and the lock file. An application
+  therefore compiles no esbuild.
+
+- **`avero.KeepPrefix()`** is an option of `Mount`. The default removes the
+  prefix from the path. A handler of a library that states its own base path,
+  such as the handler of auth-all, removes the prefix itself, and two removals
+  answer 404. The option gives such a handler the whole path.
+- **The package manager of a front end.** `avero.json` names it in the
+  `packageManager` member of the assets block: npm, bun, pnpm or yarn. An
+  application that names none takes the `packageManager` member of
+  `package.json`, then the lock file, then npm. The `install`, `dev`, `api` and
+  `command` members replace one command each. `avero new --package-manager`
+  writes the member. Avero no longer calls npm by name.
+- **`avero generate` writes `openapi.json` and the client of the front end**,
+  and `avero generate --check` proves that `openapi.json` is current. The check
+  answered 0 for a stale description before.
+- **The 422 answer states its field errors.** The description of the API names
+  the `ValidationProblem` schema, which carries the members of `Problem` and the
+  `errors` member, a map of field name to message. A generated client reads the
+  field errors and needs no cast.
+
+### Fixed
+
+- **The telemetry states no `http.route` when the route is unknown.** It wrote
+  an empty value, which a dashboard cannot tell from a route that is the empty
+  string. A middleware that wraps a whole mux from outside runs before the
+  dispatch of net/http, so it reads no pattern. The router registers each route
+  with its own chain below that dispatch, and a test now pins it.
+- **`Use` ignores the zero middleware**, so a constructor that states none,
+  such as `avero.Transaction(nil)` for an inspection command, needs no guard
+  at the call site.
+
+- **The writer that records the status now flushes and hijacks.** It carries
+  `Unwrap`, `Flush` and `Hijack`, so a mounted handler of a server sent event
+  stream or a websocket reaches the writer of the server.
+
+### Changed
+
+- **The middleware of the scope wraps a mounted handler.** A mount ran no
+  middleware before, so a library that an application mounted carried no
+  request identifier, no access log, no trace and no session. The transaction
+  stays out, because a mounted handler writes the answer itself and no commit
+  can stand before the first byte. `Middleware.NeedsResponse` states that rule,
+  and `avero routes` prints the chain that each mount runs.
+- **The schema of a struct holds the fields of an embedded struct.** Go writes
+  the fields of an embedded struct as members of the outer object. The
+  description stated none of them and closed the object, so the schema refused
+  the answer that the service writes. A request body follows the same rule.
+- **`avero slice` writes `drel.yaml` when the application holds none.** drel
+  refuses an empty `modules` block, so the file and its first entry arrive
+  together. The dialect follows `DATABASE_URL`. The command states the repair
+  when `go.mod` names no drel tool, and it writes no file in that case.
+- **`avero generate` and `avero migrate` skip drel while `drel.yaml` names no
+  module.** An application that holds no slice generates its handlers.
+
 ## v0.4.0
 
 ### Added

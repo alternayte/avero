@@ -41,19 +41,28 @@ jobs:
             exit 1
           fi
 
-      # 2. go vet passes.
+      # 2. go vet passes. The repository holds two modules: the host and the
+      # CLI.
       - name: vet
-        run: go vet ./...
+        run: |
+          go vet ./...
+          cd cli && go vet ./...
 
       # 3. golangci-lint passes. The version is pinned, because a linter that
       # a lower Go version built refuses the target of go.mod.
       - uses: golangci/golangci-lint-action@v8
         with:
           version: v2.12.2
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.12.2
+          working-directory: cli
 
       # 4. Unit tests pass with the race detector.
       - name: test
-        run: go test ./... -race -count=1
+        run: |
+          go test ./... -race -count=1
+          cd cli && go test ./... -race -count=1
 
       # 7. Every generated file is current.
       - name: generate
@@ -66,22 +75,23 @@ jobs:
       # and one module from a CDN.
       - name: integration
         run: |
-          go test ./assets/... -race -tags=integration -timeout 10m
+          cd cli
+          go test ./pipeline/... -race -tags=integration -timeout 10m
           go test ./internal/cli/... -tags=integration -run 'TestTheDoctor|TestTheRoutesAndThe|TestVerifyRuns|TestTheSpaBinary|TestTheOpenAPI|TestTheGeneratedModulesHoldARepository' -timeout 20m
-          go test ./cmd/avero/dev/... -tags=integration -run TestTheProductionBuild -timeout 10m
+          go test ./dev/... -tags=integration -run TestTheProductionBuild -timeout 10m
           go test ./mcp/... -tags=integration -timeout 20m
 
       # 8, 9. The three reference applications.
       - name: examples
         run: |
-          go run ./internal/cmd/averoexamples -check
-          go test ./internal/cli/... -tags=integration -run TestEachShapeScaffolds -timeout 20m
+          go run ./cli/internal/cmd/averoexamples -check
+          cd cli && go test ./internal/cli/... -tags=integration -run TestEachShapeScaffolds -timeout 20m
           # A clone holds no built asset, because an example ignores its
           # output directory.
-          go run ./internal/cmd/averoexamples -assets
-          cd examples/blog && go build ./... && go test ./... -count=1 && cd ../..
-          cd examples/board && go build ./... && go test ./... -count=1 && cd ../..
-          cd examples/orders && go build ./... && go test ./... -count=1
+          go run ./cli/internal/cmd/averoexamples -assets
+          cd examples/blog && GOWORK=off go build ./... && GOWORK=off go test ./... -count=1 && cd ../..
+          cd examples/board && GOWORK=off go build ./... && GOWORK=off go test ./... -count=1 && cd ../..
+          cd examples/orders && GOWORK=off go build ./... && GOWORK=off go test ./... -count=1
 
   budgets:
     name: budgets
@@ -101,8 +111,9 @@ jobs:
 
       - name: measure
         run: |
+          cd cli
           go test ./internal/cli/... -tags=integration -run TestDX1 -timeout 15m -v
-          go test ./cmd/avero/dev/... -tags=integration -run 'TestDX2|TestDX3' -timeout 15m -v
+          go test ./dev/... -tags=integration -run 'TestDX2|TestDX3' -timeout 15m -v
 
       - name: report
         if: always()

@@ -50,8 +50,10 @@ func newID() string {
 	return hex.EncodeToString(b[:])
 }
 
-// statusOf returns the status that a response will send.
-func statusOf(res Response) int {
+// StatusOf returns the status that a response will send. A nil response
+// answers 204, as the router does. A middleware outside this package reads it,
+// such as the transaction of the db package.
+func StatusOf(res Response) int {
 	if res == nil {
 		return http.StatusNoContent
 	}

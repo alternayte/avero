@@ -1,0 +1,9 @@
+// The repository holds two modules: the host and the CLI. The workspace joins
+// them, so a change to the host reaches the CLI with no release and no replace
+// directive. A consumer of either module never reads this file.
+go 1.26.2
+
+use (
+	.
+	./cli
+)

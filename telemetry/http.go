@@ -32,12 +32,17 @@ func (p *Provider) HTTPMiddleware() router.Middleware {
 	}
 	return router.Middleware{Name: "trace", Wrap: func(next router.Handler) router.Handler {
 		return func(c *router.Ctx) (router.Response, error) {
+			// net/http fills Pattern when the mux dispatches the request. The
+			// router registers each route on the mux with its own chain, so
+			// the pattern stands here. A middleware that wraps the whole mux
+			// from outside, which Middleware.HTTP allows, runs before the
+			// dispatch and reads no pattern. The route is then unknown, and
+			// the span carries the method alone.
 			method, route := splitPattern(c.Request().Pattern, c.Request().Method)
 			start := time.Now()
 
 			ctx, span := p.start(c.Context(), spanName(method, route), trace.SpanKindServer,
-				semconv.HTTPRequestMethodKey.String(method),
-				semconv.HTTPRoute(route))
+				routeAttributes(method, route)...)
 			c.SetContext(ctx)
 
 			res, err := next(c)
@@ -56,14 +61,26 @@ func (p *Provider) HTTPMiddleware() router.Middleware {
 
 			if p.duration != nil {
 				p.duration.Record(ctx, time.Since(start).Seconds(),
-					metric.WithAttributes(
-						semconv.HTTPRequestMethodKey.String(method),
-						semconv.HTTPRoute(route),
-						semconv.HTTPResponseStatusCode(code)))
+					metric.WithAttributes(append(routeAttributes(method, route),
+						semconv.HTTPResponseStatusCode(code))...))
 			}
 			return res, err
 		}
 	}}
+}
+
+// routeAttributes names the method and, when the dispatch already matched a
+// route, the pattern of that route.
+//
+// An unknown route states no http.route attribute. An empty value would state
+// that the route is the empty string, and a dashboard cannot tell the two
+// apart.
+func routeAttributes(method, route string) []attribute.KeyValue {
+	out := []attribute.KeyValue{semconv.HTTPRequestMethodKey.String(method)}
+	if route == "" {
+		return out
+	}
+	return append(out, semconv.HTTPRoute(route))
 }
 
 // statusOf returns the status that the client will read.
@@ -97,5 +114,3 @@ func spanName(method, route string) string {
 	}
 	return method + " " + route
 }
-
-var _ = attribute.String

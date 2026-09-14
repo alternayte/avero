@@ -34,6 +34,10 @@ func (s *Set) Report() (*Report, error) {
 	if err := s.Err(); err != nil {
 		return nil, err
 	}
+	if s == nil {
+		// An application states no module set, so it contributes no row.
+		return &Report{Modules: []Contribution{}}, nil
+	}
 	rows := make([]Contribution, len(s.rows))
 	copy(rows, s.rows)
 	return &Report{Modules: rows}, nil
@@ -164,6 +168,9 @@ type ModelRow struct {
 // Schema returns the models that the modules describe.
 func Schema(s *Set) *SchemaReport {
 	out := &SchemaReport{Models: []ModelRow{}}
+	if s == nil {
+		return out
+	}
 	for _, row := range s.rows {
 		if row.Description == nil {
 			continue

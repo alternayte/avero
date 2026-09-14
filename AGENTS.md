@@ -4,7 +4,8 @@ Avero is an application host for Go services. It owns the composition root, the
 lifecycle, the configuration, the telemetry, and the transactional plumbing for
 messaging. It is not a web framework.
 
-- Module path: `github.com/alternayte/avero`
+- Modules: `github.com/alternayte/avero` and `github.com/alternayte/avero/cli`.
+  `go.work` joins them. Run a go command of the CLI with `cd cli`.
 - Binary and CLI: `avero`
 - Specification: `docs/internal/sdd.md`. This file is local only. Read it before
   you change a subsystem. The SDD wins over this file.
@@ -12,34 +13,31 @@ messaging. It is not a web framework.
 ## Commands
 
 ```
-just verify          # the full gate. See "Definition of done".
-go build ./...
-go test ./... -race -count=1
+just verify          # the full gate, both modules. See "Definition of done".
+go build ./... && cd cli && go build ./...
+go test ./... -race -count=1              # run it in each module
 go test ./... -race -tags=integration     # needs PostgreSQL and RabbitMQ
 gofmt -l .
 go vet ./...
 golangci-lint run
 ```
 
-Run one test:
-
-```
-go test ./router -race -run TestName
-```
+Run one test: `go test ./router -race -run TestName`.
 
 ## Repository layout
 
-One directory for each subsystem. `cmd/avero` holds the CLI. `config`, `host`,
-`telemetry`, `router`, `codegen`, `module`, `outbox`, `inbox`, `es`, `view`,
-`assets`, `ds`, `htmx` and `mcp` hold the subsystems. `scaffold/templates` holds
-the project templates. `examples` holds the three reference applications.
+One directory for each subsystem. The host holds `config`, `host`, `telemetry`,
+`router`, `db`, `auth`, `codegen`, `module`, `openapi`, `outbox`, `inbox`, `es`,
+`view`, `assets`, `ds`, `htmx`. `cli` holds `cmd/avero`, `internal/cli`,
+`pipeline`, `dev`, `mcp`, `verify`, `scaffold/templates`. `examples` holds the
+three reference applications: they are standalone, so run their go commands
+with `GOWORK=off`.
 
 ## Design rules
 
 1. No global mutable state. No facades. No package-level singletons.
 2. No runtime reflection on a request path. Generate the code instead.
-3. Dependencies are struct fields. The constructor takes them. `main.go` supplies
-   them.
+3. Dependencies are struct fields that the constructor takes and `main.go` fills.
 4. Generated code is plain Go. A person can read it, edit it, and delete it.
 5. Avero owns lifecycle. Avero does not own semantics.
 6. Explicit beats short. Do not add magic to save a line.

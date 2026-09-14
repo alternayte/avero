@@ -88,7 +88,8 @@ func (l *Faults) Unwrap() []error {
 	return out
 }
 
-// fault returns one fault as an error.
-func fault(file, message, repair string) error {
+// NewFault returns one fault as an error. The pipeline package builds a fault
+// of the build with it, so both halves of the asset subsystem state one shape.
+func NewFault(file, message, repair string) error {
 	return &Fault{File: file, Message: message, Repair: repair}
 }

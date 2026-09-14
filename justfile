@@ -15,26 +15,29 @@ verify: fmt vet lint test generate-check integration reference-apps budgets
 fmt:
     @out=$(gofmt -l .); if [ -n "$out" ]; then echo "gofmt: these files need a format:"; echo "$out"; exit 1; fi
 
-# 2. go vet passes.
+# 2. go vet passes. The repository holds two modules: the host and the CLI.
 vet:
     go vet ./...
+    cd cli && go vet ./...
 
 # 3. golangci-lint passes.
 lint:
     golangci-lint run
+    cd cli && golangci-lint run
 
 # 4. Unit tests pass with the race detector.
 test:
     go test ./... -race -count=1
+    cd cli && go test ./... -race -count=1
 
 # 5, 6. Integration tests. The asset suite needs the network. The CLI suite
 # scaffolds an application and drives its commands. The broker suite arrives
 # with S7.
 integration:
-    go test ./assets/... -race -tags=integration -timeout 10m
-    go test ./internal/cli/... -tags=integration -run 'TestTheDoctor|TestTheRoutesAndThe|TestVerifyRuns|TestTheSpaBinary|TestTheOpenAPI|TestTheGeneratedModulesHoldARepository' -timeout 20m
-    go test ./cmd/avero/dev/... -tags=integration -run TestTheProductionBuild -timeout 10m
-    go test ./mcp/... -tags=integration -timeout 20m
+    cd cli && go test ./pipeline/... -race -tags=integration -timeout 10m
+    cd cli && go test ./internal/cli/... -tags=integration -run 'TestTheDoctor|TestTheRoutesAndThe|TestVerifyRuns|TestTheSpaBinary|TestTheOpenAPI|TestTheGeneratedModulesHoldARepository' -timeout 20m
+    cd cli && go test ./dev/... -tags=integration -run TestTheProductionBuild -timeout 10m
+    cd cli && go test ./mcp/... -tags=integration -timeout 20m
     @echo "integration: no broker test exists yet. S7 adds the first one."
 
 # 7. Every generated file is current.
@@ -49,26 +52,26 @@ generate-check:
 
 # 8, 9. Scaffold, build and test the three reference applications.
 reference-apps: examples-check
-    go test ./internal/cli/... -tags=integration -run TestEachShapeScaffolds -timeout 20m
+    cd cli && go test ./internal/cli/... -tags=integration -run TestEachShapeScaffolds -timeout 20m
     # A clone holds no built asset, because an example ignores its output
     # directory. The starter assets let each example build. The spa example
     # takes the index document that stands until Vite writes its own.
-    go run ./internal/cmd/averoexamples -assets
-    cd examples/blog && go build ./... && go test ./... -count=1
-    cd examples/board && go build ./... && go test ./... -count=1
-    cd examples/orders && go build ./... && go test ./... -count=1
+    go run ./cli/internal/cmd/averoexamples -assets
+    cd examples/blog && GOWORK=off go build ./... && GOWORK=off go test ./... -count=1
+    cd examples/board && GOWORK=off go build ./... && GOWORK=off go test ./... -count=1
+    cd examples/orders && GOWORK=off go build ./... && GOWORK=off go test ./... -count=1
 
 # Write the three reference applications again. Run it after a change to a
 # template, and commit the result.
 examples:
-    go run ./internal/cmd/averoexamples
+    go run ./cli/internal/cmd/averoexamples
 
 # The examples match the templates of the scaffolder.
 examples-check:
-    go run ./internal/cmd/averoexamples -check
+    go run ./cli/internal/cmd/averoexamples -check
 
 # 10. Measure DX-1 to DX-5.
 budgets:
-    go test ./internal/cli/... -tags=integration -run TestDX1 -timeout 15m -v
-    go test ./cmd/avero/dev/... -tags=integration -run 'TestDX2|TestDX3' -timeout 15m -v
+    cd cli && go test ./internal/cli/... -tags=integration -run TestDX1 -timeout 15m -v
+    cd cli && go test ./dev/... -tags=integration -run 'TestDX2|TestDX3' -timeout 15m -v
     @cat artifacts/verification.md

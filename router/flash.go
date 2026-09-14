@@ -33,7 +33,7 @@ func Flash(secret config.Secret, opts ...CookieOption) Middleware {
 			if err != nil {
 				return res, err
 			}
-			if isRedirect(statusOf(res)) && len(c.toasts) > 0 {
+			if isRedirect(StatusOf(res)) && len(c.toasts) > 0 {
 				if body, mErr := json.Marshal(c.toasts); mErr == nil {
 					http.SetCookie(c.Writer(), newCookie(FlashCookieName, sign.sign(body), opts))
 				}

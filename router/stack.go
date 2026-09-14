@@ -4,7 +4,6 @@ import (
 	"log/slog"
 
 	"github.com/alternayte/avero/config"
-	"github.com/alternayte/drel"
 )
 
 // Stack builds the middleware chain of an application in the order that the
@@ -24,12 +23,12 @@ import (
 //	    Secret: cfg.Secret,
 //	    Logger: log,
 //	    Trace:  provider.HTTPMiddleware(),
-//	    Engine: engine,
+//	    Tx:     db.Transaction(engine),
 //	}.Middleware()...)
 //
-// The router package must not import telemetry or auth-all, because both
-// import the router. Trace, Session and Auth therefore carry a value that the
-// application builds.
+// The router package imports no database, no authentication library and no
+// telemetry, because each one imports the router. Tx, Trace, Session and Auth
+// therefore carry a value that the application builds.
 type Stack struct {
 	// Secret signs the CSRF cookie and the flash cookie. It is mandatory.
 	Secret config.Secret
@@ -40,9 +39,13 @@ type Stack struct {
 	Trace Middleware
 	// Session holds the session middleware of auth-all, adapted with Adapt.
 	Session []Middleware
-	// Engine opens the transaction. A nil value leaves the transaction out,
-	// which an inspection command needs.
-	Engine *drel.Engine
+	// Tx opens the transaction of a request. `db.Transaction(engine)` builds
+	// it. The zero value leaves the transaction out, which an inspection
+	// command needs.
+	//
+	// The router holds no database. An application that keeps its own
+	// storage writes its own middleware here.
+	Tx Middleware
 	// Auth holds the authentication middleware of auth-all, adapted with
 	// Adapt. It runs last, so it reads the session and the transaction.
 	Auth []Middleware
@@ -81,8 +84,8 @@ func (s Stack) build(cookies bool) []Middleware {
 	if cookies {
 		mws = append(mws, CSRF(s.Secret, s.Cookie...))
 	}
-	if s.Engine != nil {
-		mws = append(mws, Transaction(s.Engine))
+	if s.Tx.Wrap != nil {
+		mws = append(mws, s.Tx)
 	}
 	return append(mws, s.Auth...)
 }

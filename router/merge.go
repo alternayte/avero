@@ -28,10 +28,17 @@ func (r *Router) Merge(src *Router) {
 	for _, route := range src.Routes() {
 		route.Pattern = joinPattern(r.prefix, route.Pattern)
 		route.mws = append(append([]Middleware(nil), r.mws...), route.mws...)
+		if route.Mounted {
+			// A mounted handler writes the answer itself, so the middleware
+			// that acts on the response stays out of its chain.
+			route.mws = mountable(route.mws)
+		}
 		route.Middleware = names(route.mws)
 		if route.Mounted {
 			route.Pattern = strings.TrimSuffix(route.Pattern, "/") + "/"
-			route.stripped = strings.TrimSuffix(route.Pattern, "/")
+			if !route.KeepPrefix {
+				route.stripped = strings.TrimSuffix(route.Pattern, "/")
+			}
 		}
 		r.add(route)
 	}

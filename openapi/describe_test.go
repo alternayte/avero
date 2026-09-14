@@ -3,6 +3,7 @@ package openapi_test
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -68,7 +69,11 @@ func describe(t *testing.T) *openapi.Document {
 	if err != nil {
 		t.Fatalf("the router holds a fault: %v", err)
 	}
-	return openapi.Describe("blog", "1.0.0", rep.Routes, router.API{})
+	doc, err := openapi.Describe("blog", "1.0.0", rep.Routes, router.API{})
+	if err != nil {
+		t.Fatalf("Describe returned %v", err)
+	}
+	return doc
 }
 
 // The description names the schema of the answer, and the components carry it.
@@ -196,7 +201,10 @@ func TestARouteWithNoTypeStatesNoOperation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the router holds a fault: %v", err)
 	}
-	doc := openapi.Describe("blog", "1.0.0", rep.Routes, router.API{})
+	doc, err := openapi.Describe("blog", "1.0.0", rep.Routes, router.API{})
+	if err != nil {
+		t.Fatalf("Describe returned %v", err)
+	}
 	if names := doc.PathNames(); len(names) != 1 || names[0] != "/posts" {
 		t.Fatalf("the description holds %v", names)
 	}
@@ -230,7 +238,10 @@ func TestTheTagsOfAFieldReachTheDescription(t *testing.T) {
 	r := router.New()
 	router.Get(r, "/notes", note)
 	rep, _ := r.Report()
-	doc := openapi.Describe("blog", "1.0.0", rep.Routes, router.API{})
+	doc, err := openapi.Describe("blog", "1.0.0", rep.Routes, router.API{})
+	if err != nil {
+		t.Fatalf("Describe returned %v", err)
+	}
 
 	schema := doc.Components.Schemas["Note"]
 	if schema.Description != "One note of a reader" {
@@ -274,7 +285,10 @@ func TestTwoAnswersOfOneStatusStateOneOf(t *testing.T) {
 		router.Answers[PostList](http.StatusConflict, "the titles are taken"),
 		router.AnswerHeader(http.StatusCreated, "Location", "the address of the new post"))
 	rep, _ := r.Report()
-	doc := openapi.Describe("blog", "1.0.0", rep.Routes, router.API{})
+	doc, err := openapi.Describe("blog", "1.0.0", rep.Routes, router.API{})
+	if err != nil {
+		t.Fatalf("Describe returned %v", err)
+	}
 
 	op, _ := doc.Operation(http.MethodPost, "/posts")
 	one := op.Responses["409"].Content["application/json"].Schema
@@ -301,7 +315,10 @@ func TestTheAPIStatesItsInfoAndItsSchemes(t *testing.T) {
 	router.Get(r, "/posts", list)
 	router.Get(r, "/health", list, router.Public())
 	rep, _ := r.Report()
-	doc := openapi.Describe("ignored", "0.0.0", rep.Routes, r.API())
+	doc, err := openapi.Describe("ignored", "0.0.0", rep.Routes, r.API())
+	if err != nil {
+		t.Fatalf("Describe returned %v", err)
+	}
 
 	if doc.Info.Title != "Blog" || doc.Info.Version != "2.0.0" || doc.Info.Description == "" {
 		t.Fatalf("the info states %+v", doc.Info)
@@ -336,7 +353,10 @@ func TestTheTagsOfTheInputStateTheMediaType(t *testing.T) {
 	router.Post(r, "/forms", send)
 	router.Post(r, "/posts", create)
 	rep, _ := r.Report()
-	doc := openapi.Describe("blog", "1.0.0", rep.Routes, router.API{})
+	doc, err := openapi.Describe("blog", "1.0.0", rep.Routes, router.API{})
+	if err != nil {
+		t.Fatalf("Describe returned %v", err)
+	}
 
 	form, _ := doc.Operation(http.MethodPost, "/forms")
 	if _, ok := form.RequestBody.Content[openapi.FormContent]; !ok {
@@ -348,5 +368,156 @@ func TestTheTagsOfTheInputStateTheMediaType(t *testing.T) {
 	post, _ := doc.Operation(http.MethodPost, "/posts")
 	if _, ok := post.RequestBody.Content[openapi.JSONContent]; !ok {
 		t.Fatalf("the JSON route reads %v", post.RequestBody.Content)
+	}
+}
+
+// QuestSummary is the part of the answer that a list and a detail share.
+type QuestSummary struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+// QuestDetail carries the summary and the body of one quest.
+type QuestDetail struct {
+	QuestSummary
+	Body string `json:"body"`
+}
+
+type questInput struct {
+	QuestSummary
+	Note string `json:"note" validate:"required"`
+}
+
+func (i *questInput) Bind(_ *router.Ctx) error                 { return nil }
+func (i *questInput) Validate(_ *router.Ctx, _ *router.Fields) {}
+
+func detail(_ *router.Ctx, _ questInput) (QuestDetail, error) { return QuestDetail{}, nil }
+
+// Go writes the fields of an embedded struct as members of the outer object,
+// so the schema states them. A closed schema without them refuses the answer
+// that the service writes.
+func TestTheSchemaHoldsTheFieldsOfAnEmbeddedStruct(t *testing.T) {
+	r := router.New()
+	router.Post(r, "/quests", detail)
+	rep, err := r.Report()
+	if err != nil {
+		t.Fatalf("the router holds a fault: %v", err)
+	}
+	doc, err := openapi.Describe("quests", "1.0.0", rep.Routes, router.API{})
+	if err != nil {
+		t.Fatalf("Describe returned %v", err)
+	}
+
+	schema, ok := doc.Components.Schemas["QuestDetail"]
+	if !ok {
+		t.Fatal("the components hold no QuestDetail")
+	}
+	for _, member := range []string{"id", "title", "body"} {
+		if _, held := schema.Properties[member]; !held {
+			t.Fatalf("QuestDetail holds no %q member: %v", member, schema.Properties)
+		}
+	}
+
+	op, ok := doc.Operation(http.MethodPost, "/quests")
+	if !ok {
+		t.Fatal("the description holds no POST /quests")
+	}
+	body := op.RequestBody.Content[openapi.JSONContent].Schema
+	for _, member := range []string{"id", "title", "note"} {
+		if _, held := body.Properties[member]; !held {
+			t.Fatalf("the request body holds no %q member: %v", member, body.Properties)
+		}
+	}
+}
+
+// The router answers 422 with the errors member beside the members of RFC
+// 9457. The description states it, so a generated client reads the field
+// errors and needs no cast.
+func TestTheValidationAnswerStatesTheFieldErrors(t *testing.T) {
+	doc := describe(t)
+
+	op, ok := doc.Operation(http.MethodPost, "/posts")
+	if !ok {
+		t.Fatal("the description holds no POST /posts")
+	}
+	answer, ok := op.Responses["422"]
+	if !ok {
+		t.Fatal("POST /posts answers no 422")
+	}
+	ref := answer.Content[router.ProblemContentType].Schema.Ref
+	if ref != "#/components/schemas/"+openapi.ValidationProblemSchema {
+		t.Fatalf("the 422 answer names %q", ref)
+	}
+	schema, ok := doc.Components.Schemas[openapi.ValidationProblemSchema]
+	if !ok {
+		t.Fatal("the components hold no ValidationProblem")
+	}
+	if len(schema.AllOf) != 2 {
+		t.Fatalf("ValidationProblem holds %d members of allOf", len(schema.AllOf))
+	}
+	errorsMember, held := schema.AllOf[1].Properties["errors"]
+	if !held {
+		t.Fatalf("ValidationProblem holds no errors member: %v", schema.AllOf[1].Properties)
+	}
+	value, ok := errorsMember.AdditionalProperties.(*openapi.Schema)
+	if !ok || value.Type != "string" {
+		t.Fatalf("the errors member holds %v", errorsMember.AdditionalProperties)
+	}
+}
+
+// Two types of two packages can carry one name. The description holds one
+// schema for each name, so the second would take the shape of the first. The
+// walk reports the pair instead, and the fault names both types.
+type collidingInput struct {
+	Name string `json:"name"`
+}
+
+func (i *collidingInput) Bind(_ *router.Ctx) error                 { return nil }
+func (i *collidingInput) Validate(_ *router.Ctx, _ *router.Fields) {}
+
+// View collides with the View of this package, because both state the name
+// View. The second states another name, so the description holds both.
+type renamedView struct {
+	Body string `json:"body"`
+}
+
+func (renamedView) SchemaName() string { return "View" }
+
+func collide(_ *router.Ctx, _ collidingInput) (renamedView, error) { return renamedView{}, nil }
+
+func TestTwoTypesOfOneSchemaNameAreAFault(t *testing.T) {
+	r := router.New()
+	router.Post(r, "/posts", create)
+	router.Post(r, "/notes", collide)
+	rep, err := r.Report()
+	if err != nil {
+		t.Fatalf("the router holds a fault: %v", err)
+	}
+	_, err = openapi.Describe("blog", "1.0.0", rep.Routes, router.API{})
+	if err == nil {
+		t.Fatal("the description accepted two types of one name")
+	}
+	for _, want := range []string{"View", "SchemaName", "renamedView"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("the fault holds no %q: %v", want, err)
+		}
+	}
+}
+
+// A type that states its own schema name keeps the two apart, so the
+// description holds one schema for each.
+func TestAStatedSchemaNameKeepsTwoTypesApart(t *testing.T) {
+	r := router.New()
+	router.Post(r, "/notes", collide)
+	rep, err := r.Report()
+	if err != nil {
+		t.Fatalf("the router holds a fault: %v", err)
+	}
+	doc, err := openapi.Describe("blog", "1.0.0", rep.Routes, router.API{})
+	if err != nil {
+		t.Fatalf("Describe returned %v", err)
+	}
+	if _, ok := doc.Components.Schemas["View"]; !ok {
+		t.Fatalf("the components hold no View: %v", doc.Components.Schemas)
 	}
 }

@@ -17,7 +17,7 @@ func AccessLog(log *slog.Logger) Middleware {
 			log.InfoContext(c.Context(), "request",
 				"method", c.Request().Method,
 				"path", c.Request().URL.Path,
-				"status", statusOf(res),
+				"status", StatusOf(res),
 				"duration_ms", time.Since(start).Milliseconds(),
 				"request_id", c.RequestID())
 			return res, err

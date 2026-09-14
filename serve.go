@@ -107,13 +107,14 @@ func Serve[C Configurer](s Service[C]) int {
 	if err := w.validate(); err != nil {
 		return Exit(errOut, err)
 	}
-	handler, err := w.Router.Handler()
+	handler, err := w.handler()
 	if err != nil {
 		return Exit(errOut, err)
 	}
 
 	// A module states its own migration files. The module set merges them
 	// in registration order, so an application keeps one list and not two.
+	// An application that states no module set holds no such file.
 	sets := w.Modules.Migrations()
 
 	// The boot checks read the engine that the application already opened,

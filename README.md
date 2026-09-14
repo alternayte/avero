@@ -10,7 +10,7 @@ delete.
 ## Start
 
 ```
-go install github.com/alternayte/avero/cmd/avero@latest
+go install github.com/alternayte/avero/cli/cmd/avero@latest
 
 avero new blog
 cd blog
@@ -24,6 +24,22 @@ reaches the browser in about 40 milliseconds. A change to a `.go` file reaches
 it in under two seconds.
 
 You need Go, and a database when you leave SQLite. You need no Node.js.
+
+## The two modules
+
+`github.com/alternayte/avero` is the host: the router, the lifecycle, the
+configuration, the telemetry, the views and the module system. An application
+imports it.
+
+`github.com/alternayte/avero/cli` is the CLI: the commands, the scaffolder, the
+asset pipeline, the development loop and the MCP server. An application does
+not import it, so it compiles no bundler and no file watcher.
+
+Take one part or take all of it. The router imports no database and no
+authentication library. An application that holds a router of another library
+states it in the wiring and keeps the lifecycle of the host. One handler, one
+middleware or one whole Avero router reaches a mux of the standard library with
+`HTTP()` and `MustHandler()`.
 
 ## What you get
 
@@ -84,7 +100,7 @@ An example ignores its output directory, as every application does, so a clone
 holds no built asset. Write the starter assets one time:
 
 ```
-go run ./internal/cmd/averoexamples -assets
+go run ./cli/internal/cmd/averoexamples -assets
 cd examples/blog && go run .
 ```
 

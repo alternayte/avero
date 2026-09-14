@@ -38,6 +38,7 @@ type registry struct {
 	api       API
 	docs      map[string]string
 	onInvalid func(c *Ctx, f *Fields) Response
+	responder Responder
 }
 
 // New builds a router.
@@ -65,6 +66,32 @@ func WithErrorResponse(fn func(c *Ctx, err error) Response) Option {
 	return func(r *Router) { r.reg.onErr = fn }
 }
 
+// Responder turns the value that a typed handler returned into a Response.
+//
+// code is the status that the method of the route states, or the status that
+// Ctx.Status named. v is the value of the handler, and it is never a NoBody
+// and never a Response: the router answers those two itself.
+type Responder func(c *Ctx, code int, v any) Response
+
+// WithResponder sets how a typed handler turns its value into a Response.
+//
+// The default writes JSON, which a service of an API needs. An application
+// that renders pages states a responder, so a typed handler returns a view and
+// not a Response:
+//
+//	r := router.New(router.WithResponder(func(c *router.Ctx, code int, v any) router.Response {
+//	    if component, ok := v.(view.Component); ok {
+//	        return view.View(component)
+//	    }
+//	    return router.JSON(code, v)
+//	}))
+//
+// The router registers the responder at registration, so a route that this
+// option does not reach keeps the default. State the option in New.
+func WithResponder(fn Responder) Option {
+	return func(r *Router) { r.reg.responder = fn }
+}
+
 // WithValidationResponse sets the response that a validation fault produces.
 // The default answers 422 with a map of field name to message. The SSR shape
 // replaces it, so the middleware renders the form again with the errors and
@@ -87,7 +114,18 @@ func defaultErrorResponse(c *Ctx, err error) Response {
 
 // Use adds middleware to this scope. It applies to every route that this scope
 // registers after the call, and to every child group.
-func (r *Router) Use(mws ...Middleware) { r.mws = append(r.mws, mws...) }
+//
+// The zero middleware adds no frame, so a constructor that states no
+// middleware, such as db.Transaction with a nil engine, needs no guard at the
+// call site.
+func (r *Router) Use(mws ...Middleware) {
+	for _, mw := range mws {
+		if mw.Wrap == nil {
+			continue
+		}
+		r.mws = append(r.mws, mw)
+	}
+}
 
 // Get registers a GET route.
 func (r *Router) Get(pattern string, h Handler) { r.register(http.MethodGet, pattern, h) }
@@ -129,9 +167,18 @@ func (r *Router) Group(prefix string, fn func(g *Router)) {
 // Mount serves an http.Handler under a prefix. The handler sees the path with
 // the prefix removed.
 //
-// A mounted handler writes to the ResponseWriter itself, so no transaction
-// surrounds it. `avero routes` marks it.
-func (r *Router) Mount(prefix string, h http.Handler) {
+// The middleware of the scope wraps the handler, so a mounted handler carries
+// the request identifier, the access log, the trace and the session of the
+// application. The transaction is the one exception: a mounted handler writes
+// to the ResponseWriter itself, so no commit can stand before the first byte.
+// `avero routes` prints the chain that the mount runs, and it marks the row.
+//
+// A library that already knows its own base path removes the prefix itself.
+// Two removals leave a path that the handler does not hold, and the answer is
+// 404. KeepPrefix gives such a handler the whole path.
+//
+//	r.Mount("/api/auth", auth.Handler(), router.KeepPrefix())
+func (r *Router) Mount(prefix string, h http.Handler, opts ...MountOption) {
 	full := joinPattern(r.prefix, prefix)
 	file, line := caller(1)
 	if h == nil {
@@ -139,18 +186,46 @@ func (r *Router) Mount(prefix string, h http.Handler) {
 			"Pass an http.Handler to Mount")
 		return
 	}
+	var cfg mountConfig
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	mws := mountable(r.mws)
 	route := Route{
 		Method:     "*",
 		Pattern:    strings.TrimSuffix(full, "/") + "/",
 		Handler:    handlerName(h),
-		Middleware: names(r.mws),
+		Middleware: names(mws),
 		File:       file,
 		Line:       line,
 		Mounted:    true,
+		KeepPrefix: cfg.keepPrefix,
 		stripped:   strings.TrimSuffix(full, "/"),
 		mount:      h,
+		mws:        mws,
+	}
+	if cfg.keepPrefix {
+		route.stripped = ""
 	}
 	r.add(route)
+}
+
+// MountOption states one more fact of a mount.
+type MountOption func(*mountConfig)
+
+// mountConfig holds the options of one mount.
+type mountConfig struct {
+	keepPrefix bool
+}
+
+// KeepPrefix passes the whole path to the mounted handler.
+//
+// The default removes the prefix, because a handler that a person writes reads
+// the path below the mount. A handler of a library that states its own base
+// path, such as the handler of auth-all, removes the prefix itself and needs
+// the whole path.
+func KeepPrefix() MountOption {
+	return func(c *mountConfig) { c.keepPrefix = true }
 }
 
 // register records one route. It records a fault instead of the route when the
@@ -256,10 +331,19 @@ func mount(mux *http.ServeMux, route Route, h http.Handler) (fault *Fault) {
 
 // serve turns one route into an http.Handler.
 func (r *Router) serve(route Route) http.Handler {
+	handler := route.handler
 	if route.Mounted {
-		return http.StripPrefix(route.stripped, route.mount)
+		if len(route.mws) == 0 {
+			// The mount carries no middleware, so the handler of the library
+			// serves the request itself and Avero adds no frame.
+			if route.stripped == "" {
+				return route.mount
+			}
+			return http.StripPrefix(route.stripped, route.mount)
+		}
+		handler = mountHandler(route)
 	}
-	h := chain(route.handler, route.mws)
+	h := chain(handler, route.mws)
 	onErr := r.reg.onErr
 	onInvalid := r.reg.onInvalid
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -277,6 +361,25 @@ func (r *Router) serve(route Route) http.Handler {
 			return
 		}
 	})
+}
+
+// mountHandler turns a mounted http.Handler into a typed handler, so the
+// middleware of the scope wraps it.
+//
+// The handler of the library writes the whole answer, so the Response that it
+// returns writes nothing more and carries the status that the library wrote. A
+// middleware that reads the status, such as the access log, therefore reports
+// the answer that the client read.
+func mountHandler(route Route) Handler {
+	h := route.mount
+	if route.stripped != "" {
+		h = http.StripPrefix(route.stripped, h)
+	}
+	return func(c *Ctx) (Response, error) {
+		watch := &statusWriter{ResponseWriter: c.Writer()}
+		h.ServeHTTP(watch, c.Request())
+		return alreadyWritten{status: watch.status()}, nil
+	}
 }
 
 // muxPattern returns the pattern in the net/http 1.22 form.

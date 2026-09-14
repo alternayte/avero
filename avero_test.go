@@ -352,3 +352,34 @@ func TestTheRootInAdapterReachesTheRouter(t *testing.T) {
 		t.Fatalf("the body is %q", rec.Body.String())
 	}
 }
+
+// The aliases of the root package carry the way out of Avero, so an
+// application that holds a mux of its own writes one import and no
+// conversion of its own.
+func TestTheRootPackageCarriesTheAdaptersOfNetHTTP(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.Handle("GET /posts", avero.Handler(func(_ *avero.Ctx) (avero.Response, error) {
+		return avero.Text(200, "posts"), nil
+	}).HTTP())
+
+	api := avero.NewRouter()
+	api.Get("/things", func(_ *avero.Ctx) (avero.Response, error) {
+		return avero.Text(200, "things"), nil
+	})
+	mux.Handle("/api/", http.StripPrefix("/api", api.MustHandler()))
+
+	stack := avero.RequestID().HTTP()(mux)
+	for _, tc := range []struct{ target, want string }{
+		{"/posts", "posts"},
+		{"/api/things", "things"},
+	} {
+		rec := httptest.NewRecorder()
+		stack.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tc.target, nil))
+		if rec.Code != 200 || rec.Body.String() != tc.want {
+			t.Fatalf("GET %s gave %d %q", tc.target, rec.Code, rec.Body.String())
+		}
+		if rec.Header().Get("X-Request-Id") == "" {
+			t.Fatalf("GET %s carried no request identifier", tc.target)
+		}
+	}
+}

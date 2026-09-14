@@ -21,7 +21,7 @@ func wire(engine *drel.Engine, cfg Config) (*avero.Wiring, error) {
 	// Stack states the order of the chain one time. API leaves the flash
 	// cookie and the CSRF token out, because a JSON client needs neither. A
 	// nil engine leaves the transaction out.
-	r.Use(avero.Stack{Secret: cfg.Secret, Engine: engine}.API()...)
+	r.Use(avero.Stack{Secret: cfg.Secret, Tx: avero.Transaction(engine)}.API()...)
 
 	// The service answers JSON, so the root path states the name of the
 	// service.

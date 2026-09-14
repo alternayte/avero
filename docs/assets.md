@@ -2,6 +2,11 @@
 
 The asset pipeline has three tiers. Tier 0 is the default and needs no Node.js.
 
+The subsystem stands in two packages. An application imports `avero/assets`,
+which holds the manifest and the two handlers that serve the build. The CLI
+imports `avero/assets/pipeline`, which holds the bundler, Tailwind, the pins
+and the lock file. An application therefore compiles no bundler.
+
 ## Tier 0
 
 `avero build` bundles the entry points with esbuild as a Go library, and it
@@ -67,12 +72,17 @@ The spa shape uses tier 2. Vite builds its TypeScript front end, and
 {
   "assets": {
     "tier": "external",
-    "command": ["npm", "run", "build"],
+    "packageManager": "npm",
     "dir": "web",
     "manifest": false
   }
 }
 ```
+
+`packageManager` names npm, bun, pnpm or yarn. An empty member reads
+`package.json` and the lock file of the front end. The build runs the build
+script of that tool, and the `command` member replaces it. See [The package
+manager](spa.md#the-package-manager).
 
 Vite writes its own index document, so it writes no manifest of Avero, and the
 application serves the build with `assets.SPA`. See [The single page
@@ -82,7 +92,7 @@ shape](spa.md).
 
 ```
 avero assets init
-npm install some-package
+npm install some-package   # or bun add, pnpm add, yarn add
 avero build
 ```
 
@@ -101,6 +111,9 @@ Write the bundler command in `avero.json`:
   }
 }
 ```
+
+An empty `command` runs the build script of the package manager of the front
+end, so a project of Bun needs no command here.
 
 The command must write `assets/dist/` and a `manifest.json` with the shape of
 `assets/schema.json`.

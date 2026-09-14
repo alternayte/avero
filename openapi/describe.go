@@ -1,7 +1,10 @@
 package openapi
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -18,7 +21,7 @@ import (
 //
 // The reflection reads the types one time, when the inspection command runs.
 // It never runs on a request path. See design rule 2.
-func Describe(name, version string, routes []router.Route, api router.API) *Document {
+func Describe(name, version string, routes []router.Route, api router.API) (*Document, error) {
 	if api.Title != "" {
 		name = api.Title
 	}
@@ -46,25 +49,53 @@ func Describe(name, version string, routes []router.Route, api router.API) *Docu
 		}
 		doc.Security = schemes
 	}
-	schemas := map[string]Schema{}
+	w := newWalk()
 	for _, route := range routes {
 		if route.Op == nil || route.Mounted {
 			continue
 		}
-		path, item := describeRoute(route, schemas)
+		path, item := w.describeRoute(route)
 		if doc.Paths[path] == nil {
 			doc.Paths[path] = PathItem{}
 		}
 		doc.Paths[path][strings.ToLower(route.Method)] = item
 	}
-	if len(schemas) > 0 || len(api.Security) > 0 {
-		doc.Components = &Components{Schemas: schemas, SecuritySchemes: api.Security}
+	if len(w.schemas) > 0 || len(api.Security) > 0 {
+		doc.Components = &Components{Schemas: w.schemas, SecuritySchemes: api.Security}
 	}
-	return doc
+	if len(w.collisions) > 0 {
+		return nil, collisionFault(w.collisions)
+	}
+	return doc, nil
+}
+
+// collisionFault states the types that share one schema name, and states the
+// repair. See DX-7.
+//
+// The description holds one schema for each name, so a second type of the same
+// name would take the shape of the first. The fault appears when the
+// description is written, which is before a client of a front end reads it.
+func collisionFault(list []collision) error {
+	var b strings.Builder
+	b.WriteString("openapi: two types state one schema name")
+	for _, c := range list {
+		fmt.Fprintf(&b, "\n  %s: %s and %s", c.Name, typePath(c.First), typePath(c.Second))
+	}
+	b.WriteString("\n  → Give one of the two types another schema name: " +
+		"write `func (T) SchemaName() string { return \"OtherName\" }` on it")
+	return errors.New(b.String())
+}
+
+// typePath names one type with its package, such as models.User.
+func typePath(t reflect.Type) string {
+	if t.PkgPath() == "" {
+		return t.String()
+	}
+	return t.PkgPath() + "." + t.Name()
 }
 
 // describeRoute builds one operation and returns its path.
-func describeRoute(route router.Route, schemas map[string]Schema) (string, Operation) {
+func (w *walk) describeRoute(route router.Route) (string, Operation) {
 	op := route.Op
 	out := Operation{
 		OperationID: opIDOf(route),
@@ -85,11 +116,11 @@ func describeRoute(route router.Route, schemas map[string]Schema) (string, Opera
 		out.Security = &schemes
 	}
 	if op.Input() != nil {
-		out.Parameters, out.RequestBody = inputOf(op.Input(), schemas)
+		out.Parameters, out.RequestBody = w.inputOf(op.Input())
 	}
 	for _, answer := range op.Answers {
 		code := strconv.Itoa(answer.Code)
-		next := answerResponse(answer, schemas)
+		next := w.answerResponse(answer)
 		if first, ok := out.Responses[code]; ok {
 			// Two answers of one status state that the answer carries one of
 			// two shapes.
@@ -99,14 +130,16 @@ func describeRoute(route router.Route, schemas map[string]Schema) (string, Opera
 	}
 	// Every route answers the faults that the router writes. One problem
 	// schema covers them, so a client reads one shape. See RFC 9457.
-	problemInto(schemas)
+	problemInto(w.schemas)
 	// A route that binds a value can fail to read it, and a rule of a field
 	// can refuse it. A route that binds nothing answers neither.
 	if out.RequestBody != nil || len(out.Parameters) > 0 {
-		out.Responses[strconv.Itoa(http.StatusBadRequest)] = problemResponse("the request does not read")
-		out.Responses[strconv.Itoa(http.StatusUnprocessableEntity)] = problemResponse("one field or more failed validation")
+		validationProblemInto(w.schemas)
+		out.Responses[strconv.Itoa(http.StatusBadRequest)] = problemResponse(ProblemSchema, "the request does not read")
+		out.Responses[strconv.Itoa(http.StatusUnprocessableEntity)] = problemResponse(ValidationProblemSchema,
+			"one field or more failed validation")
 	}
-	out.Responses[strconv.Itoa(http.StatusInternalServerError)] = problemResponse("the handler returned an error")
+	out.Responses[strconv.Itoa(http.StatusInternalServerError)] = problemResponse(ProblemSchema, "the handler returned an error")
 	return oapiPath(route.Pattern), out
 }
 
@@ -138,7 +171,7 @@ func oapiPath(pattern string) string {
 }
 
 // answerResponse builds one answer.
-func answerResponse(answer router.Answer, schemas map[string]Schema) Response {
+func (w *walk) answerResponse(answer router.Answer) Response {
 	out := Response{Description: answer.Description}
 	if out.Description == "" {
 		out.Description = http.StatusText(answer.Code)
@@ -156,7 +189,13 @@ func answerResponse(answer router.Answer, schemas map[string]Schema) Response {
 	if body == nil {
 		return out
 	}
-	out.Content = map[string]MediaType{"application/json": {Schema: typeSchema(body, schemas)}}
+	if deref(body).Kind() == reflect.Interface {
+		// The handler states an interface, such as a Response or a view, so
+		// the type names no shape. A schema of an empty object would state
+		// that the answer holds an object, which it does not.
+		return out
+	}
+	out.Content = map[string]MediaType{"application/json": {Schema: w.typeSchema(body)}}
 	return out
 }
 
@@ -215,12 +254,46 @@ func problemInto(schemas map[string]Schema) {
 	}
 }
 
+// ValidationProblemSchema is the name of the schema of a validation fault. It
+// carries the members of a problem document and the field errors.
+const ValidationProblemSchema = "ValidationProblem"
+
+// validationProblemInto records the schema of a validation fault one time.
+//
+// The router answers 422 with a problem document that carries the errors
+// member, a map of field name to message. See Ctx.validationResponse. The
+// schema states that member, so the generated client of a front end reads the
+// field errors and needs no cast.
+func validationProblemInto(schemas map[string]Schema) {
+	if _, ok := schemas[ValidationProblemSchema]; ok {
+		return
+	}
+	message := Schema{Type: "string"}
+	schemas[ValidationProblemSchema] = Schema{
+		Description: "A problem document that names the field that failed validation",
+		AllOf: []Schema{
+			{Ref: "#/components/schemas/" + ProblemSchema},
+			{
+				Type: "object",
+				Properties: map[string]Schema{
+					"errors": {
+						Type:                 "object",
+						Description:          "One message for each field that failed validation",
+						AdditionalProperties: &message,
+					},
+				},
+				Required: []string{"errors"},
+			},
+		},
+	}
+}
+
 // problemResponse returns an answer that carries a problem document.
-func problemResponse(description string) Response {
+func problemResponse(schema, description string) Response {
 	return Response{
 		Description: description,
 		Content: map[string]MediaType{
-			router.ProblemContentType: {Schema: Schema{Ref: "#/components/schemas/" + ProblemSchema}},
+			router.ProblemContentType: {Schema: Schema{Ref: "#/components/schemas/" + schema}},
 		},
 	}
 }

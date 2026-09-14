@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alternayte/avero/auth"
 	"github.com/alternayte/avero/config"
 	"github.com/alternayte/avero/router"
 	"github.com/alternayte/avero/view"
@@ -154,7 +155,7 @@ func TestTheHelpersWorkWithANilSessionAndNilFields(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	c := router.NewCtx(rec, req)
-	if c.Session() != nil || c.User() != nil {
+	if auth.Session(c) != nil || auth.User(c) != nil {
 		t.Fatal("the request carries a session, want none")
 	}
 	ctx := view.RenderContext(c)

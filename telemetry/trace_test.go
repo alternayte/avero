@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/alternayte/avero/config"
+	"github.com/alternayte/avero/db"
 	"github.com/alternayte/avero/router"
 	"github.com/alternayte/avero/telemetry"
 	"github.com/alternayte/drel"
@@ -82,9 +83,9 @@ func TestAQuerySpanIsAChildOfItsRequestSpan(t *testing.T) {
 	exp.Reset()
 
 	r := router.New()
-	r.Use(p.HTTPMiddleware(), router.Transaction(e))
+	r.Use(p.HTTPMiddleware(), db.Transaction(e))
 	r.Post("/things", func(c *router.Ctx) (router.Response, error) {
-		if _, err := c.MustTx().Exec(c.Context(), `INSERT INTO things (name) VALUES (?)`, "one"); err != nil {
+		if _, err := db.MustTx(c).Exec(c.Context(), `INSERT INTO things (name) VALUES (?)`, "one"); err != nil {
 			return nil, err
 		}
 		return router.Text(201, "made"), nil

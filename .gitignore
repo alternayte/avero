@@ -3,6 +3,8 @@ docs/internal/
 
 # Go
 /avero
+# go.work and go.work.sum are committed: the gate needs the workspace, which
+# joins the host module and the CLI module.
 *.exe
 *.test
 *.out

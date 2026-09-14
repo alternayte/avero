@@ -546,3 +546,106 @@ func TestTheRoutesCommandReadsNoConfiguration(t *testing.T) {
 		t.Fatalf("the routes command returned the code %d", code)
 	}
 }
+
+// muxWire builds a wiring that states a mux of the standard library and no
+// Avero router and no module set. An application that holds a router of
+// another library keeps the lifecycle, the boot checks and the readiness of
+// the host.
+func muxWire(_ *drel.Engine, _ serveConfig) (*avero.Wiring, error) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, "mine")
+	})
+	return &avero.Wiring{Handler: mux}, nil
+}
+
+func TestServeRunsAHandlerOfAnotherLibrary(t *testing.T) {
+	t.Setenv("AVERO_SECRET", strings.Repeat("a", 64))
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen returned an error: %v", err)
+	}
+	address := "http://" + ln.Addr().String()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan int, 1)
+	go func() {
+		done <- avero.Serve(avero.Service[serveConfig]{
+			Args:    nil,
+			Wire:    muxWire,
+			Ctx:     ctx,
+			Out:     io.Discard,
+			Err:     io.Discard,
+			Options: []avero.Option{avero.WithoutSignals(), avero.WithListener(ln)},
+		})
+	}()
+	defer cancel()
+
+	// The host answers its own readiness path, and the mux of the
+	// application answers every other path.
+	waitFor(t, address+"/readyz")
+	body := get(t, address+"/")
+	if body != "mine" {
+		t.Fatalf("the application answered %q", body)
+	}
+
+	cancel()
+	select {
+	case code := <-done:
+		if code != 0 {
+			t.Fatalf("the run returned the code %d", code)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the run did not stop")
+	}
+}
+
+// `avero routes` states the repair for an application that holds a router of
+// another library, because Avero knows no route of it.
+func TestInspectStatesTheFaultForAHandlerOfAnotherLibrary(t *testing.T) {
+	var errOut strings.Builder
+	code := avero.Serve(avero.Service[serveConfig]{
+		Args: []string{avero.InspectPrefix + "routes"},
+		Wire: muxWire,
+		Out:  io.Discard,
+		Err:  &errOut,
+	})
+	if code != 1 {
+		t.Fatalf("the inspection returned the code %d", code)
+	}
+	if !strings.Contains(errOut.String(), "avero.Router") {
+		t.Fatalf("the fault states no repair: %q", errOut.String())
+	}
+}
+
+// waitFor polls one address until it answers or the deadline passes.
+func waitFor(t *testing.T, address string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		res, err := http.Get(address)
+		if err == nil {
+			_ = res.Body.Close()
+			if res.StatusCode == http.StatusOK {
+				return
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("%s did not answer", address)
+}
+
+// get reads the body of one address.
+func get(t *testing.T, address string) string {
+	t.Helper()
+	res, err := http.Get(address)
+	if err != nil {
+		t.Fatalf("Get returned an error: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("ReadAll returned an error: %v", err)
+	}
+	return string(body)
+}

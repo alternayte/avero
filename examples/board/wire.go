@@ -26,23 +26,26 @@ var dist embed.FS
 // no key.
 func wire(engine *drel.Engine, cfg Config) (*avero.Wiring, error) {
 	r := avero.NewRouter()
-	// Stack states the order of the chain one time. API leaves the flash
-	// cookie and the CSRF token out, because a JSON client needs neither. A
-	// nil engine leaves the transaction out.
-	r.Use(avero.Stack{Secret: cfg.Secret, Engine: engine}.API()...)
-
-	modules := avero.Modules(tasks.New(engine))
-	if err := modules.Attach(r); err != nil {
-		return nil, err
-	}
-
 	// The front end owns every path that no route holds. It reads the path
 	// itself, so a deep link and a reload reach the same document.
+	//
+	// The mount stands before Use, because middleware applies to the routes
+	// that follow it. A built file needs no session, so it runs no chain.
 	files, err := fs.Sub(dist, "assets/dist")
 	if err != nil {
 		return nil, err
 	}
 	r.Mount("/", assets.SPA(files))
+
+	// Stack states the order of the chain one time. API leaves the flash
+	// cookie and the CSRF token out, because a JSON client needs neither. A
+	// nil engine leaves the transaction out.
+	r.Use(avero.Stack{Secret: cfg.Secret, Tx: avero.Transaction(engine)}.API()...)
+
+	modules := avero.Modules(tasks.New(engine))
+	if err := modules.Attach(r); err != nil {
+		return nil, err
+	}
 
 	// Wiring states what this application is. Add a dependency of your own
 	// with a lifecycle in Components, and its boot check in Checks.

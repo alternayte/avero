@@ -208,7 +208,7 @@ func (s *Set) fault(file string, line int, message, repair string) {
 // Err returns every fault that the inspection found, or nil. The caller stops
 // the process on a fault. See DX-8.
 func (s *Set) Err() error {
-	if len(s.faults) == 0 {
+	if s == nil || len(s.faults) == 0 {
 		return nil
 	}
 	return &Faults{Faults: s.faults}
@@ -241,6 +241,9 @@ func (s *Set) InboxHandlers() []InboxHandler {
 
 // Projections returns the projections of every ProjectorModule.
 func (s *Set) Projections() []Projection {
+	if s == nil {
+		return nil
+	}
 	out := make([]Projection, len(s.proj))
 	copy(out, s.proj)
 	return out
@@ -249,6 +252,11 @@ func (s *Set) Projections() []Projection {
 // Migrations returns the file system of every MigrationModule, in registration
 // order.
 func (s *Set) Migrations() []fs.FS {
+	if s == nil {
+		// An application states no module set, so it holds no migration of a
+		// module. See Wiring.
+		return nil
+	}
 	out := make([]fs.FS, len(s.migs))
 	copy(out, s.migs)
 	return out

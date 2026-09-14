@@ -4,9 +4,6 @@ import (
 	"context"
 	"net/http"
 	"time"
-
-	"github.com/alternayte/auth-all/store"
-	"github.com/alternayte/drel"
 )
 
 // Ctx carries one request. A handler reads it and returns a Response. A
@@ -107,33 +104,6 @@ func (c *Ctx) WriteHeader(code int) {
 
 // PathValue returns a value from the pattern, such as {id}.
 func (c *Ctx) PathValue(name string) string { return c.r.PathValue(name) }
-
-// Tx returns the transaction that the transaction middleware opened. It
-// returns nil when no transaction surrounds the request.
-//
-// The SDD names this method UoW. drel deleted UnitOfWork, because it held no
-// connection and could not write an application row and a control row in one
-// transaction. The context now carries *drel.Tx.
-func (c *Ctx) Tx() *drel.Tx {
-	tx, ok := drel.FromContext(c.r.Context())
-	if !ok {
-		return nil
-	}
-	return tx
-}
-
-// MustTx returns the transaction and panics when none is present. Use it in a
-// handler that a transaction must always surround, so that a wiring fault
-// fails at once.
-func (c *Ctx) MustTx() *drel.Tx { return drel.MustFromContext(c.r.Context()) }
-
-// User returns the signed-in user. It returns nil for an anonymous request.
-// auth-all attaches the user with RequireAuth or LoadSession.
-func (c *Ctx) User() *store.User { return authUserFrom(c.r.Context()) }
-
-// Session returns the auth-all session. It returns nil for an anonymous
-// request.
-func (c *Ctx) Session() *store.Session { return authSessionFrom(c.r.Context()) }
 
 // Partial reports whether the client asked for a fragment and not a whole
 // page. htmx and Datastar both mark such a request with a header.

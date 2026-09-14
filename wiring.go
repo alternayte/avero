@@ -1,17 +1,36 @@
 package avero
 
-import "errors"
+import (
+	"errors"
+	"net/http"
+)
 
 // Wiring is what wire builds. Serve reads it.
 //
-// The Router and the Modules are required. The Components and the Checks are
-// optional, so an application that adds no dependency of its own states two
-// fields.
+// An application states its routes in one of two ways. It states the Router,
+// which is the whole host: the typed routes, the module system and the
+// inspection commands. Or it states the Handler, which is any http.Handler,
+// such as a chi router or a mux of the standard library. An application that
+// states the Handler keeps the lifecycle, the configuration, the boot checks
+// and `avero doctor`, and it keeps its own router.
+//
+// The Modules, the Components and the Checks are optional, so a simple
+// application states one field.
 type Wiring struct {
-	// Router holds the routes of the application.
+	// Router holds the routes of the application. State it or state the
+	// Handler, and not both.
 	Router *Router
+	// Handler serves the requests of an application that holds a router of
+	// another library. State it or state the Router, and not both.
+	//
+	// The inspection commands read the routes of an Avero router, so
+	// `avero routes` and `avero openapi` report nothing for such an
+	// application. `avero doctor` reads the configuration and the checks, so
+	// it works for both.
+	Handler http.Handler
 	// Modules holds the module set. Serve reads the migrations of each
-	// module from it.
+	// module from it. An application that states no module holds no module
+	// set, and the field stays nil.
 	Modules *ModuleSet
 	// Components are the parts of the application that hold a lifecycle,
 	// such as an emailer, a blob store or a cache. Serve starts them in this
@@ -35,11 +54,22 @@ type Wiring struct {
 func (w *Wiring) validate() error {
 	switch {
 	case w == nil:
-		return errors.New("wire returned no wiring: return a *avero.Wiring that holds its Router and its Modules")
-	case w.Router == nil:
-		return errors.New("the wiring holds no router: set the Router field to the value that avero.NewRouter returned")
-	case w.Modules == nil:
-		return errors.New("the wiring holds no module set: set the Modules field to the value that avero.Modules returned")
+		return errors.New("wire returned no wiring: return a *avero.Wiring that holds its Router or its Handler")
+	case w.Router == nil && w.Handler == nil:
+		return errors.New("the wiring holds no routes: set the Router field to the value that avero.NewRouter returned, or set the Handler field to an http.Handler of your own")
+	case w.Router != nil && w.Handler != nil:
+		return errors.New("the wiring holds a Router and a Handler: state one of the two, because Serve can mount one handler only")
 	}
 	return nil
+}
+
+// handler returns the http.Handler of the application.
+//
+// The router reports every registration fault here, before the process serves.
+// See DX-8.
+func (w *Wiring) handler() (http.Handler, error) {
+	if w.Handler != nil {
+		return w.Handler, nil
+	}
+	return w.Router.Handler()
 }
