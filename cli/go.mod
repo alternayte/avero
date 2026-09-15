@@ -17,7 +17,7 @@ require (
 	// version even in the workspace. The release raises this line after it
 	// tags the host, and the tag of this module follows. See the release
 	// steps in the SDD, section 13.
-	github.com/alternayte/avero v0.5.1
+	github.com/alternayte/avero v0.6.0
 	// drel applies the migrations that `avero migrate` runs.
 	github.com/alternayte/drel v0.7.1
 	// esbuild is the bundler of the asset pipeline. S11 names it: "Bundle
