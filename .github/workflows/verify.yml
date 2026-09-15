@@ -46,7 +46,7 @@ jobs:
       - name: vet
         run: |
           go vet ./...
-          cd cli && go vet ./...
+          (cd cli && go vet ./...)
 
       # 3. golangci-lint passes. The version is pinned, because a linter that
       # a lower Go version built refuses the target of go.mod.
@@ -62,7 +62,7 @@ jobs:
       - name: test
         run: |
           go test ./... -race -count=1
-          cd cli && go test ./... -race -count=1
+          (cd cli && go test ./... -race -count=1)
 
       # 7. Every generated file is current.
       - name: generate
@@ -82,16 +82,19 @@ jobs:
           go test ./mcp/... -tags=integration -timeout 20m
 
       # 8, 9. The three reference applications.
+      # Each step runs one shell, so a cd of one line reaches the next one.
+      # Every directory change therefore stands in a subshell, and each command
+      # of this step starts at the root of the repository.
       - name: examples
         run: |
           go run ./cli/internal/cmd/averoexamples -check
-          cd cli && go test ./internal/cli/... -tags=integration -run TestEachShapeScaffolds -timeout 20m
+          (cd cli && go test ./internal/cli/... -tags=integration -run TestEachShapeScaffolds -timeout 20m)
           # A clone holds no built asset, because an example ignores its
           # output directory.
           go run ./cli/internal/cmd/averoexamples -assets
-          cd examples/blog && GOWORK=off go build ./... && GOWORK=off go test ./... -count=1 && cd ../..
-          cd examples/board && GOWORK=off go build ./... && GOWORK=off go test ./... -count=1 && cd ../..
-          cd examples/orders && GOWORK=off go build ./... && GOWORK=off go test ./... -count=1
+          (cd examples/blog && GOWORK=off go build ./... && GOWORK=off go test ./... -count=1)
+          (cd examples/board && GOWORK=off go build ./... && GOWORK=off go test ./... -count=1)
+          (cd examples/orders && GOWORK=off go build ./... && GOWORK=off go test ./... -count=1)
 
   budgets:
     name: budgets
