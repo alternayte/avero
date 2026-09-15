@@ -165,6 +165,8 @@ A later source replaces an earlier one, so the path wins.
 | `email` | the value must be an email address |
 | `uuid` | the value must be a UUID |
 | `oneof=a b c` | the value must be one of the words |
+| `maxsize=5MB` | the size of an upload. The units are B, KB, MB and GB |
+| `accept=image/png image/jpeg` | the media types of an upload. `image/*` accepts every subtype |
 
 Write a rule of your own as a `Check` method:
 
@@ -178,6 +180,53 @@ func (in *CreateInput) Check(c *avero.Ctx, f *avero.Fields) {
 
 A message carries the name that the person sent, such as `title`, so a view
 reads it with the name that it writes in the form.
+
+## An upload
+
+A field of type `*multipart.FileHeader` with a `form` tag binds one file of a
+multipart form. A field of type `[]*multipart.FileHeader` binds every file of
+one member.
+
+```go
+type UploadInput struct {
+	ID    string                `path:"id" validate:"required,uuid"`
+	Note  string                `form:"note" validate:"max=140"`
+	Image *multipart.FileHeader `form:"image" validate:"required,maxsize=5MB,accept=image/png image/jpeg"`
+}
+```
+
+The generated `Bind` reads the multipart body, and the text fields of the same
+body bind as they do in a form of a browser. An input type of this shape still
+reads a request of another media type, so one route serves both.
+
+The handler reads the content through the header:
+
+```go
+func (m *Module) Upload(c *avero.Ctx, in UploadInput) (View, error) {
+	file, err := in.Image.Open()
+	if err != nil {
+		return View{}, err
+	}
+	defer file.Close()
+	...
+}
+```
+
+The description of the API states a body of `multipart/form-data`, and the file
+stands in it as a string of the format `binary`. A generator of a client, such
+as Hey API, writes the upload function from that description, so the front end
+needs no `fetch` of its own.
+
+`accept` reads the media type that the client declared, which a client can
+state wrongly. A handler that must be sure reads the first bytes of the file
+and calls `http.DetectContentType`.
+
+`avero.MaxBytes` bounds the whole body, so an upload cannot fill the disk
+before a rule reads the size of one file:
+
+```go
+r.Use(avero.MaxBytes(10 << 20))
+```
 
 ## The responses
 

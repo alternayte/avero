@@ -68,6 +68,35 @@ A configuration with a fault still yields the values that did load, so the
 doctor can state a composed address that is incomplete. The table above names
 the absent variable in the same report.
 
+## The .env file
+
+`avero dev` and `avero migrate` read `.env` beside the application, so a
+command needs no export in the shell.
+
+A variable that the shell holds wins over the file. A person who exports a
+value states it for this one run:
+
+```
+GITHUB_APP_PRIVATE_KEY="$(cat key.pem)" avero dev
+```
+
+A value between quotation marks can hold line breaks, so a key of PEM stands
+in the file as a person pastes it:
+
+```
+GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----
+MIIEow...
+-----END RSA PRIVATE KEY-----"
+```
+
+A value between double quotation marks carries the escapes `\n`, `\r`, `\t`,
+`\\` and `\"`. A value between single quotation marks carries the characters
+that it holds and no escape. A value that opens a quotation mark that no line
+closes stops the command, and the fault names the line.
+
+The application itself reads the environment of its process and no file, so a
+deployment states its variables as a container or a unit file does.
+
 ## A secret
 
 `avero.Secret` prints as `********` in a log line, in an error message and in a

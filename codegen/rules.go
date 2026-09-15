@@ -15,10 +15,17 @@ const (
 	ruleEmail    = "email"
 	ruleUUID     = "uuid"
 	ruleOneOf    = "oneof"
+	// ruleMaxSize bounds the size of an upload, such as maxsize=5MB.
+	ruleMaxSize = "maxsize"
+	// ruleAccept names the media types that an upload can carry, such as
+	// accept=image/png image/jpeg. The members stand between spaces, because
+	// a comma separates two rules.
+	ruleAccept = "accept"
 )
 
 // knownRules lists the rules in the order that a person reads them in a fault.
-var knownRules = []string{ruleRequired, ruleMin, ruleMax, ruleEmail, ruleUUID, ruleOneOf}
+var knownRules = []string{ruleRequired, ruleMin, ruleMax, ruleEmail, ruleUUID, ruleOneOf,
+	ruleMaxSize, ruleAccept}
 
 // readRules parses one validate tag and records a fault for each rule that the
 // generator cannot apply to the field.
@@ -45,7 +52,42 @@ func readRules(tag string, name *ast.Ident, k kind, c *collector) []rule {
 					"Remove required from "+name.Name+", because a false bool is a value that a person sent")
 				continue
 			}
+		case ruleMaxSize:
+			if !k.file() {
+				c.at(name.Pos(),
+					"the rule maxsize does not apply to "+name.Name+", which has type "+typeOf(k),
+					"Remove maxsize from "+name.Name+", or give the field the type *multipart.FileHeader")
+				continue
+			}
+			bytes, ok := readSize(arg)
+			if !ok {
+				c.at(name.Pos(),
+					"the rule maxsize on "+name.Name+" carries "+strconv.Quote(arg)+", which is not a size",
+					"Write the rule as `maxsize=5MB`, with the unit B, KB, MB or GB")
+				continue
+			}
+			r.Arg = strconv.FormatInt(bytes, 10)
+		case ruleAccept:
+			if !k.file() {
+				c.at(name.Pos(),
+					"the rule accept does not apply to "+name.Name+", which has type "+typeOf(k),
+					"Remove accept from "+name.Name+", or give the field the type *multipart.FileHeader")
+				continue
+			}
+			r.Values = strings.Fields(arg)
+			if len(r.Values) == 0 {
+				c.at(name.Pos(),
+					"the rule accept on "+name.Name+" names no media type",
+					"Write the rule as `accept=image/png image/jpeg`")
+				continue
+			}
 		case ruleMin, ruleMax:
+			if k.file() {
+				c.at(name.Pos(),
+					"the rule "+head+" does not apply to "+name.Name+", which is a file",
+					"Write `maxsize=5MB` to bound the size of the upload")
+				continue
+			}
 			if !hasArg || arg == "" {
 				c.at(name.Pos(),
 					"the rule "+head+" on "+name.Name+" carries no number",
@@ -115,7 +157,37 @@ func typeOf(k kind) string {
 		return "time.Time"
 	case kindStringSlice:
 		return "[]string"
+	case kindFile:
+		return "*multipart.FileHeader"
+	case kindFileSlice:
+		return "[]*multipart.FileHeader"
 	default:
 		return "an unknown type"
 	}
+}
+
+// readSize reads the argument of maxsize and returns the number of bytes.
+//
+// The generator converts the size, so the generated code holds a constant and
+// the application parses nothing on a request path. See design rule 2.
+func readSize(arg string) (int64, bool) {
+	text := strings.ToUpper(strings.TrimSpace(arg))
+	unit := int64(1)
+	for _, pair := range []struct {
+		suffix string
+		factor int64
+	}{
+		{"KB", 1 << 10}, {"MB", 1 << 20}, {"GB", 1 << 30}, {"B", 1},
+	} {
+		if before, found := strings.CutSuffix(text, pair.suffix); found {
+			text = strings.TrimSpace(before)
+			unit = pair.factor
+			break
+		}
+	}
+	n, err := strconv.ParseInt(text, 10, 64)
+	if err != nil || n <= 0 {
+		return 0, false
+	}
+	return n * unit, true
 }

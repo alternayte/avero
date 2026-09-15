@@ -3,6 +3,43 @@
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.6.0
+
+### Added
+
+- **A route binds a file of a multipart form.** A field of type
+  `*multipart.FileHeader` with a `form` tag binds one file, and
+  `[]*multipart.FileHeader` binds every file of one member. The generated
+  `Bind` reads the multipart body and the text fields of the same body, and an
+  input of this shape still reads a request of another media type.
+
+  Two rules state what a form accepts: `maxsize=5MB`, with the units B, KB, MB
+  and GB, and `accept=image/png image/jpeg`, where `image/*` accepts every
+  subtype. The generator writes the number of bytes, so no request path parses
+  a size.
+
+  The description of the API states a body of `multipart/form-data` with the
+  file as a string of the format `binary`, so a generator of a client writes
+  the upload function and a front end needs no `fetch` of its own.
+
+  `avero.MaxBytes(n)` bounds the whole body. `avero.FileType` and
+  `avero.FileAccepted` read the media type that the client declared.
+
+### Fixed
+
+- **A variable of the shell wins over `.env`.** `avero dev` and
+  `avero migrate` put the file after the environment of the process, so an
+  empty value in `.env` replaced a value that a person exported for one run.
+  The file now stands first, which is the rule that `just` with `dotenv-load`
+  and the dotenv libraries state.
+- **`.env` reads a value of several lines.** The parser read one line for each
+  variable, so a key of PEM between quotation marks lost every line but the
+  first and kept an unmatched quotation mark. A value between quotation marks
+  can now hold line breaks. A value between double quotation marks carries the
+  escapes `\n`, `\r`, `\t`, `\\` and `\"`, and a value between single
+  quotation marks carries the characters that it holds. A value that opens a
+  quotation mark that no line closes states the fault and names the line.
+
 ## v0.5.1
 
 ### Fixed

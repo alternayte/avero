@@ -1,11 +1,15 @@
 package example_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"go/parser"
 	"go/token"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"strings"
 	"testing"
 	"time"
@@ -363,5 +367,154 @@ func BenchmarkRequest(b *testing.B) {
 		req := httptest.NewRequest(http.MethodPost, cards(""), strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		h.ServeHTTP(httptest.NewRecorder(), req)
+	}
+}
+
+// multipartBody writes one multipart body with the files and the fields that
+// the caller states, and returns it with its media type.
+func multipartBody(t *testing.T, fields map[string]string, files []uploadPart) (*bytes.Buffer, string) {
+	t.Helper()
+	body := &bytes.Buffer{}
+	w := multipart.NewWriter(body)
+	for name, value := range fields {
+		if err := w.WriteField(name, value); err != nil {
+			t.Fatalf("WriteField returned %v", err)
+		}
+	}
+	for _, file := range files {
+		head := make(textproto.MIMEHeader)
+		head.Set("Content-Disposition",
+			`form-data; name="`+file.Field+`"; filename="`+file.Name+`"`)
+		head.Set("Content-Type", file.Type)
+		part, err := w.CreatePart(head)
+		if err != nil {
+			t.Fatalf("CreatePart returned %v", err)
+		}
+		if _, err := part.Write(file.Body); err != nil {
+			t.Fatalf("Write returned %v", err)
+		}
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("Close returned %v", err)
+	}
+	return body, w.FormDataContentType()
+}
+
+// uploadPart is one file of a multipart body.
+type uploadPart struct {
+	Field, Name, Type string
+	Body              []byte
+}
+
+// bindUpload runs the generated Bind and Validate against one multipart
+// request.
+func bindUpload(t *testing.T, fields map[string]string, files []uploadPart) (example.UploadInput, *router.Fields) {
+	t.Helper()
+	body, mediaType := multipartBody(t, fields, files)
+	req := httptest.NewRequest(http.MethodPost, "/boards/"+validUUID+"/image", body)
+	req.Header.Set("Content-Type", mediaType)
+	req.SetPathValue("board_id", validUUID)
+	c := router.NewCtx(httptest.NewRecorder(), req)
+
+	var in example.UploadInput
+	if err := in.Bind(c); err != nil {
+		t.Fatalf("Bind returned %v", err)
+	}
+	f := &router.Fields{}
+	in.Validate(c, f)
+	return in, f
+}
+
+// The generated Bind reads a file of a multipart form, and it reads the text
+// fields of the same body.
+func TestBindReadsAFileOfAMultipartForm(t *testing.T) {
+	in, f := bindUpload(t,
+		map[string]string{"note": "a photo of the board"},
+		[]uploadPart{
+			{Field: "image", Name: "board.png", Type: "image/png", Body: []byte("\x89PNG\r\n")},
+			{Field: "attachments", Name: "one.pdf", Type: "application/pdf", Body: []byte("%PDF-")},
+			{Field: "attachments", Name: "two.pdf", Type: "application/pdf", Body: []byte("%PDF-")},
+		})
+	if f.Len() != 0 {
+		t.Fatalf("the input failed validation: %v", f.Map())
+	}
+	if in.Image == nil || in.Image.Filename != "board.png" {
+		t.Fatalf("the image is %v", in.Image)
+	}
+	if in.Image.Size != int64(len("\x89PNG\r\n")) {
+		t.Fatalf("the image holds %d bytes", in.Image.Size)
+	}
+	if in.Note != "a photo of the board" {
+		t.Fatalf("the note is %q", in.Note)
+	}
+	if in.BoardID != validUUID {
+		t.Fatalf("the path value is %q", in.BoardID)
+	}
+	if len(in.Attachments) != 2 {
+		t.Fatalf("the input holds %d attachments", len(in.Attachments))
+	}
+	// The handler reads the content through the header.
+	file, err := in.Image.Open()
+	if err != nil {
+		t.Fatalf("Open returned %v", err)
+	}
+	defer func() { _ = file.Close() }()
+	body, err := io.ReadAll(file)
+	if err != nil {
+		t.Fatalf("ReadAll returned %v", err)
+	}
+	if string(body) != "\x89PNG\r\n" {
+		t.Fatalf("the content is %q", body)
+	}
+}
+
+// The rules of a file state one message for each fault, with the name that the
+// person sent.
+func TestTheRulesOfAFileRefuseASizeAndAType(t *testing.T) {
+	// A file of another media type states the types that the rule accepts.
+	_, f := bindUpload(t, nil, []uploadPart{
+		{Field: "image", Name: "small.gif", Type: "image/gif", Body: []byte("GIF89a")},
+	})
+	if got := f.Map()["image"]; got != "must be image/png or image/jpeg" {
+		t.Fatalf("the message of the type is %q", got)
+	}
+
+	// A file that is too large states its bound. The message names the size
+	// that a person reads and not the number of bytes.
+	large := bytes.Repeat([]byte("x"), (5<<20)+1)
+	_, f = bindUpload(t, nil, []uploadPart{
+		{Field: "image", Name: "big.png", Type: "image/png", Body: large},
+	})
+	if got := f.Map()["image"]; got != "is larger than 5 MB" {
+		t.Fatalf("the message of the size is %q", got)
+	}
+}
+
+// A required file that no part carries states one message.
+func TestARequiredFileThatIsAbsentStatesAMessage(t *testing.T) {
+	_, f := bindUpload(t, map[string]string{"note": "no file"}, nil)
+	if got := f.Map()["image"]; got != "is required" {
+		t.Fatalf("the message is %q", got)
+	}
+}
+
+// A request of another media type still reads its form, so one input type
+// serves a form of a browser and a multipart upload.
+func TestTheInputOfAFileStillReadsAFormOfAnotherKind(t *testing.T) {
+	form := strings.NewReader("note=from+a+plain+form")
+	req := httptest.NewRequest(http.MethodPost, "/boards/"+validUUID+"/image", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetPathValue("board_id", validUUID)
+	c := router.NewCtx(httptest.NewRecorder(), req)
+
+	var in example.UploadInput
+	if err := in.Bind(c); err != nil {
+		t.Fatalf("Bind returned %v", err)
+	}
+	if in.Note != "from a plain form" {
+		t.Fatalf("the note is %q", in.Note)
+	}
+	if in.Image != nil {
+		t.Fatalf("the input holds a file: %v", in.Image)
 	}
 }

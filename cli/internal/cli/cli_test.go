@@ -210,7 +210,13 @@ func TestTheEnvironmentFileReachesTheLoop(t *testing.T) {
 		t.Fatalf("WriteFile returned %v", err)
 	}
 	t.Setenv("AVERO_ENV", "development")
+	// The shell states no secret. Setenv registers the value of this process
+	// for the cleanup, and Unsetenv removes it for this test, because a
+	// variable that the shell holds wins over .env.
 	t.Setenv("AVERO_SECRET", "")
+	if err := os.Unsetenv("AVERO_SECRET"); err != nil {
+		t.Fatalf("Unsetenv returned %v", err)
+	}
 	// The loop reads .env, so the secret of the file is enough. The command
 	// stops at the build, because the directory holds no application.
 	code, _, errOut := run(t, dir, "dev")

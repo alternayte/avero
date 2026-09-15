@@ -28,6 +28,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"os"
@@ -414,6 +415,30 @@ func User(ctx context.Context) *store.User { return auth.User(ctx) }
 // Session returns the auth-all session of the request, or nil. See
 // auth.Session.
 func Session(ctx context.Context) *store.Session { return auth.Session(ctx) }
+
+// MaxBytes refuses a request body that is larger than n bytes. An application
+// that reads an upload states it, so a body cannot fill the disk of the server
+// before a rule of a field reads the size of the file. See router.MaxBytes.
+//
+//	r.Use(avero.MaxBytes(10 << 20))
+func MaxBytes(n int64) Middleware { return router.MaxBytes(n) }
+
+// The helpers of a multipart form. The generated Bind and Validate call them,
+// and a handler that reads an upload by hand calls them as well.
+
+// MaxMultipartMemory is the number of bytes of a multipart request that stand
+// in memory. See router.MaxMultipartMemory.
+const MaxMultipartMemory = router.MaxMultipartMemory
+
+// FileType returns the media type that the client declared for one file. See
+// router.FileType.
+func FileType(file *multipart.FileHeader) string { return router.FileType(file) }
+
+// FileAccepted reports a file whose declared media type stands in the list.
+// See router.FileAccepted.
+func FileAccepted(file *multipart.FileHeader, types ...string) bool {
+	return router.FileAccepted(file, types...)
+}
 
 // Adapt turns a net/http middleware into an Avero middleware.
 func Adapt(name string, mw func(http.Handler) http.Handler) Middleware {

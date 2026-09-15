@@ -83,7 +83,10 @@ func moduleMigrate(ctx context.Context, s Streams, dir, step string) (int, bool)
 	if _, err := os.Stat(filepath.Join(dir, "go.mod")); err != nil {
 		return 0, false
 	}
-	environment := append(os.Environ(), readEnvFile(dir)...)
+	environment, err := Environment(dir)
+	if err != nil {
+		return fail(s, err), true
+	}
 	result, err := inspect.RunWithEnv(ctx, dir, inspect.Migrate, environment, step)
 	if err != nil {
 		return fail(s, err), true

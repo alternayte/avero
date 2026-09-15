@@ -84,6 +84,9 @@ func (w *walk) inputInto(t reflect.Type, params *[]Parameter, kinds *bodyKinds, 
 			}
 			if form := name(f, "form"); form != "" {
 				kinds.form = true
+				if isFile(f.Type) {
+					kinds.multipart = true
+				}
 				if member == "" {
 					member = form
 				}
@@ -135,6 +138,8 @@ const (
 	JSONContent = "application/json"
 	// FormContent is the media type of a body of a form.
 	FormContent = "application/x-www-form-urlencoded"
+	// MultipartContent is the media type of a form that carries a file.
+	MultipartContent = "multipart/form-data"
 )
 
 // mediaTypes returns the media types that the tags of an input state.
@@ -144,6 +149,12 @@ const (
 // both, and the description says so.
 func mediaTypes(kinds bodyKinds, body Schema) map[string]MediaType {
 	out := map[string]MediaType{}
+	if kinds.multipart {
+		// A file rides in a multipart body and in no other, so the route
+		// reads that one media type.
+		out[MultipartContent] = MediaType{Schema: body}
+		return out
+	}
 	if kinds.json {
 		out[JSONContent] = MediaType{Schema: body}
 	}
@@ -160,6 +171,9 @@ func mediaTypes(kinds bodyKinds, body Schema) map[string]MediaType {
 type bodyKinds struct {
 	json bool
 	form bool
+	// multipart states a member that carries a file, which only a multipart
+	// body holds.
+	multipart bool
 }
 
 // parameterOf builds one parameter of a request.
@@ -231,6 +245,16 @@ func (w *walk) typeSchema(t reflect.Type) Schema {
 	}
 }
 
+// isFile reports a type that a multipart form carries as an upload, which is
+// *multipart.FileHeader or a slice of it.
+func isFile(t reflect.Type) bool {
+	t = deref(t)
+	if t.Kind() == reflect.Slice {
+		t = deref(t.Elem())
+	}
+	return t.String() == "multipart.FileHeader"
+}
+
 // knownSchema returns the schema of a type that JSON writes as one value, and
 // not as an object of its fields.
 //
@@ -247,6 +271,10 @@ func knownSchema(t reflect.Type) (Schema, bool) {
 		return Schema{Type: "string", Format: "uuid"}, true
 	case "json.RawMessage":
 		return Schema{}, true
+	case "multipart.FileHeader":
+		// OpenAPI 3.1 states a file as a string of bytes. A generator of a
+		// client writes an upload from it.
+		return Schema{Type: "string", Format: "binary"}, true
 	}
 	if t.Kind() == reflect.Struct || t.Kind() == reflect.Array {
 		if reflect.PointerTo(t).Implements(textMarshaler) || t.Implements(textMarshaler) {

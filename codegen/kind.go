@@ -15,7 +15,12 @@ const (
 	kindDuration
 	kindTime
 	kindStringSlice
+	kindFile
+	kindFileSlice
 )
+
+// file reports a kind that a multipart form carries as an upload.
+func (k kind) file() bool { return k == kindFile || k == kindFileSlice }
 
 // text reports whether a rule that reads characters applies to this kind.
 func (k kind) text() bool { return k == kindString }
@@ -44,6 +49,10 @@ func classify(expr string) (kind, bool) {
 		return kindTime, true
 	case "[]string":
 		return kindStringSlice, true
+	case "*multipart.FileHeader":
+		return kindFile, true
+	case "[]*multipart.FileHeader":
+		return kindFileSlice, true
 	}
 	return kindInvalid, false
 }
@@ -61,6 +70,8 @@ func (k kind) want() string {
 		return "a duration such as 15s"
 	case kindTime:
 		return "a time in RFC 3339 form"
+	case kindFile, kindFileSlice:
+		return "a file of a multipart form"
 	default:
 		return "text"
 	}

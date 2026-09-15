@@ -53,8 +53,12 @@ func runDev(ctx context.Context, s Streams, args []string) int {
 		return failf(s, "avero dev: AVERO_ENV is %q\n  → Set AVERO_ENV=development, because the loop rebuilds and restarts the application", env)
 	}
 
-	// The loop reads .env, so a person runs one command and no export.
-	environment := append(os.Environ(), readEnvFile(dir)...)
+	// The loop reads .env, so a person runs one command and no export. A
+	// variable of the shell wins over the file. See Environment.
+	environment, err := Environment(dir)
+	if err != nil {
+		return fail(s, err)
+	}
 	if !hasEnv(environment, "AVERO_SECRET") {
 		return failf(s, "avero dev: AVERO_SECRET is absent\n  → Copy .env.example to .env, which already holds a key for this application")
 	}

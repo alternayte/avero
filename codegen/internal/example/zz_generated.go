@@ -186,6 +186,78 @@ func (in *ListInput) Validate(c *router.Ctx, f *router.Fields) {
 	}
 }
 
+// Bind fills UploadInput from the request.
+//
+// The sources are the JSON body, the form, the query and the path, in that
+// order. A later source replaces an earlier one, so the path wins.
+func (in *UploadInput) Bind(c *router.Ctx) error {
+	r := c.Request()
+
+	if router.HasMultipartBody(r) {
+		if err := r.ParseMultipartForm(router.MaxMultipartMemory); err != nil {
+			return err
+		}
+	} else if err := r.ParseForm(); err != nil {
+		return err
+	}
+
+	// file: image
+	if v, ok := router.FileValue(r, "image"); ok {
+		in.Image = v
+	}
+
+	// file: attachments
+	if v, ok := router.FileValues(r, "attachments"); ok {
+		in.Attachments = v
+	}
+
+	// form: note
+	if v, ok := router.Value(r.PostForm, "note"); ok {
+		in.Note = v
+	}
+
+	// path: board_id
+	if v, ok := router.PathValue(r, "board_id"); ok {
+		in.BoardID = v
+	}
+
+	return nil
+}
+
+// Validate checks UploadInput and records one message for each field that failed.
+func (in *UploadInput) Validate(c *router.Ctx, f *router.Fields) {
+	if strings.TrimSpace(in.BoardID) == "" {
+		f.Add("board_id", "is required")
+	}
+	if in.BoardID != "" && !router.IsUUID(in.BoardID) {
+		f.Add("board_id", "must be a UUID")
+	}
+	if utf8.RuneCountInString(in.Note) > 140 {
+		f.Add("note", "must hold at most 140 characters")
+	}
+	if in.Image == nil {
+		f.Add("image", "is required")
+	}
+	if in.Image != nil && in.Image.Size > 5242880 {
+		f.Add("image", "is larger than 5 MB")
+	}
+	if in.Image != nil && !router.FileAccepted(in.Image, "image/png", "image/jpeg") {
+		f.Add("image", "must be image/png or image/jpeg")
+	}
+	for _, file := range in.Attachments {
+		if file != nil && file.Size > 1048576 {
+			f.Add("attachments", "is larger than 1 MB")
+			break
+		}
+	}
+	for _, file := range in.Attachments {
+		if file != nil && !router.FileAccepted(file, "application/pdf") {
+			f.Add("attachments", "must be application/pdf")
+			break
+		}
+	}
+}
+
 // Summaries returns the summary of each handler of Module.
 //
 // The comment of a handler states it. Change the comment and run
@@ -194,5 +266,6 @@ func (m *Module) Summaries() map[string]string {
 	return map[string]string{
 		"Create": "Is a handler",
 		"List":   "Is a second handler",
+		"Upload": "Is a handler that reads a multipart form",
 	}
 }

@@ -133,12 +133,34 @@ func emitBind(b *strings.Builder, in input, imports map[string]bool) {
 		b.WriteString("\t\tif err := json.NewDecoder(r.Body).Decode(in); err != nil {\n")
 		b.WriteString("\t\t\treturn err\n\t\t}\n\t}\n")
 	}
-	if anyForm(in) {
+	switch {
+	case anyFile(in):
+		// A multipart body carries the files and the fields. ParseMultipartForm
+		// refuses a body of another media type, so a form of the other kind
+		// still reads. ParseMultipartForm fills PostForm as well, so a field
+		// of the same input reads from one place.
+		b.WriteString("\n\tif router.HasMultipartBody(r) {\n")
+		fmt.Fprintf(b, "\t\tif err := r.ParseMultipartForm(router.MaxMultipartMemory); err != nil {\n\t\t\treturn err\n\t\t}\n")
+		b.WriteString("\t} else if err := r.ParseForm(); err != nil {\n\t\treturn err\n\t}\n")
+	case anyForm(in):
 		b.WriteString("\n\tif err := r.ParseForm(); err != nil {\n\t\treturn err\n\t}\n")
 	}
 	if anyQuery(in) {
 		// url.URL.Query parses the whole string, so read it one time.
 		b.WriteString("\n\tq := r.URL.Query()\n")
+	}
+
+	for _, f := range in.Fields {
+		if !f.Kind.file() || f.Form == "" {
+			continue
+		}
+		fmt.Fprintf(b, "\n\t// file: %s\n", f.Form)
+		read, list := "router.FileValue", "router.FileValues"
+		if f.Kind == kindFileSlice {
+			read = list
+		}
+		fmt.Fprintf(b, "\tif v, ok := %s(r, %s); ok {\n\t\tin.%s = v\n\t}\n",
+			read, strconv.Quote(f.Form), f.Name)
 	}
 
 	for _, source := range []struct {
@@ -154,7 +176,7 @@ func emitBind(b *strings.Builder, in input, imports map[string]bool) {
 	} {
 		for _, f := range in.Fields {
 			member := source.name(f)
-			if member == "" {
+			if member == "" || f.Kind.file() {
 				continue
 			}
 			fmt.Fprintf(b, "\n\t// %s: %s\n", source.label, member)
@@ -268,10 +290,41 @@ func emitRule(b *strings.Builder, f field, r rule, imports map[string]bool) {
 			fmt.Fprintf(b, "\tif len(in.%s) == 0 {\n", f.Name)
 		case kindTime:
 			fmt.Fprintf(b, "\tif in.%s.IsZero() {\n", f.Name)
+		case kindFile:
+			fmt.Fprintf(b, "\tif in.%s == nil {\n", f.Name)
+		case kindFileSlice:
+			fmt.Fprintf(b, "\tif len(in.%s) == 0 {\n", f.Name)
 		default:
 			fmt.Fprintf(b, "\tif in.%s == 0 {\n", f.Name)
 		}
 		fmt.Fprintf(b, "\t\tf.Add(%s, \"is required\")\n\t}\n", name)
+	case ruleMaxSize:
+		// The generator wrote the number of bytes, so the check holds a
+		// constant and the request path parses nothing.
+		if f.Kind == kindFileSlice {
+			fmt.Fprintf(b, "\tfor _, file := range in.%s {\n", f.Name)
+			fmt.Fprintf(b, "\t\tif file != nil && file.Size > %s {\n", r.Arg)
+			fmt.Fprintf(b, "\t\t\tf.Add(%s, \"is larger than %s\")\n\t\t\tbreak\n\t\t}\n\t}\n",
+				name, sizeText(r.Arg))
+			break
+		}
+		fmt.Fprintf(b, "\tif in.%s != nil && in.%s.Size > %s {\n", f.Name, f.Name, r.Arg)
+		fmt.Fprintf(b, "\t\tf.Add(%s, \"is larger than %s\")\n\t}\n", name, sizeText(r.Arg))
+	case ruleAccept:
+		list := make([]string, len(r.Values))
+		for i, v := range r.Values {
+			list[i] = strconv.Quote(v)
+		}
+		types := strings.Join(list, ", ")
+		if f.Kind == kindFileSlice {
+			fmt.Fprintf(b, "\tfor _, file := range in.%s {\n", f.Name)
+			fmt.Fprintf(b, "\t\tif file != nil && !router.FileAccepted(file, %s) {\n", types)
+			fmt.Fprintf(b, "\t\t\tf.Add(%s, \"must be %s\")\n\t\t\tbreak\n\t\t}\n\t}\n",
+				name, strings.Join(r.Values, " or "))
+			break
+		}
+		fmt.Fprintf(b, "\tif in.%s != nil && !router.FileAccepted(in.%s, %s) {\n", f.Name, f.Name, types)
+		fmt.Fprintf(b, "\t\tf.Add(%s, \"must be %s\")\n\t}\n", name, strings.Join(r.Values, " or "))
 	case ruleMin:
 		if f.Kind == kindString {
 			imports["unicode/utf8"] = true
@@ -329,6 +382,16 @@ func anyQuery(in input) bool {
 }
 
 // anyForm reports whether one field binds from the form.
+// anyFile reports an input that reads a file of a multipart form.
+func anyFile(in input) bool {
+	for _, f := range in.Fields {
+		if f.Kind.file() && f.Form != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func anyForm(in input) bool {
 	for _, f := range in.Fields {
 		if f.Form != "" {
@@ -350,4 +413,24 @@ func bits(typeText string) int {
 	default:
 		return 64
 	}
+}
+
+// sizeText returns the size that a message states, such as 5 MB. The rule
+// holds the number of bytes, which no person reads in a message.
+func sizeText(bytes string) string {
+	n, err := strconv.ParseInt(bytes, 10, 64)
+	if err != nil {
+		return bytes + " bytes"
+	}
+	for _, unit := range []struct {
+		factor int64
+		name   string
+	}{
+		{1 << 30, "GB"}, {1 << 20, "MB"}, {1 << 10, "KB"},
+	} {
+		if n >= unit.factor && n%unit.factor == 0 {
+			return strconv.FormatInt(n/unit.factor, 10) + " " + unit.name
+		}
+	}
+	return strconv.FormatInt(n, 10) + " bytes"
 }

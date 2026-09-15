@@ -5,6 +5,7 @@
 package example
 
 import (
+	"mime/multipart"
 	"time"
 
 	"github.com/alternayte/avero/router"
@@ -57,6 +58,23 @@ func (in *CreateInput) Check(_ *router.Ctx, f *router.Fields) {
 // Create is a handler. The generator finds CreateInput from this signature.
 func (m *Module) Create(_ *router.Ctx, in CreateInput) (router.Response, error) {
 	return router.JSON(201, in), nil
+}
+
+// UploadInput covers a file of a multipart form.
+type UploadInput struct {
+	// BoardID comes from the path.
+	BoardID string `path:"board_id" validate:"required,uuid"`
+	// Note comes from the same multipart body as the file.
+	Note string `form:"note" validate:"max=140"`
+	// Image covers one file, its size and its media type.
+	Image *multipart.FileHeader `form:"image" validate:"required,maxsize=5MB,accept=image/png image/jpeg"`
+	// Attachments covers a repeated file.
+	Attachments []*multipart.FileHeader `form:"attachments" validate:"maxsize=1MB,accept=application/pdf"`
+}
+
+// Upload is a handler that reads a multipart form.
+func (m *Module) Upload(_ *router.Ctx, in UploadInput) (router.Response, error) {
+	return router.JSON(201, in.Image.Filename), nil
 }
 
 // ListInput covers a type with no custom rule.

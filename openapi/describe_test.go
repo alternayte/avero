@@ -2,6 +2,7 @@ package openapi_test
 
 import (
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"strings"
 	"testing"
@@ -519,5 +520,59 @@ func TestAStatedSchemaNameKeepsTwoTypesApart(t *testing.T) {
 	}
 	if _, ok := doc.Components.Schemas["View"]; !ok {
 		t.Fatalf("the components hold no View: %v", doc.Components.Schemas)
+	}
+}
+
+// uploadInput carries a file and a text field, which is the shape of a form
+// that a browser posts with an image.
+type uploadInput struct {
+	ID    string                `path:"id"`
+	Note  string                `form:"note"`
+	Image *multipart.FileHeader `form:"image" validate:"required"`
+}
+
+func (i *uploadInput) Bind(_ *router.Ctx) error                 { return nil }
+func (i *uploadInput) Validate(_ *router.Ctx, _ *router.Fields) {}
+
+func upload(_ *router.Ctx, _ uploadInput) (View, error) { return View{}, nil }
+
+// A route that binds a file states a body of multipart/form-data, and the file
+// stands in it as a string of bytes. A generator of a client writes the upload
+// from that description.
+func TestARouteWithAFileStatesAMultipartBody(t *testing.T) {
+	r := router.New()
+	router.Post(r, "/posts/{id}/image", upload)
+	rep, err := r.Report()
+	if err != nil {
+		t.Fatalf("the router holds a fault: %v", err)
+	}
+	doc, err := openapi.Describe("blog", "1.0.0", rep.Routes, router.API{})
+	if err != nil {
+		t.Fatalf("Describe returned %v", err)
+	}
+	op, ok := doc.Operation(http.MethodPost, "/posts/{id}/image")
+	if !ok {
+		t.Fatal("the description holds no POST /posts/{id}/image")
+	}
+	if _, held := op.RequestBody.Content[openapi.JSONContent]; held {
+		t.Fatal("the body states JSON, which carries no file")
+	}
+	media, held := op.RequestBody.Content[openapi.MultipartContent]
+	if !held {
+		t.Fatalf("the body states no multipart form: %v", op.RequestBody.Content)
+	}
+	image, held := media.Schema.Properties["image"]
+	if !held {
+		t.Fatalf("the body holds no image member: %v", media.Schema.Properties)
+	}
+	if image.Type != "string" || image.Format != "binary" {
+		t.Fatalf("the image member is %v %q", image.Type, image.Format)
+	}
+	if _, held := media.Schema.Properties["note"]; !held {
+		t.Fatal("the body holds no note member")
+	}
+	// The path parameter stays a parameter and no member of the body.
+	if _, held := media.Schema.Properties["id"]; held {
+		t.Fatal("the body holds the path parameter")
 	}
 }
